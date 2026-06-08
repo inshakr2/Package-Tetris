@@ -16,6 +16,7 @@ import {
   Truck,
   X
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "@/lib/persistence/indexed-db";
 import {
@@ -76,8 +77,10 @@ import {
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
+import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
+type ResultViewMode = "three" | ProjectionView;
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -113,7 +116,28 @@ const DEFAULT_BLOCK_FORM = {
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const PROJECTION_VIEWS: ProjectionView[] = ["top", "front", "side"];
+const THREE_CAMERA_PRESETS: Array<{ preset: ThreeCameraPreset; label: string }> = [
+  { preset: "isometric", label: "사시" },
+  { preset: "top", label: "상면" },
+  { preset: "front", label: "정면" },
+  { preset: "side", label: "측면" }
+];
 const STORAGE_PANEL_ID = "storage-reliability-panel";
+
+const Result3DCanvas = dynamic(
+  () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="result-three-host" data-render-state="loading">
+        <div className="projection-empty">
+          <strong>3D 뷰 준비 중</strong>
+          <span className="fine-print">3D 렌더러를 불러오고 있습니다.</span>
+        </div>
+      </div>
+    )
+  }
+);
 
 export function TetrisWorkspaceApp() {
   const storage = useMemo(() => new IndexedDbTetrisStorage(), []);
@@ -1526,6 +1550,9 @@ const ResultStage = ({
   ref: React.Ref<HTMLElement>;
 }) => {
   const [projectionView, setProjectionView] = useState<ProjectionView>("top");
+  const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("three");
+  const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
+  const [threeResetToken, setThreeResetToken] = useState(0);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
@@ -1536,6 +1563,12 @@ const ResultStage = ({
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
   const selectedPackedSpace =
     displayedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? displayedSpaces[0] ?? null;
+  const selectedPackedSpaceIndex = selectedPackedSpace
+    ? Math.max(
+        0,
+        displayedSpaces.findIndex((space) => space.spaceInstanceId === selectedPackedSpace.spaceInstanceId)
+      )
+    : -1;
   const resultSpace = latestResult?.spaceSnapshot ?? selectedSpace;
   const usableSize = resultSpace ? calculateUsableSize(resultSpace) : null;
   const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
@@ -1571,6 +1604,9 @@ const ResultStage = ({
     : projectedBlocks.length;
 
   useEffect(() => {
+    setResultViewMode("three");
+    setThreeCameraPreset("isometric");
+    setThreeResetToken((value) => value + 1);
     setProjectionView("top");
     setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
     setSelectedBlockTemplateId(null);
@@ -1582,6 +1618,27 @@ const ResultStage = ({
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
     setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
+  }
+
+  function clearSelectedBlockTemplate() {
+    setSelectedBlockTemplateId(null);
+  }
+
+  function selectProjectionView(view: ProjectionView) {
+    setResultViewMode(view);
+    setProjectionView(view);
+  }
+
+  function resetResultViewer() {
+    if (resultViewMode === "three") {
+      setThreeCameraPreset("isometric");
+      setThreeResetToken((value) => value + 1);
+    } else {
+      setProjectionView("top");
+      setResultViewMode("top");
+    }
+
+    setSelectedBlockTemplateId(null);
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -1659,7 +1716,7 @@ const ResultStage = ({
           </span>
           <h2>{getWorkspaceSectionTitle("result")}</h2>
           <p className="panel-subtitle">
-            v0 엔진이 계산한 좌표를 상면, 정면, 측면 2D 작업대로 검토합니다.
+            v0 엔진이 계산한 좌표를 3D 장면과 2D 투영 작업대로 검토합니다.
           </p>
         </div>
       </div>
@@ -1675,7 +1732,7 @@ const ResultStage = ({
       </div>
 
       {latestResult ? (
-        <div className="result-preview result-preview-large" tabIndex={0} aria-label="2D 배치 검토 작업대">
+        <div className="result-preview result-preview-large" tabIndex={0} aria-label="3D 및 2D 배치 검토 작업대">
           <div className="result-workspace-grid">
             <aside className="result-space-panel" aria-label="공간 인스턴스 선택">
               <div className="result-panel-head">
@@ -1702,97 +1759,129 @@ const ResultStage = ({
               </div>
             </aside>
 
-            <section className="projection-stage" aria-label={`${getProjectionViewLabel(projectionView)} 투영 결과`}>
+            <section className="projection-stage" aria-label="배치 뷰어">
               <div className="projection-toolbar">
                 <div>
-                  <strong>{getProjectionViewLabel(projectionView)} 투영</strong>
+                  <strong>{resultViewMode === "three" ? "3D 적재 뷰" : `${getProjectionViewLabel(projectionView)} 투영`}</strong>
                   <span className="fine-print">
                     {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
                   </span>
                 </div>
-                <div className="view-buttons" aria-label="투영 방향 선택">
+                <div className="view-buttons" aria-label="결과 보기 방식 선택">
+                  <button
+                    className="secondary-button"
+                    aria-pressed={resultViewMode === "three"}
+                    onClick={() => setResultViewMode("three")}
+                  >
+                    3D
+                  </button>
                   {PROJECTION_VIEWS.map((view) => (
                     <button
                       key={view}
                       className="secondary-button"
-                      aria-pressed={projectionView === view}
-                      onClick={() => setProjectionView(view)}
+                      aria-pressed={resultViewMode === view}
+                      onClick={() => selectProjectionView(view)}
                     >
                       {getProjectionViewLabel(view)}
                     </button>
                   ))}
-                  <button
-                    className="secondary-button"
-                    onClick={() => {
-                      setProjectionView("top");
-                      setSelectedBlockTemplateId(null);
-                    }}
-                  >
+                  <button className="secondary-button" onClick={resetResultViewer}>
                     <RotateCcw size={16} />
                     리셋
                   </button>
                 </div>
               </div>
 
-              <div className="projection-board" data-view={projectionView}>
-                {projectedBlocks.length > 0 ? (
-                  projectedBlocks.map((block) => {
-                    const isSelected =
-                      selectedBlockTemplateId === null || selectedBlockTemplateId === block.blockTemplateId;
-                    const previewState = chainPreview
-                      ? chainPreviewBlockIds.has(block.blockId)
-                        ? "new"
-                        : "base"
-                      : undefined;
-                    const blockStyle = {
-                      "--block-color": block.color,
-                      left: `${block.leftPercent}%`,
-                      top: `${block.topPercent}%`,
-                      width: `${Math.max(block.widthPercent, 1.4)}%`,
-                      height: `${Math.max(block.heightPercent, 1.4)}%`,
-                      zIndex: Math.max(1, Math.round(block.depthOrder))
-                    } as React.CSSProperties;
-
-                    return (
-                      <span
-                        key={block.blockId}
-                        className="projected-block"
-                        data-muted={!isSelected}
-                        data-fragile={block.fragile}
-                        data-chain-preview={previewState}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
-                        title={`${block.name} · ${block.fragile ? "fragile" : "normal"}`}
-                        style={blockStyle}
-                        onClick={() => toggleSelectedBlockTemplate(block.blockTemplateId)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            toggleSelectedBlockTemplate(block.blockTemplateId);
-                          }
-                        }}
+              {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
+                <>
+                  <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
+                    {THREE_CAMERA_PRESETS.map((item) => (
+                      <button
+                        key={item.preset}
+                        className="secondary-button"
+                        aria-pressed={threeCameraPreset === item.preset}
+                        onClick={() => setThreeCameraPreset(item.preset)}
                       >
-                        <span>{block.name}</span>
-                      </span>
-                    );
-                  })
-                ) : (
-                  <div className="projection-empty">
-                    <strong>표시할 배치 좌표가 없습니다.</strong>
-                    <span className="fine-print">결과 요약을 다시 생성하면 v0 좌표를 확인할 수 있습니다.</span>
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
+                  <Result3DCanvas
+                    blocks={selectedPackedSpace.blocks}
+                    bounds={usableSize}
+                    selectedBlockTemplateId={selectedBlockTemplateId}
+                    chainPreviewBlockIds={chainPreviewBlockIds}
+                    cameraPreset={threeCameraPreset}
+                    resetToken={threeResetToken}
+                    spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
+                    utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
+                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
+                    onClearSelection={clearSelectedBlockTemplate}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="projection-board" data-view={projectionView}>
+                    {projectedBlocks.length > 0 ? (
+                      projectedBlocks.map((block) => {
+                        const isSelected =
+                          selectedBlockTemplateId === null || selectedBlockTemplateId === block.blockTemplateId;
+                        const previewState = chainPreview
+                          ? chainPreviewBlockIds.has(block.blockId)
+                            ? "new"
+                            : "base"
+                          : undefined;
+                        const blockStyle = {
+                          "--block-color": block.color,
+                          left: `${block.leftPercent}%`,
+                          top: `${block.topPercent}%`,
+                          width: `${Math.max(block.widthPercent, 1.4)}%`,
+                          height: `${Math.max(block.heightPercent, 1.4)}%`,
+                          zIndex: Math.max(1, Math.round(block.depthOrder))
+                        } as React.CSSProperties;
 
-              <div className="projection-status">
-                <span className="badge" data-tone="green">
-                  {selectedBlockTemplateId ? "강조" : "표시"} {visibleBlockCount}개
-                </span>
-                <span className="fine-print">
-                  {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 블록 표시"}
-                </span>
-              </div>
+                        return (
+                          <span
+                            key={block.blockId}
+                            className="projected-block"
+                            data-muted={!isSelected}
+                            data-fragile={block.fragile}
+                            data-chain-preview={previewState}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
+                            title={`${block.name} · ${block.fragile ? "fragile" : "normal"}`}
+                            style={blockStyle}
+                            onClick={() => toggleSelectedBlockTemplate(block.blockTemplateId)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                toggleSelectedBlockTemplate(block.blockTemplateId);
+                              }
+                            }}
+                          >
+                            <span>{block.name}</span>
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <div className="projection-empty">
+                        <strong>표시할 배치 좌표가 없습니다.</strong>
+                        <span className="fine-print">결과 요약을 다시 생성하면 v0 좌표를 확인할 수 있습니다.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="projection-status">
+                    <span className="badge" data-tone="green">
+                      {selectedBlockTemplateId ? "강조" : "표시"} {visibleBlockCount}개
+                    </span>
+                    <span className="fine-print">
+                      {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 블록 표시"}
+                    </span>
+                  </div>
+                </>
+              )}
             </section>
 
             <aside className="result-legend-panel" aria-label="블록 유형 범례">

@@ -917,6 +917,11 @@ select:focus-visible {
   gap: 8px;
 }
 
+.three-camera-buttons {
+  align-items: center;
+  padding-bottom: 2px;
+}
+
 .view-buttons .secondary-button[aria-pressed="true"] {
   border-color: rgba(37, 99, 235, 0.55);
   background: #dce9ff;
@@ -1019,6 +1024,71 @@ select:focus-visible {
     linear-gradient(90deg, rgba(96, 112, 103, 0.14) 1px, transparent 1px),
     #f7faf8;
   background-size: 10% 10%;
+}
+
+.result-three-shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 0;
+  height: clamp(390px, 48vh, 540px);
+  max-height: 540px;
+}
+
+.result-three-host {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(96, 112, 103, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 112, 103, 0.1) 1px, transparent 1px),
+    #f7faf8;
+  background-size: 10% 10%;
+  touch-action: pan-y pinch-zoom;
+}
+
+.result-three-host:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+.result-three-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.three-status {
+  align-items: center;
+}
+
+.three-tooltip {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  gap: 2px;
+  max-width: min(260px, calc(100% - 24px));
+  padding: 8px 9px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  pointer-events: none;
+  transform: translate(10px, 10px);
+}
+
+.three-tooltip strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.three-tooltip span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .projection-board::before {
@@ -1375,6 +1445,19 @@ select:focus-visible {
 
   .projection-board {
     min-height: 300px;
+  }
+
+  .result-three-host {
+    height: 100%;
+  }
+
+  .result-three-shell {
+    height: 340px;
+    max-height: 340px;
+  }
+
+  .three-camera-buttons .secondary-button {
+    min-height: 44px;
   }
 
   .result-panel-head,
