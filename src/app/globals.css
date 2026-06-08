@@ -897,6 +897,34 @@ select:focus-visible {
   margin-top: 8px;
 }
 
+.result-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+
+.result-meta-item {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f7faf8;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.result-meta-item time,
+.result-meta-value {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .result-hero-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1831,6 +1859,14 @@ select:focus-visible {
   .connectivity-status-pill {
     max-width: 100%;
     white-space: normal;
+  }
+
+  .result-meta-strip {
+    width: 100%;
+  }
+
+  .result-meta-item {
+    width: 100%;
   }
 
   .storage-reliability-panel {

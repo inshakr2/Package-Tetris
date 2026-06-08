@@ -2200,9 +2200,19 @@ const ResultStage = ({
             메인 결과
           </span>
           <h2>{getWorkspaceSectionTitle("result")}</h2>
-                  <p className="panel-subtitle">
-                    계산 결과를 3D로 먼저 확인하고, 위/앞/옆 보기로 위치를 다시 점검합니다.
-                  </p>
+          <p className="panel-subtitle">
+            계산 결과를 3D로 먼저 확인하고, 위/앞/옆 보기로 위치를 다시 점검합니다.
+          </p>
+          <div className="result-meta-strip" aria-label="결과 계산 정보">
+            <span className="result-meta-item">
+              계산 시각{" "}
+              {latestResult ? (
+                <time dateTime={latestResult.createdAt}>{formatDateTime(latestResult.createdAt)}</time>
+              ) : (
+                <span className="result-meta-value">결과를 만들면 계산 시각이 표시됩니다.</span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
 
