@@ -7,7 +7,7 @@ export interface SaveConflictBannerNotice {
 }
 
 export function getSaveConflictBannerCopy(saveConflict: SaveConflictBannerNotice) {
-  const detail = `작업본 번호: 최신 ${saveConflict.storedRevision} · 이 화면 ${saveConflict.expectedRevision}`;
+  const detail = createSaveConflictVersionDetail(saveConflict);
 
   if (saveConflict.source === "remote") {
     return {
@@ -27,4 +27,10 @@ export function getSaveConflictBannerCopy(saveConflict: SaveConflictBannerNotice
     primaryLabel: "최신본 불러오기",
     secondaryLabel: "현재 화면 백업"
   };
+}
+
+export function createSaveConflictVersionDetail(
+  saveConflict: Pick<SaveConflictBannerNotice, "storedRevision" | "expectedRevision">
+) {
+  return `작업본 번호: 저장된 최신 ${saveConflict.storedRevision} · 현재 화면 ${saveConflict.expectedRevision}`;
 }

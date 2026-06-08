@@ -20,7 +20,7 @@ describe("save-conflict-banner-copy", () => {
     assert.deepEqual(copy, {
       title: "다른 탭의 최신 작업본이 있어 이 화면은 잠시 멈췄습니다.",
       description: "최신본을 불러오거나, 지금 보이는 화면을 백업 파일로 남긴 뒤 다시 이어가세요.",
-      detail: "작업본 번호: 최신 12 · 이 화면 10",
+      detail: "작업본 번호: 저장된 최신 12 · 현재 화면 10",
       primaryLabel: "최신본 불러오기",
       secondaryLabel: "현재 화면 백업"
     });
@@ -45,7 +45,7 @@ describe("save-conflict-banner-copy", () => {
       copy.description,
       "이 기기 저장 중 최신 작업본과 달라졌습니다. 최신본을 불러오거나, 지금 보이는 화면을 백업 파일로 남긴 뒤 다시 이어가세요."
     );
-    assert.equal(copy.detail, "작업본 번호: 최신 8 · 이 화면 6");
+    assert.equal(copy.detail, "작업본 번호: 저장된 최신 8 · 현재 화면 6");
     assert.equal(copy.primaryLabel, "최신본 불러오기");
     assert.equal(copy.secondaryLabel, "현재 화면 백업");
   });

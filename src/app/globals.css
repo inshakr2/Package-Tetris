@@ -241,6 +241,8 @@ button {
 
 .storage-health-detail {
   color: #46564e;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .storage-health-actions {

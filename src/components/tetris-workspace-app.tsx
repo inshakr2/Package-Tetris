@@ -64,6 +64,7 @@ import {
   type DeleteConfirmationKind
 } from "@/lib/workspace/delete-confirmation-copy";
 import { getSaveConflictBannerCopy } from "@/lib/workspace/save-conflict-banner-copy";
+import { createLocalSaveState } from "@/lib/workspace/storage-save-state";
 import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
@@ -2672,7 +2673,13 @@ function StorageReliabilityPanel({
   onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
 }) {
-  const localState = getLocalSaveState(status, error, lastLocalSavedAt, saveConflict, otherTabCount);
+  const localState = createLocalSaveState({
+    status,
+    error,
+    lastLocalSavedLabel: lastLocalSavedAt ? formatDateTime(lastLocalSavedAt) : null,
+    saveConflict,
+    otherTabCount
+  });
   const exportState = getExportState(workspace, needsExport);
   const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
   const canRequestProtection =
@@ -2703,6 +2710,7 @@ function StorageReliabilityPanel({
           label="이 기기 저장"
           value={localState.value}
           description={localState.description}
+          detail={localState.detail}
         />
         <StorageHealthRow
           icon={<Download size={18} />}
@@ -2776,66 +2784,6 @@ function StorageHealthRow({
       </div>
     </div>
   );
-}
-
-function getLocalSaveState(
-  status: SaveStatus,
-  error: string | null,
-  lastLocalSavedAt: string | null,
-  saveConflict: WorkspaceSaveConflictNotice | null,
-  otherTabCount: number
-) {
-  if (status === "conflict" || saveConflict) {
-    return {
-      tone: "red" as const,
-      value: "다른 탭 최신본 감지",
-              description: "이 화면은 보호를 위해 잠겼습니다. 최신본을 불러오면 계속할 수 있습니다.",
-      detail: saveConflict
-        ? `저장소 revision ${saveConflict.storedRevision} · 이 탭 기준 ${saveConflict.expectedRevision}`
-                : "최신 작업본을 불러오거나 현재 화면을 백업 파일로 남기세요."
-    };
-  }
-
-  if (status === "error") {
-    return {
-      tone: "red" as const,
-      value: "저장 실패",
-      description: error
-        ? `브라우저 저장소에 쓰지 못했습니다. ${error}`
-        : "브라우저 저장소에 쓰지 못했습니다. 이 기기 저장이 불안정할 수 있습니다.",
-      detail: null
-    };
-  }
-
-  if (status === "loading") {
-    return {
-      tone: "amber" as const,
-      value: "불러오는 중",
-      description: "이 기기에 저장된 작업본을 확인하고 있습니다.",
-      detail: null
-    };
-  }
-
-  if (status === "saving") {
-    return {
-      tone: "amber" as const,
-      value: "저장 중",
-              description: "현재 작업을 이 기기에 자동저장하고 있습니다.",
-      detail: otherTabCount > 0 ? "다른 탭도 열려 있습니다. 저장 기준 revision을 확인합니다." : null
-    };
-  }
-
-  return {
-    tone: otherTabCount > 0 ? ("amber" as const) : ("green" as const),
-    value: otherTabCount > 0 ? "이 탭이 편집 중 · 다른 탭 열림" : "자동저장됨",
-    description: lastLocalSavedAt
-      ? `마지막 이 기기 저장: ${formatDateTime(lastLocalSavedAt)}`
-      : "브라우저를 닫아도 이 기기에서는 이어서 작업할 수 있습니다.",
-    detail:
-      otherTabCount > 0
-        ? "다른 탭을 참고용으로 열어둘 수 있지만, 같은 작업본 편집은 한 탭에서만 이어가는 것이 안전합니다."
-        : null
-  };
 }
 
 function getExportState(workspace: TetrisWorkspace, needsExport: boolean) {
