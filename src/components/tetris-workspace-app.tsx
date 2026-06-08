@@ -1725,6 +1725,14 @@ const ResultStage = ({
           }
         });
 
+        if (preview.warnings.length > 0) {
+          setChainPreview(null);
+          setSelectedBlockTemplateId(null);
+          setChainStatus("error");
+          setChainStatusMessage(preview.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          return;
+        }
+
         setChainPreview(preview);
         setSelectedBlockTemplateId(preview.blockTemplateId);
 
@@ -2007,6 +2015,7 @@ const ResultStage = ({
         onSelectTemplate={selectChainTemplate}
         onCalculate={calculateChainPreview}
         onConfirm={confirmChainPreview}
+        onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
         onUndo={() => {
           if (latestResult) {
@@ -2080,6 +2089,7 @@ function ChainSimulationPanel({
   onSelectTemplate,
   onCalculate,
   onConfirm,
+  onCreateResult,
   onClearSelection,
   onUndo
 }: {
@@ -2094,11 +2104,12 @@ function ChainSimulationPanel({
   onSelectTemplate: (blockTemplateId: string) => void;
   onCalculate: () => void;
   onConfirm: () => void;
+  onCreateResult: () => void;
   onClearSelection: () => void;
   onUndo: () => void;
 }) {
   const hasResult = Boolean(latestResult);
-  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
+  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating" && chainStatus !== "error";
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
 
   return (
@@ -2162,7 +2173,7 @@ function ChainSimulationPanel({
                   : chainStatus === "empty"
                     ? "추가 가능 0"
                     : chainStatus === "error"
-                      ? "계산 실패"
+                      ? "기준 결과 확인 필요"
                       : chainStatus === "calculating"
                         ? "계산 중"
                         : "대기"}
@@ -2177,6 +2188,11 @@ function ChainSimulationPanel({
               <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
                 이 결과 반영
               </button>
+              {chainStatus === "error" ? (
+                <button className="secondary-button" onClick={onCreateResult}>
+                  결과 다시 생성
+                </button>
+              ) : null}
               <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>
                 직전 추가 취소
               </button>

@@ -156,6 +156,12 @@ function createAxisCandidates(
 
 function fitsWithinUsableSize(candidate: PositionCandidate, usableSize: PlacementBounds) {
   return (
+    candidate.xMm >= 0 &&
+    candidate.yMm >= 0 &&
+    candidate.zMm >= 0 &&
+    candidate.widthMm > 0 &&
+    candidate.depthMm > 0 &&
+    candidate.heightMm > 0 &&
     candidate.xMm + candidate.widthMm <= usableSize.widthMm &&
     candidate.yMm + candidate.depthMm <= usableSize.depthMm &&
     candidate.zMm + candidate.heightMm <= usableSize.heightMm

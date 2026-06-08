@@ -4,6 +4,10 @@ import {
   type PlacementBounds,
   type PlacementPolicy
 } from "./packing-placement";
+import {
+  INVALID_CHAIN_BASE_RESULT_WARNING,
+  validatePackedResult
+} from "./packed-result-validation";
 import { BlockTemplate, PackedBlock, PackedSpace, ResultSummary } from "./types";
 
 export interface ChainSimulationInput {
@@ -35,6 +39,22 @@ export function runChainSimulationV0(input: ChainSimulationInput): ChainSimulati
       spaces: input.result.spaces ?? [],
       averageUtilizationRate: input.result.averageUtilizationRate,
       warnings: ["결과 공간 정보가 없어 추가 적재를 계산할 수 없습니다."]
+    };
+  }
+
+  const baseResultValidation = validatePackedResult(input.result, input.policy);
+
+  if (!baseResultValidation.isValid) {
+    return {
+      runId: input.runId,
+      blockTemplateId: input.blockTemplate.blockTemplateId,
+      blockName: input.blockTemplate.name,
+      addedQuantity: 0,
+      spaces: input.result.spaces,
+      averageUtilizationRate: input.result.averageUtilizationRate,
+      warnings: baseResultValidation.reasons.length
+        ? baseResultValidation.reasons
+        : [INVALID_CHAIN_BASE_RESULT_WARNING]
     };
   }
 

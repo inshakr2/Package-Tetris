@@ -198,4 +198,103 @@ describe("chain-simulation v0", () => {
     // Then
     assert.equal(output.addedQuantity, 0);
   });
+
+  it("기존 결과에 공중에 떠 있는 블록이 있으면 추가 적재 계산을 거부한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "floating",
+        zMm: 500
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate(),
+      runId: "chain-run-invalid-floating",
+      policy: DEFAULT_POLICY
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
+    assert.deepEqual(output.spaces, result.spaces);
+    assert.deepEqual(output.warnings, [
+      "기존 결과의 배치가 안전 기준에 맞지 않아 추가 적재를 계산할 수 없습니다. 결과를 다시 생성하세요."
+    ]);
+  });
+
+  it("기존 결과에 겹치는 블록이 있으면 추가 적재 계산을 거부한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "base-left",
+        xMm: 0,
+        yMm: 0,
+        zMm: 0
+      }),
+      createPackedBlock({
+        blockId: "base-right",
+        xMm: 250,
+        yMm: 0,
+        zMm: 0
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate(),
+      runId: "chain-run-invalid-overlap",
+      policy: DEFAULT_POLICY
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
+    assert.deepEqual(output.spaces, result.spaces);
+    assert.deepEqual(output.warnings, [
+      "기존 결과의 배치가 안전 기준에 맞지 않아 추가 적재를 계산할 수 없습니다. 결과를 다시 생성하세요."
+    ]);
+  });
+
+  it("기존 결과가 fragile 정책을 어기면 추가 적재 계산을 거부한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "fragile-base",
+        fragile: true,
+        widthMm: 1000,
+        depthMm: 1000,
+        heightMm: 500
+      }),
+      createPackedBlock({
+        blockId: "fragile-top",
+        fragile: true,
+        xMm: 0,
+        yMm: 0,
+        zMm: 500,
+        widthMm: 500,
+        depthMm: 500,
+        heightMm: 500
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate({ fragile: true }),
+      runId: "chain-run-invalid-fragile-policy",
+      policy: {
+        fragileStackOnFragileAllowed: false,
+        nonFragileOnFragileAllowed: false
+      }
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
+    assert.deepEqual(output.spaces, result.spaces);
+    assert.deepEqual(output.warnings, [
+      "기존 결과의 배치가 안전 기준에 맞지 않아 추가 적재를 계산할 수 없습니다. 결과를 다시 생성하세요."
+    ]);
+  });
 });
