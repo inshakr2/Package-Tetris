@@ -89,6 +89,7 @@ import {
   createPackingResultWarnings,
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
+import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
 import {
@@ -2031,6 +2032,8 @@ const ResultStage = ({
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
     latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
+  const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
+  const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
 
   useEffect(() => {
     setResultViewMode("three");
@@ -2212,6 +2215,29 @@ const ResultStage = ({
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
+
+      {unloadedWarningSummary.length > 0 ? (
+        <div className="result-unloaded-callout" role="status" aria-label="미적재 안내">
+          <div>
+            <span className="badge" data-tone="amber">
+              미적재 확인
+            </span>
+            <p className="fine-print">
+              안전하게 올릴 자리가 없는 박스가 {latestResult?.unloadedBlockCount ?? 0}개 있습니다.
+              박스 수량을 줄이거나 더 큰 공간을 선택하세요.
+            </p>
+          </div>
+          <ul className="unloaded-warning-list">
+            {unloadedWarningSummary.slice(0, 2).map((item) => (
+              <li key={item.message}>
+                {item.message}
+                {item.count > 1 ? ` · ${item.count}건` : ""}
+              </li>
+            ))}
+            {unloadedWarningSummary.length > 2 ? <li>외 {unloadedWarningSummary.length - 2}건</li> : null}
+          </ul>
+        </div>
+      ) : null}
 
       {latestResult && needsExport ? (
         <div className="result-backup-callout" aria-label="결과 백업 안내">
@@ -2534,12 +2560,13 @@ const ResultStage = ({
           ) : (
                     <p className="meta">결과를 만들면 공간별 박스 배치가 저장됩니다.</p>
           )}
-          {resultWarnings.length ? (
+          {resultWarningSummary.length ? (
             <ul className="checklist compact-checklist">
-              {resultWarnings.map((warning) => (
-                <li key={warning} className="review-message" data-tone="amber">
+              {resultWarningSummary.map((warning) => (
+                <li key={warning.message} className="review-message" data-tone="amber">
                   <AlertTriangle size={18} color="var(--amber)" />
-                  {warning}
+                  {warning.message}
+                  {warning.count > 1 ? ` · ${warning.count}건` : ""}
                 </li>
               ))}
             </ul>

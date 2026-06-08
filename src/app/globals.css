@@ -926,6 +926,30 @@ select:focus-visible {
   margin-top: 6px;
 }
 
+.result-unloaded-callout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(183, 121, 31, 0.32);
+  border-radius: 8px;
+  background: #fff8e7;
+  overflow-wrap: anywhere;
+}
+
+.result-unloaded-callout .fine-print {
+  margin-top: 6px;
+}
+
+.unloaded-warning-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #6c430f;
+  font-size: 13px;
+}
+
 .result-backup-action {
   min-height: 48px;
   white-space: normal;
@@ -1842,6 +1866,10 @@ select:focus-visible {
   }
 
   .result-backup-callout {
+    grid-template-columns: 1fr;
+  }
+
+  .result-unloaded-callout {
     grid-template-columns: 1fr;
   }
 
