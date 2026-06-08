@@ -1,0 +1,29 @@
+{
+  "name": "my-tetris",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --import tsx --test src/lib/persistence/*.test.ts src/lib/workspace/*.test.ts"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "fake-indexeddb": "latest",
+    "tsx": "^4.22.4",
+    "typescript": "latest"
+  },
+  "overrides": {
+    "postcss": "8.5.10",
+    "esbuild": "0.25.0"
+  }
+}

@@ -1,0 +1,172 @@
+<style>
+  .review-shell { color: #0f172a; }
+  .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 18px; }
+  .step { border: 1px solid #94a3b8; border-radius: 6px; padding: 8px; background: #fff; color: #0f172a; font-size: 13px; }
+  .step.done { background: #ecfdf5; border-color: #047857; }
+  .step.current { background: #dbeafe; border-color: #1d4ed8; font-weight: 700; }
+  .step.pending { background: #f8fafc; }
+  .workflow-grid { display: grid; grid-template-columns: 220px minmax(360px, 1fr) 260px; gap: 14px; align-items: stretch; }
+  .panel { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #fff; color: #0f172a; }
+  .panel h4 { margin: 0 0 10px; color: #0f172a; }
+  .field { border: 1px solid #94a3b8; border-radius: 6px; padding: 8px; margin: 7px 0; background: #f8fafc; color: #0f172a; }
+  .field.error { border-color: #b91c1c; background: #fef2f2; }
+  .field.loading { border-color: #0369a1; background: #ecfeff; }
+  .status-note { border-radius: 6px; padding: 8px; margin: 8px 0; color: #0f172a; font-size: 13px; }
+  .status-note.empty { background: #f8fafc; border: 1px dashed #64748b; }
+  .status-note.warning { background: #fef3c7; border: 1px solid #b45309; }
+  .status-note.error { background: #fee2e2; border: 1px solid #b91c1c; }
+  .status-note.success { background: #dcfce7; border: 1px solid #047857; }
+  .cta-bar { display: flex; justify-content: space-between; gap: 10px; align-items: center; border-top: 1px solid #cbd5e1; margin-top: 12px; padding-top: 10px; }
+  .cta-rule { color: #334155; font-size: 12px; }
+  .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .semantic-button { border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; border-radius: 6px; padding: 8px 10px; font-weight: 700; }
+  .semantic-button.secondary { background: #fff; color: #1d4ed8; }
+  .semantic-button[disabled] { border-color: #94a3b8; background: #e2e8f0; color: #475569; }
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; color: #0f172a; }
+  .mini-table th, .mini-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
+  .mini-table th { background: #f1f5f9; }
+  @media (max-width: 1279px) {
+    .workflow-grid { grid-template-columns: 1fr 1fr; }
+    .workflow-grid .panel:last-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 767px) {
+    .stepper { grid-template-columns: 1fr; }
+    .workflow-grid { grid-template-columns: 1fr; }
+    .cta-bar { position: sticky; bottom: 0; background: #fff; }
+  }
+</style>
+
+<div class="review-shell">
+  <h2>5단계 입력 플로우 목업: Step 1~3</h2>
+  <p class="subtitle">각 단계는 실제 구현 전 검토가 가능하도록 CTA 조건, 오류/빈/로딩 상태, 접근성 주석을 함께 보여줍니다.</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Step 1 / 5 공간 선택</div>
+    <div class="mockup-body">
+      <div class="stepper" aria-label="5단계 진행 표시">
+        <div class="step current">1 공간</div>
+        <div class="step pending">2 블록</div>
+        <div class="step pending">3 검토</div>
+        <div class="step pending">4 결과</div>
+        <div class="step pending">5 추가</div>
+      </div>
+      <div class="workflow-grid">
+        <div class="panel">
+          <h4>공간 preset</h4>
+          <div class="field loading">로딩: 공식 preset 불러오는 중...</div>
+          <div class="field">파레트 기본 · 1150 x 1150 x 1550mm</div>
+          <div class="field">20ft GP · Hapag-Lloyd 예시치</div>
+          <div class="field">2.5톤반 · 현대 카탈로그</div>
+          <div class="status-note empty">빈 상태: 아직 공간이 선택되지 않았습니다.</div>
+        </div>
+        <div class="panel">
+          <h4>선택 공간 상세</h4>
+          <div class="field">외형 치수: 1150 / 1150 / 1550mm</div>
+          <div class="field">offset: 50 / 50 / 100mm</div>
+          <div class="field">usable size: 1100 / 1100 / 1450mm</div>
+          <div class="field error">오류 예시: offset이 외형 치수보다 커 usable size가 0 이하입니다.</div>
+          <div class="status-note warning">출처 배지: 내부 기준 · 검증일 2026-06-08 · 예시치</div>
+        </div>
+        <div class="panel">
+          <h4>CTA / 접근성</h4>
+          <div class="status-note success">조건 충족: 공간 선택 + usable size 유효</div>
+          <div class="button-row">
+            <button class="semantic-button secondary">커스텀 저장</button>
+            <button class="semantic-button">다음: 블록 입력</button>
+          </div>
+          <p class="cta-rule">disabled 이유 표시: 공간을 선택하고 usable size를 확인해야 합니다.</p>
+          <p class="cta-rule">접근성: 오류는 필드 옆 텍스트와 상단 요약에 동시에 표시합니다.</p>
+        </div>
+      </div>
+      <div class="cta-bar">
+        <span class="cta-rule">Focus: Stepper -> 1 / 5 공간 선택 제목 -> preset 리스트 -> 상세 폼 -> CTA</span>
+        <button class="semantic-button">다음</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Step 2 / 5 블록 입력</div>
+    <div class="mockup-body">
+      <div class="stepper" aria-label="5단계 진행 표시">
+        <div class="step done">1 공간</div>
+        <div class="step current">2 블록</div>
+        <div class="step pending">3 검토</div>
+        <div class="step pending">4 결과</div>
+        <div class="step pending">5 추가</div>
+      </div>
+      <div class="workflow-grid">
+        <div class="panel">
+          <h4>입력 상태</h4>
+          <div class="status-note empty">빈 상태: 아직 블록이 없습니다. 첫 블록 유형을 추가하세요.</div>
+          <div class="status-note error">불러오기 실패: preset 블록 목록을 불러오지 못했습니다.</div>
+          <button class="semantic-button secondary">블록 추가</button>
+        </div>
+        <div class="panel">
+          <h4>블록 유형 테이블</h4>
+          <table class="mini-table">
+            <thead>
+              <tr><th>유형</th><th>치수(mm)</th><th>수량</th><th>Fragile</th><th>상태</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>A 박스</td><td>600 x 400 x 300</td><td>38</td><td>아니오</td><td>정상</td></tr>
+              <tr><td>B 유리</td><td>400 x 300 x 220</td><td>12</td><td>예 · Fragile</td><td>정상</td></tr>
+              <tr><td>A 박스</td><td>500 x 300 x 200</td><td>0</td><td>아니오</td><td>오류: 중복 이름 + 수량 0</td></tr>
+            </tbody>
+          </table>
+          <div class="status-note warning">상단 요약 경고: 오류 행 1개가 있어 다음 단계로 이동할 수 없습니다.</div>
+        </div>
+        <div class="panel">
+          <h4>CTA / 접근성</h4>
+          <button class="semantic-button" disabled>다음: 실행 전 검토</button>
+          <p class="cta-rule">disabled 이유: 블록 1개 이상 + 모든 필수값 유효 조건을 충족해야 합니다.</p>
+          <p class="cta-rule">테이블 편집: Tab 이동, Enter 저장, Esc 취소, 오류 수정 후 오류 행 첫 셀로 포커스 복귀.</p>
+        </div>
+      </div>
+      <div class="cta-bar">
+        <span class="cta-rule">상태: 행 오류 / 중복 이름 / 수량 0 / preset 불러오기 실패를 표면화</span>
+        <button class="semantic-button" disabled>다음</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Step 3 / 5 실행 전 검토</div>
+    <div class="mockup-body">
+      <div class="stepper" aria-label="5단계 진행 표시">
+        <div class="step done">1 공간</div>
+        <div class="step done">2 블록</div>
+        <div class="step current">3 검토</div>
+        <div class="step pending">4 결과</div>
+        <div class="step pending">5 추가</div>
+      </div>
+      <div class="workflow-grid">
+        <div class="panel">
+          <h4>요약</h4>
+          <div class="field">선택 공간: 파레트 기본</div>
+          <div class="field">총 블록: 58개</div>
+          <div class="field">공간 1개 usable volume: 1.75m³</div>
+          <div class="field">예상 최소 공간 수 하한: 2개</div>
+        </div>
+        <div class="panel">
+          <h4>제약 체크리스트</h4>
+          <div class="status-note success">통과: offset 적용 완료</div>
+          <div class="status-note success">통과: 직육면체 + 90도 직교 회전</div>
+          <div class="status-note warning">정책: fragile끼리 적층 허용, fragile 위 non-fragile 적층 금지</div>
+          <div class="status-note error">실행 실패 예시: 브라우저 계산 중단 또는 메모리 부족. 재시도 또는 입력 수정 필요.</div>
+        </div>
+        <div class="panel">
+          <h4>CTA / 상태 메시지</h4>
+          <button class="semantic-button">시뮬레이션 실행</button>
+          <button class="semantic-button secondary">입력 수정</button>
+          <p class="cta-rule">경고만 있으면 실행 가능, 오류가 있으면 비활성.</p>
+          <p class="cta-rule">실행 중: 버튼 라벨을 "계산 중..."으로 바꾸고 role=status로 진행 상태를 알림.</p>
+        </div>
+      </div>
+      <div class="cta-bar">
+        <span class="cta-rule">진행 상태: 검증 중 -> 적재 계산 중 -> 3D 생성 중</span>
+        <button class="semantic-button">시뮬레이션 실행</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,224 @@
+<style>
+  .result-shell { color: #0f172a; }
+  .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 18px; }
+  .step { border: 1px solid #94a3b8; border-radius: 6px; padding: 8px; background: #fff; color: #0f172a; font-size: 13px; }
+  .step.done { background: #ecfdf5; border-color: #047857; }
+  .step.current { background: #dbeafe; border-color: #1d4ed8; font-weight: 700; }
+  .step.pending { background: #f8fafc; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 8px; }
+  .kpi { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #fff; color: #0f172a; }
+  .kpi .label { display: block; font-size: 11px; color: #334155; letter-spacing: 0; text-transform: none; }
+  .kpi strong { display: block; margin-top: 4px; font-size: 19px; color: #0f172a; }
+  .workspace-grid { display: grid; grid-template-columns: 210px minmax(440px, 1fr) 310px; gap: 14px; margin-top: 14px; }
+  .panel { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #fff; color: #0f172a; }
+  .panel h4 { margin: 0 0 10px; color: #0f172a; }
+  .rail-item, .legend-item, .state-card { border: 1px solid #94a3b8; border-radius: 6px; padding: 8px; margin: 7px 0; background: #f8fafc; color: #0f172a; }
+  .rail-item.active, .legend-item.active { border-color: #1d4ed8; background: #dbeafe; font-weight: 700; }
+  .legend-item.fragile { background: #fff7ed; border-style: dashed; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .tool { border: 1px solid #64748b; background: #fff; color: #0f172a; border-radius: 6px; padding: 7px 9px; }
+  .tool.active { border-color: #1d4ed8; background: #dbeafe; font-weight: 700; }
+  .canvas { position: relative; min-height: 340px; border: 1px solid #64748b; border-radius: 8px; background: linear-gradient(135deg, #f8fafc, #e2e8f0); overflow: hidden; }
+  .box { position: absolute; border: 2px solid #0f172a; box-shadow: 9px 9px 0 rgba(15, 23, 42, 0.14); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #0f172a; }
+  .box.selected { opacity: 1; background: #60a5fa; z-index: 4; }
+  .box.dimmed { opacity: .28; background: #cbd5e1; border-style: solid; }
+  .box.fragile { background: repeating-linear-gradient(45deg, #fde68a, #fde68a 8px, #fff7ed 8px, #fff7ed 16px); }
+  .tooltip { position: absolute; right: 18px; top: 18px; width: 210px; border: 1px solid #0f172a; border-radius: 8px; background: #fff; color: #0f172a; padding: 10px; font-size: 12px; z-index: 5; }
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 12px; color: #0f172a; margin-top: 8px; }
+  .mini-table th, .mini-table td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
+  .mini-table th { background: #f1f5f9; }
+  .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .semantic-button { border: 1px solid #1d4ed8; background: #1d4ed8; color: #fff; border-radius: 6px; padding: 8px 10px; font-weight: 700; }
+  .semantic-button.secondary { background: #fff; color: #1d4ed8; }
+  .semantic-button.neutral { background: #fff; color: #334155; border-color: #64748b; }
+  .semantic-button[disabled] { border-color: #94a3b8; background: #e2e8f0; color: #475569; }
+  .state-row { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; }
+  .result-state-row { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 8px; margin-top: 14px; }
+  .state-card { min-height: 58px; }
+  .state-card.current { background: #dbeafe; border-color: #1d4ed8; }
+  .state-card.error { background: #fee2e2; border-color: #b91c1c; }
+  .state-card.zero { background: #f8fafc; border-style: dashed; }
+  .cta-rule { color: #334155; font-size: 12px; margin-top: 6px; }
+  @media (max-width: 1279px) {
+    .kpi-grid { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+    .workspace-grid { grid-template-columns: 220px 1fr; }
+    .workspace-grid .panel:last-child { grid-column: 1 / -1; }
+    .state-row { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+    .result-state-row { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
+  }
+  @media (max-width: 767px) {
+    .stepper, .kpi-grid, .workspace-grid, .state-row, .result-state-row { grid-template-columns: 1fr; }
+    .canvas { min-height: 280px; }
+  }
+</style>
+
+<div class="result-shell">
+  <h2>결과 검증 목업: Step 4~5</h2>
+  <p class="subtitle">3D를 실제 구현하지 않아도 선택 강조, 비선택 투명도, 윤곽선, tooltip, CTA 상태, 체이닝 상태 전이를 검토할 수 있게 구성했습니다.</p>
+
+  <div class="mockup">
+    <div class="mockup-header">Step 4 / 5 결과 3D</div>
+    <div class="mockup-body">
+      <div class="stepper" aria-label="5단계 진행 표시">
+        <div class="step done">1 공간</div>
+        <div class="step done">2 블록</div>
+        <div class="step done">3 검토</div>
+        <div class="step current">4 결과</div>
+        <div class="step pending">5 추가</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi"><span class="label">사용 공간 수</span><strong>2개</strong></div>
+        <div class="kpi"><span class="label">평균 적재율</span><strong>86%</strong></div>
+        <div class="kpi"><span class="label">남은 부피</span><strong>1.4m³</strong></div>
+        <div class="kpi"><span class="label">미적재 수</span><strong>0개</strong></div>
+        <div class="kpi"><span class="label">실행 시간</span><strong>18.4초</strong></div>
+        <div class="kpi"><span class="label">제약 위반</span><strong>0건</strong></div>
+      </div>
+
+      <div class="workspace-grid">
+        <div class="panel">
+          <h4>공간 탐색</h4>
+          <div class="rail-item active" role="button" aria-pressed="true">Space 1 · 92%</div>
+          <div class="rail-item" role="button" aria-pressed="false">Space 2 · 77%</div>
+          <div class="rail-item" role="button" aria-pressed="false">미적재 0개</div>
+          <div class="rail-item" role="switch" aria-checked="false">원본 비교: 꺼짐</div>
+          <p class="cta-rule">공간 전환 시 카메라 위치는 유지, 리셋 버튼으로 복구.</p>
+        </div>
+
+        <div class="panel">
+          <h4>3D Canvas 상태 예시</h4>
+          <div class="toolbar" aria-label="3D 보기 도구">
+            <button class="tool">정면</button>
+            <button class="tool">측면</button>
+            <button class="tool active" aria-pressed="true">상면 active</button>
+            <button class="tool">리셋</button>
+            <button class="tool">투명도 30%</button>
+            <button class="tool active" aria-pressed="true">윤곽선 active</button>
+            <button class="tool">치수 표시</button>
+          </div>
+          <div class="canvas" tabindex="0" aria-label="3D 적재 결과 캔버스">
+            <div class="box selected" style="left:80px;top:168px;width:110px;height:76px">A</div>
+            <div class="box selected" style="left:144px;top:116px;width:110px;height:76px">A</div>
+            <div class="box dimmed" style="left:228px;top:176px;width:92px;height:62px">C</div>
+            <div class="box dimmed fragile" style="left:270px;top:92px;width:86px;height:58px">B</div>
+            <div class="box dimmed" style="left:348px;top:156px;width:92px;height:62px">C</div>
+            <div class="box dimmed fragile" style="left:422px;top:82px;width:86px;height:58px">B</div>
+            <div class="tooltip" role="tooltip">
+              <strong>A 박스 선택됨</strong><br>
+              치수: 600 x 400 x 300mm<br>
+              좌표: x80 y168 z0<br>
+              회전: W-H-D<br>
+              fragile: 아니오<br>
+              소속: Space 1
+            </div>
+          </div>
+          <p class="cta-rule">선택 블록은 100% 불투명, 비선택 블록은 20~30% 투명 + 윤곽선 유지. Tooltip은 hover/focus 모두 대응.</p>
+        </div>
+
+        <div class="panel">
+          <h4>블록 범례 / 상세</h4>
+          <div class="legend-item active" role="button" aria-pressed="true">A 박스 · 38개 · 선택됨</div>
+          <div class="legend-item fragile" role="button" aria-pressed="false">B 유리 · 12개 · Fragile</div>
+          <div class="legend-item" role="button" aria-pressed="false">C 박스 · 8개</div>
+          <h4>배치 테이블</h4>
+          <table class="mini-table">
+            <thead><tr><th>블록</th><th>좌표</th><th>회전</th></tr></thead>
+            <tbody>
+              <tr><td>A-01</td><td>80,168,0</td><td>W-H-D</td></tr>
+              <tr><td>A-02</td><td>144,116,300</td><td>W-D-H</td></tr>
+              <tr><td>B-01</td><td>270,92,620</td><td>H-W-D</td></tr>
+            </tbody>
+          </table>
+          <div class="button-row">
+            <button class="semantic-button secondary">입력 수정</button>
+            <button class="semantic-button secondary">다시 계산</button>
+            <button class="semantic-button">추가 블록 넣기</button>
+          </div>
+          <p class="cta-rule">추가 블록 넣기 조건: 정상/부분 성공 결과가 있을 때 활성.</p>
+        </div>
+      </div>
+
+      <h4 style="margin-top:16px">결과 화면 상태 스트립</h4>
+      <div class="result-state-row" aria-label="결과 3D 상태">
+        <div class="state-card">결과 생성 중<br><small>검증 중 -> 적재 계산 중 -> 3D 생성 중</small></div>
+        <div class="state-card current">정상 결과<br><small>미적재 0개, 제약 위반 0건</small></div>
+        <div class="state-card zero">부분 성공<br><small>미적재 블록 있음, 추가/수정 CTA 유지</small></div>
+        <div class="state-card error">계산 실패<br><small>원인 표시 + 재시도/입력 수정 제공</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Step 5 / 5 추가 블록 시뮬레이션</div>
+    <div class="mockup-body">
+      <div class="stepper" aria-label="5단계 진행 표시">
+        <div class="step done">1 공간</div>
+        <div class="step done">2 블록</div>
+        <div class="step done">3 검토</div>
+        <div class="step done">4 결과</div>
+        <div class="step current">5 추가</div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi"><span class="label">기준 결과</span><strong>잠금</strong></div>
+        <div class="kpi"><span class="label">현재 체인</span><strong>Step 3</strong></div>
+        <div class="kpi"><span class="label">이번 가능 수량</span><strong>9개</strong></div>
+        <div class="kpi"><span class="label">남은 부피</span><strong>0.8m³</strong></div>
+        <div class="kpi"><span class="label">원본 비교</span><strong>켜짐</strong></div>
+        <div class="kpi"><span class="label">상태</span><strong>Preview</strong></div>
+      </div>
+
+      <div class="workspace-grid">
+        <div class="panel">
+          <h4>추가할 블록</h4>
+          <div class="legend-item active" role="button" aria-pressed="true">A 박스 · 최대 적재 대상</div>
+          <div class="legend-item fragile" role="button" aria-pressed="false">B 유리 · Fragile</div>
+          <div class="legend-item" role="button" aria-pressed="false">커스텀 블록 추가</div>
+          <button class="semantic-button">최대 적재 계산</button>
+          <button class="semantic-button secondary">수량 직접 지정</button>
+          <p class="cta-rule">계산 CTA 조건: 추가할 블록 선택 후 활성.</p>
+        </div>
+
+        <div class="panel">
+          <h4>체인 Preview Canvas</h4>
+          <div class="canvas" tabindex="0" aria-label="추가 블록 preview 캔버스">
+            <div class="box dimmed" style="left:78px;top:176px;width:98px;height:66px">기존</div>
+            <div class="box dimmed fragile" style="left:190px;top:118px;width:86px;height:58px">기존</div>
+            <div class="box selected" style="left:310px;top:168px;width:92px;height:62px">신규</div>
+            <div class="box selected" style="left:390px;top:120px;width:92px;height:62px">신규</div>
+            <div class="tooltip" role="tooltip">
+              <strong>신규 A 박스 preview</strong><br>
+              이번 단계 추가 가능: 9개<br>
+              기존 배치: 25% 투명<br>
+              신규 배치: 100% 불투명
+            </div>
+          </div>
+          <p class="cta-rule">확정 전 preview는 원본 결과를 변경하지 않습니다.</p>
+        </div>
+
+        <div class="panel">
+          <h4>체이닝 이력</h4>
+          <div class="rail-item">Step 1 · A 박스 15개 추가</div>
+          <div class="rail-item">Step 2 · C 박스 4개 추가</div>
+          <div class="rail-item active">Step 3 preview · A 박스 9개</div>
+          <div class="button-row">
+            <button class="semantic-button">확정</button>
+            <button class="semantic-button neutral">되돌리기</button>
+          </div>
+          <p class="cta-rule">확정 조건: preview 성공. 되돌리기 조건: 확정 이력 1개 이상.</p>
+        </div>
+      </div>
+
+      <h4 style="margin-top:16px">체이닝 상태 머신</h4>
+      <div class="state-row" aria-label="추가 블록 상태 전이">
+        <div class="state-card">선택 전<br><small>계산 CTA disabled</small></div>
+        <div class="state-card">계산 중<br><small>최대 적재 계산 중...</small></div>
+        <div class="state-card current">preview<br><small>확정 CTA enabled</small></div>
+        <div class="state-card zero">추가 가능 0<br><small>실패 아님, 정상 결과</small></div>
+        <div class="state-card error">실패<br><small>제약 위반 또는 계산 오류</small></div>
+        <div class="state-card">확정됨 / 되돌림<br><small>live region 알림</small></div>
+      </div>
+    </div>
+  </div>
+</div>

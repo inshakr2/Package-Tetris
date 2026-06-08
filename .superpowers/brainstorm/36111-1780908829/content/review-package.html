@@ -1,0 +1,140 @@
+<style>
+  .package { color: #0f172a; }
+  .stepper { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 14px 0 18px; }
+  .step { border: 1px solid #047857; border-radius: 6px; padding: 9px; background: #ecfdf5; color: #0f172a; font-weight: 700; text-align: center; }
+  .coverage-grid { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; }
+  .coverage-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #fff; color: #0f172a; }
+  .coverage-card h3 { margin-top: 0; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .badge { border: 1px solid #64748b; border-radius: 999px; padding: 4px 8px; font-size: 12px; color: #0f172a; background: #f8fafc; }
+  .badge.ship { border-color: #047857; background: #dcfce7; }
+  .badge.warn { border-color: #b45309; background: #fef3c7; }
+  .two-col { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr); gap: 14px; margin-top: 14px; }
+  .panel { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; background: #fff; color: #0f172a; }
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; color: #0f172a; }
+  .mini-table th, .mini-table td { border: 1px solid #cbd5e1; padding: 7px; text-align: left; vertical-align: top; }
+  .mini-table th { background: #f1f5f9; }
+  .link-button { display: inline-block; border: 1px solid #1d4ed8; border-radius: 6px; padding: 6px 9px; color: #1d4ed8; background: #fff; font-weight: 700; text-decoration: none; margin-top: 6px; }
+  .link-button:hover, .link-button:focus { background: #dbeafe; }
+  @media (max-width: 1279px) {
+    .coverage-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 767px) {
+    .stepper, .coverage-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="package">
+  <h2>PM 재검토용 목업 패키지</h2>
+  <p class="subtitle">UX 테스트 지적과 PM ship-now 범위를 반영해 5단계 traceability, CTA 상태, 3D 검증 표현, 체이닝 상태 머신을 보강했습니다.</p>
+
+  <div class="stepper" aria-label="5단계 전체 흐름">
+    <div class="step">1 공간 선택</div>
+    <div class="step">2 블록 입력</div>
+    <div class="step">3 실행 전 검토</div>
+    <div class="step">4 결과 3D</div>
+    <div class="step">5 추가 블록</div>
+  </div>
+
+  <div class="coverage-grid">
+    <div class="coverage-card">
+      <h3>Step 1 공간</h3>
+      <p>preset/custom, offset, usable size, 출처 배지, usable size 오류를 명시했습니다.</p>
+      <div class="badge-row"><span class="badge ship">CTA 조건</span><span class="badge">빈 상태</span><span class="badge warn">오류</span></div>
+    </div>
+    <div class="coverage-card">
+      <h3>Step 2 블록</h3>
+      <p>블록 테이블, 수량/fragile, 중복 이름, 수량 0, preset 불러오기 실패를 표시했습니다.</p>
+      <div class="badge-row"><span class="badge ship">validation</span><span class="badge">테이블 접근성</span></div>
+    </div>
+    <div class="coverage-card">
+      <h3>Step 3 검토</h3>
+      <p>제약 체크리스트, 경고 포함 실행 가능, 계산 중, 실행 실패 재시도 상태를 정리했습니다.</p>
+      <div class="badge-row"><span class="badge ship">role=status</span><span class="badge warn">경고</span></div>
+    </div>
+    <div class="coverage-card">
+      <h3>Step 4 결과</h3>
+      <p>샘플 3D 배치, 선택 블록 100%, 비선택 20~30%, 윤곽선, tooltip, 배치 테이블을 넣었습니다.</p>
+      <div class="badge-row"><span class="badge ship">3D 검증</span><span class="badge">실행 시간</span><span class="badge">미적재 수</span></div>
+    </div>
+    <div class="coverage-card">
+      <h3>Step 5 추가</h3>
+      <p>선택 전, 계산 중, preview, 추가 가능 0, 실패, 확정, 되돌림 상태 머신을 추가했습니다.</p>
+      <div class="badge-row"><span class="badge ship">state machine</span><span class="badge">원본 비교</span></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <h3>수정된 목업 파일</h3>
+      <table class="mini-table">
+        <thead><tr><th>파일</th><th>역할</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>flow-options.html<br><a class="link-button" href="#flow-detail">접근안 섹션 보기</a></td>
+            <td>3가지 접근안 비교. A안을 5단계 기준으로 수정.</td>
+          </tr>
+          <tr>
+            <td>wizard-steps.html<br><a class="link-button" href="#wizard-detail">Step 1~3 섹션 보기</a></td>
+            <td>Step 1~3 입력 플로우, CTA 조건, 오류/빈/로딩 상태.</td>
+          </tr>
+          <tr>
+            <td>result-workspace.html<br><a class="link-button" href="#result-detail">Step 4~5 섹션 보기</a></td>
+            <td>Step 4~5 결과/추가 블록, 3D 검증 표현, 결과 상태 스트립, 체이닝 상태 머신.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>PM 성공 기준 반영 여부</h3>
+      <table class="mini-table">
+        <thead><tr><th>기준</th><th>반영</th></tr></thead>
+        <tbody>
+          <tr><td>5단계 플로우 설명 가능</td><td>반영</td></tr>
+          <tr><td>버튼 활성/비활성 이유 표시</td><td>반영</td></tr>
+          <tr><td>블록 선택 시 3D 변화 확인 가능</td><td>반영</td></tr>
+          <tr><td>추가 블록 상태 전이 명확화</td><td>반영</td></tr>
+          <tr><td>오류/빈/로딩/실패 상태</td><td>반영</td></tr>
+          <tr><td>320/768/1440px 최소 responsive rule</td><td>문서 및 CSS 반영</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="flow-detail" class="panel" style="margin-top:14px">
+    <h3>접근안 상세: A안 5단계 기준</h3>
+    <p>A안은 `공간 -> 블록 -> 검토 -> 결과 -> 추가`의 선형 플로우입니다. B안은 입력과 3D가 한 화면에 몰려 과밀하고, C안은 라이브러리 관리 중심이라 첫 계산까지 이동이 많습니다.</p>
+    <div class="badge-row">
+      <span class="badge ship">5단계 traceability</span>
+      <span class="badge ship">CTA 상태 정의</span>
+      <span class="badge ship">3D 검증 표현</span>
+      <span class="badge ship">체이닝 상태 머신</span>
+    </div>
+  </div>
+
+  <div id="wizard-detail" class="panel" style="margin-top:14px">
+    <h3>Step 1~3 상세: 입력 플로우</h3>
+    <table class="mini-table">
+      <thead><tr><th>단계</th><th>검토 가능한 상태</th><th>CTA 조건</th></tr></thead>
+      <tbody>
+        <tr><td>1 공간 선택</td><td>선택 전, preset 로딩, custom 저장 실패, usable size 오류</td><td>공간 선택 + usable size 유효일 때 `다음` 활성</td></tr>
+        <tr><td>2 블록 입력</td><td>빈 상태, 행 오류, 중복 이름, 수량 0, 불러오기 실패</td><td>블록 1개 이상 + 필수값 유효일 때 `다음` 활성</td></tr>
+        <tr><td>3 실행 전 검토</td><td>실행 가능, 경고 포함 가능, 실행 불가, 실행 중, 실행 실패</td><td>오류 없으면 `시뮬레이션 실행` 활성, 실행 중 `계산 중...`</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="result-detail" class="panel" style="margin-top:14px">
+    <h3>Step 4~5 상세: 결과 검증과 추가 블록</h3>
+    <table class="mini-table">
+      <thead><tr><th>영역</th><th>반영 내용</th></tr></thead>
+      <tbody>
+        <tr><td>결과 3D</td><td>사용 공간 수, 적재율, 남은 부피, 미적재 수, 실행 시간, 제약 위반, 배치 테이블, 입력 수정, 다시 계산, 추가 블록 넣기</td></tr>
+        <tr><td>3D 강조</td><td>선택 블록 100% 불투명, 비선택 20~30% 투명, 윤곽선 유지, tooltip, active toolbar</td></tr>
+        <tr><td>결과 상태 스트립</td><td>결과 생성 중, 정상 결과, 부분 성공-미적재 있음, 계산 실패</td></tr>
+        <tr><td>추가 블록 상태 머신</td><td>선택 전, 계산 중, preview, 추가 가능 0, 실패, 확정, 되돌림</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
