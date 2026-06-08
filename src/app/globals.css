@@ -319,6 +319,28 @@ select:focus-visible {
   gap: 18px;
 }
 
+.workspace-stack[data-readonly="true"] > :not(.workspace-readonly-banner) {
+  pointer-events: none;
+  opacity: 0.62;
+}
+
+.workspace-readonly-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(194, 65, 59, 0.28);
+  border-radius: 8px;
+  background: #fff6f5;
+  color: #8f231e;
+}
+
+.workspace-readonly-banner span {
+  color: #7f3f3a;
+  font-size: 13px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);

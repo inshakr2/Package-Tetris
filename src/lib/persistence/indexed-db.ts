@@ -10,6 +10,33 @@ interface WorkspaceRecord {
   workspace: TetrisWorkspace;
 }
 
+interface SaveWorkspaceOptions {
+  expectedRevision?: number | null;
+}
+
+interface WorkspaceSaveConflictDetails {
+  storedRevision: number;
+  incomingRevision: number;
+  expectedRevision: number;
+  storedUpdatedAt: string;
+}
+
+export class WorkspaceSaveConflictError extends Error {
+  readonly storedRevision: number;
+  readonly incomingRevision: number;
+  readonly expectedRevision: number;
+  readonly storedUpdatedAt: string;
+
+  constructor(details: WorkspaceSaveConflictDetails) {
+    super("다른 탭에서 최신 작업본이 먼저 저장되었습니다.");
+    this.name = "WorkspaceSaveConflictError";
+    this.storedRevision = details.storedRevision;
+    this.incomingRevision = details.incomingRevision;
+    this.expectedRevision = details.expectedRevision;
+    this.storedUpdatedAt = details.storedUpdatedAt;
+  }
+}
+
 export class IndexedDbTetrisStorage {
   private readonly dbName: string;
 
@@ -17,12 +44,18 @@ export class IndexedDbTetrisStorage {
     this.dbName = dbName;
   }
 
-  async saveWorkspace(workspace: TetrisWorkspace) {
+  async saveWorkspace(workspace: TetrisWorkspace, options: SaveWorkspaceOptions = {}) {
     const db = await this.openDatabase();
 
     try {
       const transaction = db.transaction(STORE_NAME, "readwrite");
       const store = transaction.objectStore(STORE_NAME);
+      const currentRecord = await requestToPromise<WorkspaceRecord | undefined>(
+        store.get(ACTIVE_WORKSPACE_KEY)
+      );
+
+      assertCanSaveWorkspace(currentRecord?.workspace, workspace, options.expectedRevision);
+
       store.put({
         key: ACTIVE_WORKSPACE_KEY,
         workspace: cloneForStorage(workspace)
@@ -85,6 +118,31 @@ export class IndexedDbTetrisStorage {
       };
     });
   }
+}
+
+function assertCanSaveWorkspace(
+  storedWorkspace: TetrisWorkspace | undefined,
+  incomingWorkspace: TetrisWorkspace,
+  expectedRevision: number | null | undefined
+) {
+  if (expectedRevision === null || expectedRevision === undefined || !storedWorkspace) {
+    return;
+  }
+
+  if (storedWorkspace.fileId !== incomingWorkspace.fileId) {
+    return;
+  }
+
+  if (storedWorkspace.revision <= expectedRevision) {
+    return;
+  }
+
+  throw new WorkspaceSaveConflictError({
+    storedRevision: storedWorkspace.revision,
+    incomingRevision: incomingWorkspace.revision,
+    expectedRevision,
+    storedUpdatedAt: storedWorkspace.updatedAt
+  });
 }
 
 function requestToPromise<T>(request: IDBRequest<T>) {

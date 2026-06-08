@@ -17,7 +17,7 @@ import {
   X
 } from "lucide-react";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IndexedDbTetrisStorage } from "@/lib/persistence/indexed-db";
+import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "@/lib/persistence/indexed-db";
 import {
   copyWorkspaceForNewFile,
   detectImportConflict,
@@ -31,6 +31,17 @@ import {
   type PersistenceRequestResult,
   type StorageHealthSnapshot
 } from "@/lib/persistence/storage-health";
+import {
+  createInitialWorkspaceSyncState,
+  createLocalStorageSyncSignal,
+  getActiveWorkspacePeerCount,
+  reduceWorkspaceSyncState,
+  shouldMarkWorkspaceStale,
+  WORKSPACE_SYNC_CHANNEL_NAME,
+  type WorkspaceRemoteSave,
+  type WorkspaceSyncMessage,
+  type WorkspaceSyncState
+} from "@/lib/persistence/workspace-sync-channel";
 import {
   addBlockTemplateToDraft,
   createBlockTemplate,
@@ -66,11 +77,19 @@ import {
   TetrisWorkspace
 } from "@/lib/workspace/types";
 
-type SaveStatus = "loading" | "saving" | "saved" | "error";
+type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
 
 interface PendingImport {
   workspace: TetrisWorkspace;
   conflict: ImportConflict;
+}
+
+interface WorkspaceSaveConflictNotice {
+  storedRevision: number;
+  incomingRevision: number;
+  expectedRevision: number;
+  storedUpdatedAt: string;
+  source: "storage" | "remote";
 }
 
 const DEFAULT_SPACE_FORM = {
@@ -98,12 +117,21 @@ const STORAGE_PANEL_ID = "storage-reliability-panel";
 
 export function TetrisWorkspaceApp() {
   const storage = useMemo(() => new IndexedDbTetrisStorage(), []);
+  const tabSessionId = useMemo(() => createClientId("tab"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultStageRef = useRef<HTMLElement>(null);
+  const workspaceRef = useRef<TetrisWorkspace | null>(null);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const lastPersistedRevisionRef = useRef<number | null>(null);
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastLocalSavedAt, setLastLocalSavedAt] = useState<string | null>(null);
+  const [lastPersistedRevision, setLastPersistedRevision] = useState<number | null>(null);
+  const [saveConflict, setSaveConflict] = useState<WorkspaceSaveConflictNotice | null>(null);
+  const [workspaceSyncState, setWorkspaceSyncState] = useState<WorkspaceSyncState>(() =>
+    createInitialWorkspaceSyncState(tabSessionId)
+  );
   const [storageHealth, setStorageHealth] = useState<StorageHealthSnapshot | null>(null);
   const [storagePanelOpen, setStoragePanelOpen] = useState(false);
   const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
@@ -122,6 +150,134 @@ export function TetrisWorkspaceApp() {
     setStorageHealth(await readStorageHealth(navigator.storage, window.isSecureContext));
   }, []);
 
+  const publishWorkspaceSyncMessage = useCallback((message: WorkspaceSyncMessage) => {
+    syncChannelRef.current?.postMessage(message);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const signal = createLocalStorageSyncSignal(message);
+      window.localStorage.setItem(signal.key, signal.value);
+    } catch {
+      // localStorage fallback is best-effort only.
+    }
+  }, []);
+
+  const handleWorkspaceSyncMessage = useCallback(
+    (message: unknown) => {
+      if (!isWorkspaceSyncMessage(message)) {
+        return;
+      }
+
+      const receivedAt = new Date().toISOString();
+      setWorkspaceSyncState((current) => reduceWorkspaceSyncState(current, message, receivedAt));
+
+      if (message.tabId === tabSessionId) {
+        return;
+      }
+
+      if (message.type === "tab-opened") {
+        publishWorkspaceSyncMessage({
+          type: "tab-present",
+          tabId: tabSessionId,
+          sentAt: receivedAt
+        });
+      }
+
+      if (message.type !== "workspace-saved") {
+        return;
+      }
+
+      const remoteSave: WorkspaceRemoteSave = {
+        tabId: message.tabId,
+        fileId: message.fileId,
+        revision: message.revision,
+        updatedAt: message.updatedAt,
+        receivedAt
+      };
+
+      if (
+        shouldMarkWorkspaceStale({
+          fileId: workspaceRef.current?.fileId,
+          lastPersistedRevision: lastPersistedRevisionRef.current,
+          remoteSave
+        })
+      ) {
+        setSaveStatus("conflict");
+        setSaveConflict({
+          storedRevision: message.revision,
+          incomingRevision: workspaceRef.current?.revision ?? message.revision,
+          expectedRevision: lastPersistedRevisionRef.current ?? 0,
+          storedUpdatedAt: message.updatedAt,
+          source: "remote"
+        });
+        setStoragePanelOpen(true);
+      }
+    },
+    [publishWorkspaceSyncMessage, tabSessionId]
+  );
+
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
+
+  useEffect(() => {
+    lastPersistedRevisionRef.current = lastPersistedRevision;
+  }, [lastPersistedRevision]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const markPresent = () =>
+      publishWorkspaceSyncMessage({
+        type: "tab-present",
+        tabId: tabSessionId,
+        sentAt: new Date().toISOString()
+      });
+
+    if ("BroadcastChannel" in window) {
+      const channel = new BroadcastChannel(WORKSPACE_SYNC_CHANNEL_NAME);
+      channel.onmessage = (event) => handleWorkspaceSyncMessage(event.data);
+      syncChannelRef.current = channel;
+    }
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== WORKSPACE_SYNC_CHANNEL_NAME || !event.newValue) {
+        return;
+      }
+
+      try {
+        handleWorkspaceSyncMessage(JSON.parse(event.newValue));
+      } catch {
+        // Ignore malformed fallback signals from older tabs.
+      }
+    };
+
+    window.addEventListener("storage", handleStorageEvent);
+    publishWorkspaceSyncMessage({
+      type: "tab-opened",
+      tabId: tabSessionId,
+      sentAt: new Date().toISOString()
+    });
+    const heartbeatId = window.setInterval(markPresent, 5_000);
+
+    return () => {
+      window.clearInterval(heartbeatId);
+      publishWorkspaceSyncMessage({
+        type: "tab-closed",
+        tabId: tabSessionId,
+        sentAt: new Date().toISOString()
+      });
+      window.removeEventListener("storage", handleStorageEvent);
+      syncChannelRef.current?.close();
+      syncChannelRef.current = null;
+    };
+  }, [handleWorkspaceSyncMessage, publishWorkspaceSyncMessage, tabSessionId]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -129,9 +285,12 @@ export function TetrisWorkspaceApp() {
       try {
         const restored = await storage.loadWorkspace();
         if (!cancelled) {
-          setWorkspace(restored ? normalizeWorkspace(restored) : createDefaultWorkspace());
+          const nextWorkspace = restored ? normalizeWorkspace(restored) : createDefaultWorkspace();
+          setWorkspace(nextWorkspace);
           setSaveStatus(restored ? "saved" : "saving");
           setLastLocalSavedAt(restored?.updatedAt ?? null);
+          setLastPersistedRevision(restored?.revision ?? null);
+          setSaveConflict(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -155,15 +314,43 @@ export function TetrisWorkspaceApp() {
       return;
     }
 
+    if (saveConflict) {
+      return;
+    }
+
     setSaveStatus("saving");
     const timeoutId = window.setTimeout(async () => {
       try {
-        await storage.saveWorkspace(workspace);
+        await storage.saveWorkspace(workspace, {
+          expectedRevision: lastPersistedRevisionRef.current
+        });
+        setLastPersistedRevision(workspace.revision);
         setLastLocalSavedAt(new Date().toISOString());
         setSaveStatus("saved");
         setSaveError(null);
+        publishWorkspaceSyncMessage({
+          type: "workspace-saved",
+          tabId: tabSessionId,
+          sentAt: new Date().toISOString(),
+          fileId: workspace.fileId,
+          revision: workspace.revision,
+          updatedAt: workspace.updatedAt
+        });
         void refreshStorageHealth();
       } catch (error) {
+        if (error instanceof WorkspaceSaveConflictError) {
+          setSaveStatus("conflict");
+          setSaveConflict({
+            storedRevision: error.storedRevision,
+            incomingRevision: error.incomingRevision,
+            expectedRevision: error.expectedRevision,
+            storedUpdatedAt: error.storedUpdatedAt,
+            source: "storage"
+          });
+          setStoragePanelOpen(true);
+          return;
+        }
+
         setSaveStatus("error");
         setSaveError(toErrorMessage(error));
         setStoragePanelOpen(true);
@@ -171,7 +358,7 @@ export function TetrisWorkspaceApp() {
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [refreshStorageHealth, storage, workspace]);
+  }, [publishWorkspaceSyncMessage, refreshStorageHealth, saveConflict, storage, tabSessionId, workspace]);
 
   useEffect(() => {
     if (!storagePanelOpen) {
@@ -203,10 +390,15 @@ export function TetrisWorkspaceApp() {
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
+  const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
+  const isWorkspaceLocked = Boolean(saveConflict);
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
       if (!current) {
+        return current;
+      }
+      if (saveConflict) {
         return current;
       }
       const now = new Date().toISOString();
@@ -519,6 +711,24 @@ export function TetrisWorkspaceApp() {
     });
   }
 
+  async function reloadLatestWorkspace() {
+    try {
+      const restored = await storage.loadWorkspace();
+      const nextWorkspace = restored ? normalizeWorkspace(restored) : createDefaultWorkspace();
+      setWorkspace(nextWorkspace);
+      setLastPersistedRevision(restored?.revision ?? null);
+      setLastLocalSavedAt(restored?.updatedAt ?? null);
+      setSaveConflict(null);
+      setSaveError(null);
+      setSaveStatus(restored ? "saved" : "saving");
+      setStoragePanelOpen(false);
+    } catch (error) {
+      setSaveStatus("error");
+      setSaveError(toErrorMessage(error));
+      setStoragePanelOpen(true);
+    }
+  }
+
   async function requestBrowserStorageProtection() {
     setPersistenceRequesting(true);
     try {
@@ -652,6 +862,8 @@ export function TetrisWorkspaceApp() {
               status={saveStatus}
               needsExport={needsExport}
               error={saveError}
+              saveConflict={saveConflict}
+              otherTabCount={otherTabCount}
               expanded={storagePanelOpen}
               controls={STORAGE_PANEL_ID}
               onClick={() => setStoragePanelOpen((open) => !open)}
@@ -684,15 +896,24 @@ export function TetrisWorkspaceApp() {
           error={saveError}
           lastLocalSavedAt={lastLocalSavedAt}
           storageHealth={storageHealth}
+          saveConflict={saveConflict}
+          otherTabCount={otherTabCount}
           persistenceRequestResult={persistenceRequestResult}
           persistenceRequesting={persistenceRequesting}
           onClose={() => setStoragePanelOpen(false)}
           onExportJson={exportJson}
+          onReloadLatestWorkspace={reloadLatestWorkspace}
           onRequestStorageProtection={requestBrowserStorageProtection}
         />
       ) : null}
 
-      <div className="workspace-stack">
+      <div className="workspace-stack" data-readonly={isWorkspaceLocked}>
+        {isWorkspaceLocked ? (
+          <div className="workspace-readonly-banner" role="alert">
+            <strong>다른 탭에서 최신 작업본이 저장되었습니다.</strong>
+            <span>충돌 방지를 위해 이 탭의 입력과 실행을 잠시 막았습니다.</span>
+          </div>
+        ) : null}
         <div className="workflow-progress">
           <Stepper activeStep={workspace.draft.currentStep} />
         </div>
@@ -754,8 +975,11 @@ export function TetrisWorkspaceApp() {
               review={review}
               needsExport={needsExport}
               storageHealth={storageHealth}
+              saveConflict={saveConflict}
+              otherTabCount={otherTabCount}
               persistenceRequesting={persistenceRequesting}
               onExportJson={exportJson}
+              onReloadLatestWorkspace={reloadLatestWorkspace}
               onRequestStorageProtection={requestBrowserStorageProtection}
               onCreateResult={createPackingResult}
             />
@@ -783,13 +1007,15 @@ export function TetrisWorkspaceApp() {
           needsExport={needsExport}
           error={saveError}
           compact
+          saveConflict={saveConflict}
+          otherTabCount={otherTabCount}
           expanded={storagePanelOpen}
           controls={STORAGE_PANEL_ID}
           onClick={() => setStoragePanelOpen((open) => !open)}
         />
-        <button className="primary-button" onClick={exportJson}>
-          <Download size={16} />
-          {saveStatus === "error" ? "지금 백업" : "내보내기"}
+        <button className="primary-button" onClick={isWorkspaceLocked ? reloadLatestWorkspace : exportJson}>
+          {isWorkspaceLocked ? <RotateCcw size={16} /> : <Download size={16} />}
+          {isWorkspaceLocked ? "최신본" : saveStatus === "error" ? "지금 백업" : "내보내기"}
         </button>
       </div>
     </main>
@@ -1150,8 +1376,11 @@ function ReviewCompactCard({
   review,
   needsExport,
   storageHealth,
+  saveConflict,
+  otherTabCount,
   persistenceRequesting,
   onExportJson,
+  onReloadLatestWorkspace,
   onRequestStorageProtection,
   onCreateResult
 }: {
@@ -1159,8 +1388,11 @@ function ReviewCompactCard({
   review: ReviewGateResult | null;
   needsExport: boolean;
   storageHealth: StorageHealthSnapshot | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
   persistenceRequesting: boolean;
   onExportJson: () => void;
+  onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
   onCreateResult: () => void;
 }) {
@@ -1197,6 +1429,22 @@ function ReviewCompactCard({
         <SummaryTile label="예상 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
       <ul className="checklist compact-checklist">
+        {saveConflict ? (
+          <li className="review-message" data-tone="red">
+            <AlertTriangle size={18} color="var(--red)" />
+            <span className="review-message-content">
+              다른 탭에서 최신 작업본이 저장되었습니다. 이 탭에서는 결과 생성과 입력 변경을 할 수 없습니다.
+              <button className="inline-action" onClick={onReloadLatestWorkspace}>
+                최신본 불러오기
+              </button>
+            </span>
+          </li>
+        ) : otherTabCount > 0 ? (
+          <li className="review-message" data-tone="amber">
+            <AlertTriangle size={18} color="var(--amber)" />
+            다른 탭도 열려 있습니다. 편집은 이 탭에서만 계속하는 것이 안전합니다.
+          </li>
+        ) : null}
         {reviewMessages.map((message) => (
           <li key={message.code} className="review-message" data-tone={message.level === "valid" ? "green" : message.level === "warning" ? "amber" : "red"}>
             {message.level === "error" ? (
@@ -1241,8 +1489,8 @@ function ReviewCompactCard({
         <button
           className="primary-button"
           onClick={onCreateResult}
-          disabled={review?.cta.disabled ?? true}
-          title={review?.cta.disabledReason ?? undefined}
+          disabled={Boolean(saveConflict) || (review?.cta.disabled ?? true)}
+          title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
         >
           <Box size={16} />
           결과 요약 생성
@@ -1794,6 +2042,8 @@ function SaveStatusPill({
   status,
   needsExport,
   error,
+  saveConflict,
+  otherTabCount,
   compact = false,
   expanded,
   controls,
@@ -1802,11 +2052,29 @@ function SaveStatusPill({
   status: SaveStatus;
   needsExport: boolean;
   error: string | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
   compact?: boolean;
   expanded: boolean;
   controls: string;
   onClick: () => void;
 }) {
+  if (status === "conflict" || saveConflict) {
+    return (
+      <button
+        className="status-pill status-pill-button"
+        data-tone="red"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+      >
+        <AlertTriangle size={16} />
+        {compact ? "읽기 전용" : "다른 탭 저장 감지 · 읽기 전용"}
+      </button>
+    );
+  }
+
   if (status === "error") {
     return (
       <button
@@ -1850,7 +2118,17 @@ function SaveStatusPill({
       onClick={onClick}
     >
       <CheckCircle2 size={16} />
-      {needsExport ? "이 기기에 저장됨 · 백업 업데이트 필요" : "이 기기에 저장됨"}
+      {compact
+        ? otherTabCount > 0
+          ? "편집 중"
+          : needsExport
+            ? "백업 필요"
+            : "저장됨"
+        : otherTabCount > 0
+          ? "이 기기에 저장됨 · 다른 탭 열림"
+          : needsExport
+            ? "이 기기에 저장됨 · 백업 업데이트 필요"
+            : "이 기기에 저장됨"}
     </button>
   );
 }
@@ -1863,10 +2141,13 @@ function StorageReliabilityPanel({
   error,
   lastLocalSavedAt,
   storageHealth,
+  saveConflict,
+  otherTabCount,
   persistenceRequestResult,
   persistenceRequesting,
   onClose,
   onExportJson,
+  onReloadLatestWorkspace,
   onRequestStorageProtection
 }: {
   id: string;
@@ -1876,13 +2157,16 @@ function StorageReliabilityPanel({
   error: string | null;
   lastLocalSavedAt: string | null;
   storageHealth: StorageHealthSnapshot | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
   persistenceRequestResult: PersistenceRequestResult | null;
   persistenceRequesting: boolean;
   onClose: () => void;
   onExportJson: () => void;
+  onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
 }) {
-  const localState = getLocalSaveState(status, error, lastLocalSavedAt);
+  const localState = getLocalSaveState(status, error, lastLocalSavedAt, saveConflict, otherTabCount);
   const exportState = getExportState(workspace, needsExport);
   const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
   const canRequestProtection =
@@ -1932,9 +2216,15 @@ function StorageReliabilityPanel({
       </div>
 
       <div className="storage-health-actions">
-        <button className="primary-button" onClick={onExportJson}>
+        {saveConflict ? (
+          <button className="primary-button" onClick={onReloadLatestWorkspace}>
+            <RotateCcw size={16} />
+            최신 작업본 불러오기
+          </button>
+        ) : null}
+        <button className={saveConflict ? "secondary-button" : "primary-button"} onClick={onExportJson}>
           <Download size={16} />
-          {status === "error" ? "지금 백업" : "JSON 내보내기"}
+          {saveConflict ? "현재 작업 JSON 백업" : status === "error" ? "지금 백업" : "JSON 내보내기"}
         </button>
         <button
           className="secondary-button"
@@ -1982,14 +2272,32 @@ function StorageHealthRow({
   );
 }
 
-function getLocalSaveState(status: SaveStatus, error: string | null, lastLocalSavedAt: string | null) {
+function getLocalSaveState(
+  status: SaveStatus,
+  error: string | null,
+  lastLocalSavedAt: string | null,
+  saveConflict: WorkspaceSaveConflictNotice | null,
+  otherTabCount: number
+) {
+  if (status === "conflict" || saveConflict) {
+    return {
+      tone: "red" as const,
+      value: "다른 탭 최신본 감지",
+      description: "충돌 방지를 위해 이 탭에서는 입력 변경과 실행을 막았습니다.",
+      detail: saveConflict
+        ? `저장소 revision ${saveConflict.storedRevision} · 이 탭 기준 ${saveConflict.expectedRevision}`
+        : "저장 보호 패널에서 최신 작업본을 불러오거나 현재 작업을 JSON으로 백업하세요."
+    };
+  }
+
   if (status === "error") {
     return {
       tone: "red" as const,
       value: "저장 실패",
       description: error
         ? `브라우저 저장소에 쓰지 못했습니다. ${error}`
-        : "브라우저 저장소에 쓰지 못했습니다. 이 기기 저장이 불안정할 수 있습니다."
+        : "브라우저 저장소에 쓰지 못했습니다. 이 기기 저장이 불안정할 수 있습니다.",
+      detail: null
     };
   }
 
@@ -1997,7 +2305,8 @@ function getLocalSaveState(status: SaveStatus, error: string | null, lastLocalSa
     return {
       tone: "amber" as const,
       value: "불러오는 중",
-      description: "이 기기에 저장된 작업본을 확인하고 있습니다."
+      description: "이 기기에 저장된 작업본을 확인하고 있습니다.",
+      detail: null
     };
   }
 
@@ -2005,16 +2314,21 @@ function getLocalSaveState(status: SaveStatus, error: string | null, lastLocalSa
     return {
       tone: "amber" as const,
       value: "저장 중",
-      description: "현재 작업본을 이 기기 IndexedDB에 저장하고 있습니다."
+      description: "현재 작업본을 이 기기 IndexedDB에 저장하고 있습니다.",
+      detail: otherTabCount > 0 ? "다른 탭도 열려 있습니다. 저장 기준 revision을 확인합니다." : null
     };
   }
 
   return {
-    tone: "green" as const,
-    value: "자동저장됨",
+    tone: otherTabCount > 0 ? ("amber" as const) : ("green" as const),
+    value: otherTabCount > 0 ? "이 탭이 편집 중 · 다른 탭 열림" : "자동저장됨",
     description: lastLocalSavedAt
       ? `마지막 이 기기 저장: ${formatDateTime(lastLocalSavedAt)}`
-      : "브라우저를 닫아도 이 기기에서는 이어서 작업할 수 있습니다."
+      : "브라우저를 닫아도 이 기기에서는 이어서 작업할 수 있습니다.",
+    detail:
+      otherTabCount > 0
+        ? "다른 탭을 참고용으로 열어둘 수 있지만, 같은 작업본 편집은 한 탭에서만 이어가는 것이 안전합니다."
+        : null
   };
 }
 
@@ -2351,6 +2665,38 @@ function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace {
         }) ?? []
     }
   };
+}
+
+function isWorkspaceSyncMessage(value: unknown): value is WorkspaceSyncMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<WorkspaceSyncMessage>;
+
+  if (
+    candidate.type !== "tab-opened" &&
+    candidate.type !== "tab-present" &&
+    candidate.type !== "tab-closed" &&
+    candidate.type !== "workspace-saved"
+  ) {
+    return false;
+  }
+
+  if (typeof candidate.tabId !== "string" || typeof candidate.sentAt !== "string") {
+    return false;
+  }
+
+  if (candidate.type !== "workspace-saved") {
+    return true;
+  }
+
+  const savedCandidate = candidate as Partial<Extract<WorkspaceSyncMessage, { type: "workspace-saved" }>>;
+  return (
+    typeof savedCandidate.fileId === "string" &&
+    typeof savedCandidate.revision === "number" &&
+    typeof savedCandidate.updatedAt === "string"
+  );
 }
 
 function toErrorMessage(error: unknown) {
