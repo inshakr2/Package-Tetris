@@ -1329,21 +1329,22 @@ export function TetrisWorkspaceApp() {
           </div>
         </section>
 
-                <ResultStage
-                  ref={resultStageRef}
-                  latestResult={latestResult}
+        <ResultStage
+          ref={resultStageRef}
+          latestResult={latestResult}
+          needsExport={needsExport}
           selectedSpace={selectedSpace}
           workspacePolicy={workspace.policy}
           review={review}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
-                  pendingImport={pendingImport}
-                  onResolveImport={resolveImport}
-                  onExportJson={exportJson}
-                  onCreateResult={createPackingResult}
-                  onConfirmChainSimulation={confirmChainSimulation}
-                  onUndoLastChainAddition={undoLastChainAddition}
-                />
+          pendingImport={pendingImport}
+          onResolveImport={resolveImport}
+          onExportJson={exportJson}
+          onCreateResult={createPackingResult}
+          onConfirmChainSimulation={confirmChainSimulation}
+          onUndoLastChainAddition={undoLastChainAddition}
+        />
       </div>
 
       {pendingDraftUndo ? (
@@ -1916,11 +1917,11 @@ function ReviewCompactCard({
           className="primary-button"
           onClick={onCreateResult}
           disabled={Boolean(saveConflict) || (review?.cta.disabled ?? true)}
-          title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
-        >
-          <Box size={16} />
-                  결과 만들기
-        </button>
+        title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
+      >
+        <Box size={16} />
+        결과 만들기
+      </button>
       </div>
     </section>
   );
@@ -1928,32 +1929,34 @@ function ReviewCompactCard({
 
 const ResultStage = ({
   latestResult,
+  needsExport,
   selectedSpace,
   workspacePolicy,
   review,
   draftBlocks,
   chainHistory,
-          pendingImport,
-          onResolveImport,
-          onExportJson,
-          onCreateResult,
-          onConfirmChainSimulation,
-          onUndoLastChainAddition,
-          ref
+  pendingImport,
+  onResolveImport,
+  onExportJson,
+  onCreateResult,
+  onConfirmChainSimulation,
+  onUndoLastChainAddition,
+  ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
+  needsExport: boolean;
   selectedSpace: SpaceDefinition | undefined;
   workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
-          pendingImport: PendingImport | null;
-          onResolveImport: (option: ImportConflictOption) => void;
-          onExportJson: () => void;
-          onCreateResult: () => void;
-          onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
-          onUndoLastChainAddition: (resultId: string) => void;
-          ref: React.Ref<HTMLElement>;
+  pendingImport: PendingImport | null;
+  onResolveImport: (option: ImportConflictOption) => void;
+  onExportJson: () => void;
+  onCreateResult: () => void;
+  onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
+  onUndoLastChainAddition: (resultId: string) => void;
+  ref: React.Ref<HTMLElement>;
 }) => {
   const [projectionView, setProjectionView] = useState<ProjectionView>("top");
   const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("three");
@@ -2209,6 +2212,23 @@ const ResultStage = ({
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
+
+      {latestResult && needsExport ? (
+        <div className="result-backup-callout" aria-label="결과 백업 안내">
+          <div>
+            <span className="badge" data-tone="amber">
+              백업 권장
+            </span>
+            <p className="fine-print">
+              결과를 다른 기기로 옮기거나 복구하려면 백업 파일을 만들어 두세요.
+            </p>
+          </div>
+          <button className="primary-button result-backup-action" onClick={onExportJson}>
+            <Download size={16} />
+            백업 파일 만들기
+          </button>
+        </div>
+      ) : null}
 
       {safetySpaceSplitWarning ? (
         <div className="review-status-banner" data-tone="amber" role="status">
