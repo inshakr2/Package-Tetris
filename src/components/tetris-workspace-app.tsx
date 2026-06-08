@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Trash2,
   Truck,
+  WifiOff,
   X
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -27,6 +28,7 @@ import {
 } from "@/lib/persistence/json-transfer";
 import {
   readStorageHealth,
+  hasMeaningfulWorkspaceData,
   requestStoragePersistence,
   shouldRemindExport,
   type PersistenceRequestResult,
@@ -88,6 +90,11 @@ import {
 } from "@/lib/workspace/result-warnings";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
+import {
+  createConnectivityStatus,
+  type ConnectivityStatus,
+  type NetworkState
+} from "@/lib/workspace/connectivity-status";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -188,6 +195,7 @@ export function TetrisWorkspaceApp() {
   );
   const [storageHealth, setStorageHealth] = useState<StorageHealthSnapshot | null>(null);
   const [storagePanelOpen, setStoragePanelOpen] = useState(false);
+  const [networkState, setNetworkState] = useState<NetworkState>("unknown");
   const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
   const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
@@ -284,6 +292,25 @@ export function TetrisWorkspaceApp() {
   useEffect(() => {
     lastPersistedRevisionRef.current = lastPersistedRevision;
   }, [lastPersistedRevision]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return;
+    }
+
+    const updateNetworkState = () => {
+      setNetworkState(navigator.onLine ? "online" : "offline");
+    };
+
+    updateNetworkState();
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+
+    return () => {
+      window.removeEventListener("online", updateNetworkState);
+      window.removeEventListener("offline", updateNetworkState);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -462,6 +489,14 @@ export function TetrisWorkspaceApp() {
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
+  const connectivityStatus = useMemo(
+    () =>
+      createConnectivityStatus({
+        networkState,
+        hasMeaningfulWorkspaceData: Boolean(workspace && hasMeaningfulWorkspaceData(workspace))
+      }),
+    [networkState, workspace]
+  );
   const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
   const isWorkspaceLocked = Boolean(saveConflict);
   const spaceDialogMode: SpaceDialogMode = editingSpaceId ? "edit" : "add";
@@ -1130,6 +1165,19 @@ export function TetrisWorkspaceApp() {
               onClick={() => setStoragePanelOpen((open) => !open)}
             />
           </div>
+          {connectivityStatus.visible ? (
+            <button
+              className="status-pill status-pill-button connectivity-status-pill"
+              data-tone={connectivityStatus.tone}
+              aria-expanded={storagePanelOpen}
+              aria-controls={STORAGE_PANEL_ID}
+              aria-live="polite"
+              onClick={() => setStoragePanelOpen(true)}
+            >
+              <WifiOff size={16} />
+              {connectivityStatus.pillLabel}
+            </button>
+          ) : null}
           <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} />
             백업 파일 가져오기
@@ -1159,6 +1207,7 @@ export function TetrisWorkspaceApp() {
           storageHealth={storageHealth}
           saveConflict={saveConflict}
           otherTabCount={otherTabCount}
+          connectivityStatus={connectivityStatus}
           persistenceRequestResult={persistenceRequestResult}
           persistenceRequesting={persistenceRequesting}
           onClose={() => setStoragePanelOpen(false)}
@@ -2673,6 +2722,7 @@ function StorageReliabilityPanel({
   storageHealth,
   saveConflict,
   otherTabCount,
+  connectivityStatus,
   persistenceRequestResult,
   persistenceRequesting,
   onClose,
@@ -2689,6 +2739,7 @@ function StorageReliabilityPanel({
   storageHealth: StorageHealthSnapshot | null;
   saveConflict: WorkspaceSaveConflictNotice | null;
   otherTabCount: number;
+  connectivityStatus: ConnectivityStatus;
   persistenceRequestResult: PersistenceRequestResult | null;
   persistenceRequesting: boolean;
   onClose: () => void;
@@ -2750,6 +2801,16 @@ function StorageReliabilityPanel({
           description={browserState.description}
           detail={browserState.detail}
         />
+        {connectivityStatus.visible ? (
+          <StorageHealthRow
+            icon={<WifiOff size={18} />}
+            tone={connectivityStatus.tone}
+            label="네트워크 상태"
+            value={connectivityStatus.title}
+            description={connectivityStatus.description}
+            detail="네트워크 상태는 브라우저가 감지한 힌트입니다. 작업 차단 기준으로 사용하지 않습니다."
+          />
+        ) : null}
       </div>
 
       <div className="storage-health-actions">

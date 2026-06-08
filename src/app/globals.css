@@ -104,6 +104,12 @@ button {
   min-width: 0;
 }
 
+.connectivity-status-pill {
+  border-color: rgba(183, 121, 31, 0.3);
+  background: white;
+  color: #70430f;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1692,6 +1698,11 @@ select:focus-visible {
   .toolbar {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .connectivity-status-pill {
+    max-width: 100%;
+    white-space: normal;
   }
 
   .storage-reliability-panel {
