@@ -36,6 +36,12 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
+import {
+  createProjectedBlocks,
+  createProjectionLegendItems,
+  getProjectionViewLabel,
+  type ProjectionView
+} from "@/lib/workspace/projection-view";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -75,6 +81,7 @@ const DEFAULT_BLOCK_FORM = {
 };
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
+const PROJECTION_VIEWS: ProjectionView[] = ["top", "front", "side"];
 
 export function TetrisWorkspaceApp() {
   const storage = useMemo(() => new IndexedDbTetrisStorage(), []);
@@ -364,6 +371,7 @@ export function TetrisWorkspaceApp() {
           resultId,
           runId: optimizationOutput.runId,
           createdAt: now,
+          spaceSnapshot: optimizationInput.space,
           usedSpaceCount: optimizationOutput.usedSpaceCount,
           averageUtilizationRate: optimizationOutput.averageUtilizationRate,
           unloadedBlockCount: optimizationOutput.unloadedBlockCount,
@@ -573,7 +581,6 @@ export function TetrisWorkspaceApp() {
           latestResult={latestResult}
           selectedSpace={selectedSpace}
           review={review}
-          draftBlocks={draftBlocks}
           pendingImport={pendingImport}
           onResolveImport={resolveImport}
         />
@@ -1022,7 +1029,6 @@ const ResultStage = ({
   latestResult,
   selectedSpace,
   review,
-  draftBlocks,
   pendingImport,
   onResolveImport,
   ref
@@ -1030,11 +1036,42 @@ const ResultStage = ({
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
-  draftBlocks: BlockDefinition[];
   pendingImport: PendingImport | null;
   onResolveImport: (option: ImportConflictOption) => void;
   ref: React.Ref<HTMLElement>;
 }) => {
+  const [projectionView, setProjectionView] = useState<ProjectionView>("top");
+  const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
+  const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
+  const packedSpaces = latestResult?.spaces ?? [];
+  const selectedPackedSpace =
+    packedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? packedSpaces[0] ?? null;
+  const resultSpace = latestResult?.spaceSnapshot ?? selectedSpace;
+  const usableSize = resultSpace ? calculateUsableSize(resultSpace) : null;
+  const projectedBlocks = useMemo(() => {
+    if (!selectedPackedSpace || !usableSize) {
+      return [];
+    }
+
+    return createProjectedBlocks(selectedPackedSpace.blocks, projectionView, usableSize);
+  }, [projectionView, selectedPackedSpace, usableSize]);
+  const legendItems = useMemo(() => createProjectionLegendItems(projectedBlocks), [projectedBlocks]);
+  const selectedLegendItem =
+    legendItems.find((item) => item.blockTemplateId === selectedBlockTemplateId) ?? null;
+  const visibleBlockCount = selectedBlockTemplateId
+    ? projectedBlocks.filter((block) => block.blockTemplateId === selectedBlockTemplateId).length
+    : projectedBlocks.length;
+
+  useEffect(() => {
+    setProjectionView("top");
+    setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
+    setSelectedBlockTemplateId(null);
+  }, [latestResult?.resultId]);
+
+  function toggleSelectedBlockTemplate(blockTemplateId: string) {
+    setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
+  }
+
   return (
     <section className="panel result-stage" ref={ref} tabIndex={-1} data-has-result={Boolean(latestResult)}>
       <div className="result-stage-header">
@@ -1044,7 +1081,7 @@ const ResultStage = ({
           </span>
           <h2>{getWorkspaceSectionTitle("result")}</h2>
           <p className="panel-subtitle">
-            실제 3D 엔진 연결 전까지는 입력 데이터 기반 요약과 큰 preview 영역을 제공합니다.
+            v0 엔진이 계산한 좌표를 상면, 정면, 측면 2D 작업대로 검토합니다.
           </p>
         </div>
       </div>
@@ -1056,29 +1093,148 @@ const ResultStage = ({
           value={latestResult ? `${Math.round(latestResult.averageUtilizationRate * 100)}%` : "-"}
         />
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
-        <SummaryTile label="대상 공간" value={selectedSpace?.name ?? "미선택"} />
+        <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
 
       {latestResult ? (
-        <div className="result-preview result-preview-large" tabIndex={0} aria-label="결과 3D placeholder">
-          <strong>3D 결과 스테이지</strong>
-          <span className="fine-print">
-            결과 영역은 데스크톱에서 가장 큰 패널입니다. 후속 단계에서 Web Worker 최적화 엔진과 3D 렌더링을
-            연결합니다.
-          </span>
-          <div className="preview-stack" aria-hidden="true">
-            {draftBlocks.slice(0, 12).map((block, index) => (
-              <span key={`${block.draftBlockItemId}-${index}`} style={{ "--i": index } as React.CSSProperties} />
-            ))}
-          </div>
-          <div className="view-buttons">
-            <button className="secondary-button">상면</button>
-            <button className="secondary-button">정면</button>
-            <button className="secondary-button">측면</button>
-            <button className="secondary-button">
-              <RotateCcw size={16} />
-              리셋
-            </button>
+        <div className="result-preview result-preview-large" tabIndex={0} aria-label="2D 배치 검토 작업대">
+          <div className="result-workspace-grid">
+            <aside className="result-space-panel" aria-label="공간 인스턴스 선택">
+              <div className="result-panel-head">
+                <strong>공간</strong>
+                <span className="fine-print">{packedSpaces.length}개 인스턴스</span>
+              </div>
+              <div className="space-instance-list">
+                {packedSpaces.map((space, index) => (
+                  <button
+                    key={space.spaceInstanceId}
+                    className="space-instance-button"
+                    aria-pressed={space.spaceInstanceId === selectedPackedSpace?.spaceInstanceId}
+                    onClick={() => {
+                      setSelectedSpaceInstanceId(space.spaceInstanceId);
+                      setSelectedBlockTemplateId(null);
+                    }}
+                  >
+                    <strong>Space {index + 1}</strong>
+                    <span>
+                      {space.blocks.length}개 · {Math.round(space.utilizationRate * 100)}%
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            <section className="projection-stage" aria-label={`${getProjectionViewLabel(projectionView)} 투영 결과`}>
+              <div className="projection-toolbar">
+                <div>
+                  <strong>{getProjectionViewLabel(projectionView)} 투영</strong>
+                  <span className="fine-print">
+                    {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
+                  </span>
+                </div>
+                <div className="view-buttons" aria-label="투영 방향 선택">
+                  {PROJECTION_VIEWS.map((view) => (
+                    <button
+                      key={view}
+                      className="secondary-button"
+                      aria-pressed={projectionView === view}
+                      onClick={() => setProjectionView(view)}
+                    >
+                      {getProjectionViewLabel(view)}
+                    </button>
+                  ))}
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setProjectionView("top");
+                      setSelectedBlockTemplateId(null);
+                    }}
+                  >
+                    <RotateCcw size={16} />
+                    리셋
+                  </button>
+                </div>
+              </div>
+
+              <div className="projection-board" data-view={projectionView}>
+                {projectedBlocks.length > 0 ? (
+                  projectedBlocks.map((block) => {
+                    const isSelected =
+                      selectedBlockTemplateId === null || selectedBlockTemplateId === block.blockTemplateId;
+                    const blockStyle = {
+                      "--block-color": block.color,
+                      left: `${block.leftPercent}%`,
+                      top: `${block.topPercent}%`,
+                      width: `${Math.max(block.widthPercent, 1.4)}%`,
+                      height: `${Math.max(block.heightPercent, 1.4)}%`,
+                      zIndex: Math.max(1, Math.round(block.depthOrder))
+                    } as React.CSSProperties;
+
+                    return (
+                      <span
+                        key={block.blockId}
+                        className="projected-block"
+                        data-muted={!isSelected}
+                        data-fragile={block.fragile}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
+                        title={`${block.name} · ${block.fragile ? "fragile" : "normal"}`}
+                        style={blockStyle}
+                        onClick={() => toggleSelectedBlockTemplate(block.blockTemplateId)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleSelectedBlockTemplate(block.blockTemplateId);
+                          }
+                        }}
+                      >
+                        <span>{block.name}</span>
+                      </span>
+                    );
+                  })
+                ) : (
+                  <div className="projection-empty">
+                    <strong>표시할 배치 좌표가 없습니다.</strong>
+                    <span className="fine-print">결과 요약을 다시 생성하면 v0 좌표를 확인할 수 있습니다.</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="projection-status">
+                <span className="badge" data-tone="green">
+                  {selectedBlockTemplateId ? "강조" : "표시"} {visibleBlockCount}개
+                </span>
+                <span className="fine-print">
+                  {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 블록 표시"}
+                </span>
+              </div>
+            </section>
+
+            <aside className="result-legend-panel" aria-label="블록 유형 범례">
+              <div className="result-panel-head">
+                <strong>블록 범례</strong>
+                <span className="fine-print">{legendItems.length}개 유형</span>
+              </div>
+              <div className="projection-legend-list">
+                {legendItems.map((item) => (
+                  <button
+                    key={item.blockTemplateId}
+                    className="projection-legend-item"
+                    aria-pressed={item.blockTemplateId === selectedBlockTemplateId}
+                    onClick={() => toggleSelectedBlockTemplate(item.blockTemplateId)}
+                  >
+                    <span className="legend-swatch" style={{ "--block-color": item.color } as React.CSSProperties} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>
+                        {item.quantity}개 · {item.fragile ? "fragile" : "normal"}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
       ) : (
