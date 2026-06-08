@@ -58,6 +58,8 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
+import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
 import {
   createProjectedBlocks,
@@ -153,6 +155,7 @@ export function TetrisWorkspaceApp() {
   const workspaceRef = useRef<TetrisWorkspace | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
   const lastPersistedRevisionRef = useRef<number | null>(null);
+  const lastSpaceDialogTriggerRef = useRef<HTMLElement | null>(null);
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -169,6 +172,8 @@ export function TetrisWorkspaceApp() {
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
+  const [spaceFormError, setSpaceFormError] = useState<string | null>(null);
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
@@ -422,6 +427,7 @@ export function TetrisWorkspaceApp() {
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
   const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
   const isWorkspaceLocked = Boolean(saveConflict);
+  const spaceDialogMode: SpaceDialogMode = editingSpaceId ? "edit" : "add";
   const mobileStickyAction = useMemo(
     () =>
       createMobileStickyActionState({
@@ -464,6 +470,10 @@ export function TetrisWorkspaceApp() {
   }
 
   function saveSpace() {
+    if (!workspace || saveConflict) {
+      return false;
+    }
+
     const now = new Date().toISOString();
     const nextSpace: SpaceDefinition = {
       spaceId: editingSpaceId ?? createClientId("space"),
@@ -502,11 +512,15 @@ export function TetrisWorkspaceApp() {
         }
       };
     });
-    setEditingSpaceId(null);
-    setSpaceForm(DEFAULT_SPACE_FORM);
+    return true;
   }
 
-  function editSpace(space: SpaceDefinition) {
+  function updateSpaceForm(nextForm: typeof DEFAULT_SPACE_FORM) {
+    setSpaceForm(nextForm);
+    setSpaceFormError(null);
+  }
+
+  function populateSpaceForm(space: SpaceDefinition) {
     setEditingSpaceId(space.spaceId);
     setSpaceForm({
       name: space.name,
@@ -517,6 +531,53 @@ export function TetrisWorkspaceApp() {
       offsetDepthMm: space.offset.depthMm,
       offsetHeightMm: space.offset.heightMm
     });
+  }
+
+  function openAddSpaceDialog(trigger?: HTMLElement | null) {
+    lastSpaceDialogTriggerRef.current = trigger ?? lastSpaceDialogTriggerRef.current;
+    setEditingSpaceId(null);
+    setSpaceForm(DEFAULT_SPACE_FORM);
+    setSpaceFormError(null);
+    setSpaceDialogOpen(true);
+  }
+
+  function openEditSpaceDialog(space: SpaceDefinition, trigger?: HTMLElement | null) {
+    lastSpaceDialogTriggerRef.current = trigger ?? lastSpaceDialogTriggerRef.current;
+    populateSpaceForm(space);
+    setSpaceFormError(null);
+    setSpaceDialogOpen(true);
+  }
+
+  function closeSpaceDialog() {
+    setSpaceDialogOpen(false);
+    setEditingSpaceId(null);
+    setSpaceForm(DEFAULT_SPACE_FORM);
+    setSpaceFormError(null);
+    const trigger = lastSpaceDialogTriggerRef.current;
+
+    if (trigger) {
+      window.setTimeout(() => {
+        trigger.focus();
+      }, 0);
+    }
+  }
+
+  function saveSpaceAndClose() {
+    const validation = validateSpaceForm(spaceForm);
+
+    if (!validation.valid) {
+      setSpaceFormError(validation.message);
+      return;
+    }
+
+    if (saveConflict) {
+      setSpaceFormError("최신본을 불러온 뒤 내 공간을 저장할 수 있습니다.");
+      return;
+    }
+
+    if (saveSpace()) {
+      closeSpaceDialog();
+    }
   }
 
   function deleteSpace(spaceId: string) {
@@ -911,7 +972,7 @@ export function TetrisWorkspaceApp() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-space-dialog-open={spaceDialogOpen ? "true" : undefined}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -990,19 +1051,24 @@ export function TetrisWorkspaceApp() {
             customSpaces={workspace.spaces}
             selectedSpaceId={workspace.draft.selectedSpaceId}
             selectedSpace={selectedSpace}
-            form={spaceForm}
-            editingSpaceId={editingSpaceId}
             onSelect={selectSpace}
-            onFormChange={setSpaceForm}
-            onSave={saveSpace}
-            onEdit={editSpace}
+            onOpenAdd={openAddSpaceDialog}
+            onOpenEdit={openEditSpaceDialog}
             onDelete={deleteSpace}
-            onCancelEdit={() => {
-              setEditingSpaceId(null);
-              setSpaceForm(DEFAULT_SPACE_FORM);
-            }}
           />
         </section>
+
+        <SpaceFormDialog
+          open={spaceDialogOpen}
+          mode={spaceDialogMode}
+          value={spaceForm}
+          error={spaceFormError}
+          saveDisabled={isWorkspaceLocked}
+          saveDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 내 공간을 저장할 수 있습니다." : null}
+          onChange={updateSpaceForm}
+          onClose={closeSpaceDialog}
+          onSave={saveSpaceAndClose}
+        />
 
         <section className="panel workflow-section block-library-row" aria-labelledby="block-library-title">
           <div className="section-layout block-library-layout">
@@ -1111,27 +1177,19 @@ function SpaceLibraryPanel({
   customSpaces,
   selectedSpaceId,
   selectedSpace,
-  form,
-  editingSpaceId,
   onSelect,
-  onFormChange,
-  onSave,
-  onEdit,
-  onDelete,
-  onCancelEdit
+  onOpenAdd,
+  onOpenEdit,
+  onDelete
 }: {
   spaces: SpaceDefinition[];
   customSpaces: SpaceDefinition[];
   selectedSpaceId: string | null;
   selectedSpace: SpaceDefinition | undefined;
-  form: typeof DEFAULT_SPACE_FORM;
-  editingSpaceId: string | null;
   onSelect: (spaceId: string) => void;
-  onFormChange: (value: typeof DEFAULT_SPACE_FORM) => void;
-  onSave: () => void;
-  onEdit: (space: SpaceDefinition) => void;
+  onOpenAdd: (trigger?: HTMLElement | null) => void;
+  onOpenEdit: (space: SpaceDefinition, trigger?: HTMLElement | null) => void;
   onDelete: (spaceId: string) => void;
-  onCancelEdit: () => void;
 }) {
   return (
     <section className="workflow-row-content">
@@ -1175,19 +1233,18 @@ function SpaceLibraryPanel({
           <SelectedSpaceSummary selectedSpace={selectedSpace} />
 
           <div className="section-divider" />
-          <h3>{editingSpaceId ? "공간 수정" : "커스텀 공간 추가"}</h3>
-          <SpaceForm value={form} onChange={onFormChange} />
-          <div className="form-actions">
-            <button className="primary-button" onClick={onSave}>
+          <div className="space-library-actions">
+            <div>
+              <h3>내 공간</h3>
+              <p className="panel-subtitle">기본값이 맞지 않을 때 직접 공간 크기와 안전 여유를 저장합니다.</p>
+            </div>
+            <button
+              className="primary-button"
+              onClick={(event) => onOpenAdd(event.currentTarget)}
+            >
               <Plus size={16} />
-              {editingSpaceId ? "공간 수정" : "공간 추가"}
+              내 공간 추가
             </button>
-            {editingSpaceId ? (
-              <button className="secondary-button" onClick={onCancelEdit}>
-                <RotateCcw size={16} />
-                취소
-              </button>
-            ) : null}
           </div>
 
           {customSpaces.length > 0 ? (
@@ -1200,7 +1257,10 @@ function SpaceLibraryPanel({
                     <small>{formatDimensions(space.dimensions)}</small>
                   </span>
                   <span className="row-actions">
-                    <button className="secondary-button" onClick={() => onEdit(space)}>
+                    <button
+                      className="secondary-button"
+                      onClick={(event) => onOpenEdit(space, event.currentTarget)}
+                    >
                       수정
                     </button>
                     <button className="danger-button" onClick={() => onDelete(space.spaceId)}>
@@ -1210,7 +1270,9 @@ function SpaceLibraryPanel({
                 </div>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <p className="meta">직접 저장한 공간이 아직 없습니다.</p>
+          )}
         </div>
       </div>
     </section>
@@ -2645,6 +2707,96 @@ function getStorageUsageDetail(storageHealth: StorageHealthSnapshot) {
   }
 
   return "브라우저가 제공한 대략치를 표시합니다.";
+}
+
+function SpaceFormDialog({
+  open,
+  mode,
+  value,
+  error,
+  saveDisabled,
+  saveDisabledReason,
+  onChange,
+  onClose,
+  onSave
+}: {
+  open: boolean;
+  mode: SpaceDialogMode;
+  value: typeof DEFAULT_SPACE_FORM;
+  error: string | null;
+  saveDisabled: boolean;
+  saveDisabledReason: string | null;
+  onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const copy = getSpaceDialogCopy(mode);
+  const titleId = "space-form-dialog-title";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("input")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="space-form-dialog"
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <div className="space-form-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id={titleId}>{copy.title}</h2>
+            <p className="fine-print">{copy.helperLabel}</p>
+          </div>
+          <button className="icon-button panel-close-button" onClick={onClose} aria-label="공간 입력 닫기">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-form-dialog-body">
+          <SpaceForm value={value} onChange={onChange} />
+          {error || saveDisabledReason ? (
+            <p className="form-error" role="alert">
+              {error ?? saveDisabledReason}
+            </p>
+          ) : null}
+        </div>
+        <div className="form-actions space-form-dialog-actions">
+          <button className="secondary-button" onClick={onClose}>
+            취소
+          </button>
+          <button className="primary-button" onClick={onSave} disabled={saveDisabled}>
+            <Plus size={16} />
+            {copy.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
 }
 
 function SpaceForm({
