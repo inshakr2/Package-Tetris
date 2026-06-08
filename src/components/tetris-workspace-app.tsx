@@ -70,6 +70,7 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
+import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -421,6 +422,19 @@ export function TetrisWorkspaceApp() {
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
   const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
   const isWorkspaceLocked = Boolean(saveConflict);
+  const mobileStickyAction = useMemo(
+    () =>
+      createMobileStickyActionState({
+        isWorkspaceLocked,
+        hasResult: Boolean(latestResult),
+        canCreateResult: Boolean(review && !review.cta.disabled),
+        reviewCtaLabel: "결과 만들기",
+        reviewCtaReason: review?.cta.disabledReason ?? null,
+        saveStatus,
+        needsExport
+      }),
+    [isWorkspaceLocked, latestResult, needsExport, review, saveStatus]
+  );
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
@@ -860,6 +874,24 @@ export function TetrisWorkspaceApp() {
     setPendingImport(null);
   }
 
+  function runMobileStickyAction() {
+    if (mobileStickyAction.disabled) {
+      return;
+    }
+
+    if (mobileStickyAction.action === "reload") {
+      reloadLatestWorkspace();
+      return;
+    }
+
+    if (mobileStickyAction.action === "create") {
+      createPackingResult();
+      return;
+    }
+
+    exportJson();
+  }
+
   if (!workspace) {
     return (
       <main className="app-shell">
@@ -1038,43 +1070,38 @@ export function TetrisWorkspaceApp() {
       </div>
 
       <div className="sticky-mobile-actions">
-        <SaveStatusPill
-          status={saveStatus}
-          needsExport={needsExport}
-          error={saveError}
-          compact
-          saveConflict={saveConflict}
-          otherTabCount={otherTabCount}
-          expanded={storagePanelOpen}
-          controls={STORAGE_PANEL_ID}
-          onClick={() => setStoragePanelOpen((open) => !open)}
-        />
-                <button
-                  className="primary-button"
-                  onClick={
-                    isWorkspaceLocked
-                      ? reloadLatestWorkspace
-                      : !latestResult && review && !review.cta.disabled
-                        ? createPackingResult
-                        : exportJson
-                  }
-                >
-                  {isWorkspaceLocked ? (
-                    <RotateCcw size={16} />
-                  ) : !latestResult && review && !review.cta.disabled ? (
-                    <Box size={16} />
-                  ) : (
-                    <Download size={16} />
-                  )}
-                  {isWorkspaceLocked
-                    ? "최신본"
-                    : !latestResult && review && !review.cta.disabled
-                      ? "결과 만들기"
-                      : saveStatus === "error"
-                        ? "지금 백업"
-                        : "백업 만들기"}
-                </button>
-              </div>
+        <div className="sticky-mobile-summary" data-tone={mobileStickyAction.tone}>
+          <SaveStatusPill
+            status={saveStatus}
+            needsExport={needsExport}
+            error={saveError}
+            compact
+            saveConflict={saveConflict}
+            otherTabCount={otherTabCount}
+            expanded={storagePanelOpen}
+            controls={STORAGE_PANEL_ID}
+            onClick={() => setStoragePanelOpen((open) => !open)}
+          />
+          <div className="sticky-mobile-copy">
+            <strong>{mobileStickyAction.statusLabel}</strong>
+            <span>{mobileStickyAction.helperLabel}</span>
+          </div>
+        </div>
+        <button
+          className="primary-button sticky-mobile-primary"
+          onClick={runMobileStickyAction}
+          disabled={mobileStickyAction.disabled}
+        >
+          {mobileStickyAction.action === "reload" ? (
+            <RotateCcw size={16} />
+          ) : mobileStickyAction.action === "create" ? (
+            <Box size={16} />
+          ) : (
+            <Download size={16} />
+          )}
+          <span>{mobileStickyAction.buttonLabel}</span>
+        </button>
+      </div>
     </main>
   );
 }

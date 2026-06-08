@@ -1349,13 +1349,78 @@ select:focus-visible {
   bottom: 0;
   z-index: 30;
   display: none;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: rgba(246, 247, 244, 0.96);
   backdrop-filter: blur(10px);
+}
+
+.sticky-mobile-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.sticky-mobile-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sticky-mobile-copy strong,
+.sticky-mobile-copy span {
+  overflow-wrap: anywhere;
+}
+
+.sticky-mobile-copy strong {
+  font-size: 14px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sticky-mobile-copy span {
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sticky-mobile-summary[data-tone="red"] .sticky-mobile-copy strong {
+  color: var(--red);
+}
+
+.sticky-mobile-summary[data-tone="amber"] .sticky-mobile-copy strong {
+  color: var(--amber);
+}
+
+.sticky-mobile-summary[data-tone="green"] .sticky-mobile-copy strong {
+  color: var(--green);
+}
+
+.sticky-mobile-primary {
+  align-self: center;
+  min-width: 112px;
+  max-width: 128px;
+  min-height: 48px;
+  padding-inline: 10px;
+  white-space: normal;
+  flex-shrink: 0;
+}
+
+.sticky-mobile-primary span {
+  display: block;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1279px) {
@@ -1440,7 +1505,7 @@ select:focus-visible {
   }
 
   .workspace-stack {
-    padding-bottom: 118px;
+    padding-bottom: 148px;
   }
 
   .workflow-progress {
@@ -1529,13 +1594,14 @@ select:focus-visible {
   }
 
   .sticky-mobile-actions {
-    display: flex;
+    display: grid;
   }
 
   .sticky-mobile-actions .status-pill-button {
-    flex: 1;
-    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
     min-width: 0;
+    justify-content: flex-start;
   }
 
   .desktop-export {

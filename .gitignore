@@ -5,6 +5,7 @@ tsconfig.tsbuildinfo
 .DS_Store
 
 .codex/
+.codex-artifacts/
 .superpowers/**/state/
 
 .env
