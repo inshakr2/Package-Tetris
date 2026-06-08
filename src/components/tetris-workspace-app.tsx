@@ -2093,12 +2093,19 @@ const ResultStage = ({
     setThreeDialogOpen(true);
   }
 
-  function closeExpandedThreeView() {
+  function closeExpandedThreeView({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
     setThreeDialogOpen(false);
 
-    window.setTimeout(() => {
-      threeDialogTriggerRef.current?.focus();
-    }, 0);
+    if (restoreFocus) {
+      window.setTimeout(() => {
+        threeDialogTriggerRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  function openTopFallbackFromExpanded() {
+    closeExpandedThreeView({ restoreFocus: false });
+    selectProjectionView("top");
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -2314,6 +2321,11 @@ const ResultStage = ({
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
+                    fallbackAction={{
+                      label: "위 보기로 확인",
+                      ariaLabel: "3D 대신 위 보기로 결과 확인",
+                      onClick: () => selectProjectionView("top")
+                    }}
                   />
                   <ExpandedThreeViewDialog
                     open={threeDialogOpen}
@@ -2330,6 +2342,7 @@ const ResultStage = ({
                     onResetViewer={resetResultViewer}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
+                    onOpenFallbackView={openTopFallbackFromExpanded}
                     onClose={closeExpandedThreeView}
                   />
                 </>
@@ -2530,6 +2543,7 @@ function ExpandedThreeViewDialog({
   onResetViewer,
   onSelectBlockTemplate,
   onClearSelection,
+  onOpenFallbackView,
   onClose
 }: {
   open: boolean;
@@ -2546,6 +2560,7 @@ function ExpandedThreeViewDialog({
   onResetViewer: () => void;
   onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
+  onOpenFallbackView: () => void;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -2643,6 +2658,13 @@ function ExpandedThreeViewDialog({
               utilizationLabel={utilizationLabel}
               onSelectBlockTemplate={onSelectBlockTemplate}
               onClearSelection={onClearSelection}
+              fallbackAction={{
+                label: "위 보기로 확인",
+                ariaLabel: "확대 3D 대신 위 보기로 결과 확인",
+                onClick: () => {
+                  onOpenFallbackView();
+                }
+              }}
             />
           ) : null}
         </div>

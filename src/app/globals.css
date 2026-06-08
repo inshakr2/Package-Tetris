@@ -1127,6 +1127,16 @@ select:focus-visible {
   align-items: center;
 }
 
+.three-fallback-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.three-fallback-action {
+  min-height: 48px;
+  white-space: normal;
+}
+
 .result-three-expand-button {
   min-height: 48px;
 }
@@ -1887,8 +1897,17 @@ select:focus-visible {
   }
 
   .result-panel-head,
-  .projection-status {
+  .projection-status,
+  .three-status {
     display: grid;
+  }
+
+  .three-fallback-actions {
+    justify-content: stretch;
+  }
+
+  .three-fallback-action {
+    width: 100%;
   }
 
   .projection-legend-list {

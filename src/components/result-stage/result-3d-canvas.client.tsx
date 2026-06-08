@@ -31,6 +31,11 @@ interface Result3DCanvasProps {
   utilizationLabel: string;
   onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
+  fallbackAction?: {
+    label: string;
+    ariaLabel: string;
+    onClick: () => void;
+  };
 }
 
 interface HoverState {
@@ -51,7 +56,8 @@ export function Result3DCanvas({
   spaceLabel,
   utilizationLabel,
   onSelectBlockTemplate,
-  onClearSelection
+  onClearSelection,
+  fallbackAction
 }: Result3DCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -425,11 +431,26 @@ export function Result3DCanvas({
         ) : null}
       </div>
       <div className="projection-status three-status" role="status">
-        <span className="badge" data-tone="green">
-          3D 표시 {blocks.length}개
+        <span className="badge" data-tone={renderState === "error" ? "red" : "green"}>
+          {renderState === "error" ? "2D 확인 권장" : `3D 표시 ${blocks.length}개`}
         </span>
-        <span className="fine-print">{statusText}</span>
+        <span className="fine-print">
+          {renderState === "error"
+            ? "3D가 뜨지 않아도 위/앞/옆 보기로 배치를 확인할 수 있습니다."
+            : statusText}
+        </span>
       </div>
+      {renderState === "error" && fallbackAction ? (
+        <div className="three-fallback-actions">
+          <button
+            className="secondary-button three-fallback-action"
+            aria-label={fallbackAction.ariaLabel}
+            onClick={fallbackAction.onClick}
+          >
+            {fallbackAction.label}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
