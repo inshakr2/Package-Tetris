@@ -1012,8 +1012,20 @@ select:focus-visible {
   font-size: 12px;
 }
 
+.space-instance-button small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .space-instance-button strong,
+.space-instance-button small,
 .projection-legend-item strong {
+  overflow-wrap: anywhere;
+}
+
+.space-load-summary {
+  display: block;
   overflow-wrap: anywhere;
 }
 

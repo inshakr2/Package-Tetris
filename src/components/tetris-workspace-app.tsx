@@ -71,6 +71,7 @@ import {
 } from "@/lib/workspace/result-warnings";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
+import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
   BlockDefinition,
@@ -1635,6 +1636,20 @@ const ResultStage = ({
   const visibleBlockCount = selectedBlockTemplateId
     ? projectedBlocks.filter((block) => block.blockTemplateId === selectedBlockTemplateId).length
     : projectedBlocks.length;
+  const displayedSpaceSummaries = useMemo(
+    () =>
+      new Map(
+        displayedSpaces.map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)
+      ),
+    [displayedSpaces]
+  );
+  const latestResultSpaceSummaries = useMemo(
+    () =>
+      new Map(
+        (latestResult?.spaces ?? []).map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)
+      ),
+    [latestResult?.spaces]
+  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
@@ -1804,6 +1819,9 @@ const ResultStage = ({
                     <span>
                       {space.blocks.length}개 · {Math.round(space.utilizationRate * 100)}%
                     </span>
+                    <small className="space-load-summary">
+                      {displayedSpaceSummaries.get(space.spaceInstanceId) ?? "적재 박스 없음"}
+                    </small>
                   </button>
                 ))}
               </div>
@@ -2019,6 +2037,9 @@ const ResultStage = ({
                     <strong>Space {index + 1}</strong>
                     <small>
                       배치 {space.blocks.length}개 · 적재율 {Math.round(space.utilizationRate * 100)}%
+                    </small>
+                    <small className="space-load-summary">
+                      {latestResultSpaceSummaries.get(space.spaceInstanceId) ?? "적재 박스 없음"}
                     </small>
                   </span>
                 </div>
