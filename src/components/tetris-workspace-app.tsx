@@ -2426,6 +2426,12 @@ const ResultStage = ({
                     <span className="fine-print">
                       {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 박스 표시"}
                     </span>
+                    {selectedLegendItem ? (
+                      <button className="secondary-button selection-clear-action" onClick={clearSelectedBlockTemplate}>
+                        <X size={16} />
+                        전체 보기
+                      </button>
+                    ) : null}
                   </div>
                 </>
               )}

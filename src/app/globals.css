@@ -1157,6 +1157,17 @@ select:focus-visible {
   white-space: normal;
 }
 
+.three-selection-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.selection-clear-action,
+.three-selection-clear-action {
+  min-height: 48px;
+  white-space: normal;
+}
+
 .result-three-expand-button {
   min-height: 48px;
 }
@@ -1934,7 +1945,16 @@ select:focus-visible {
     justify-content: stretch;
   }
 
+  .three-selection-actions {
+    justify-content: stretch;
+  }
+
   .three-fallback-action {
+    width: 100%;
+  }
+
+  .selection-clear-action,
+  .three-selection-clear-action {
     width: 100%;
   }
 

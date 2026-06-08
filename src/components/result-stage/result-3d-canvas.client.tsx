@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
+import { X } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
@@ -440,6 +441,17 @@ export function Result3DCanvas({
             : statusText}
         </span>
       </div>
+      {selectedBlock ? (
+        <div className="three-selection-actions">
+          <button
+            className="secondary-button three-selection-clear-action"
+            onClick={onClearSelection}
+          >
+            <X size={16} />
+            전체 보기
+          </button>
+        </div>
+      ) : null}
       {renderState === "error" && fallbackAction ? (
         <div className="three-fallback-actions">
           <button
