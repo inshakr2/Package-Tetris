@@ -75,6 +75,14 @@ import {
   type ProjectionView
 } from "@/lib/workspace/projection-view";
 import {
+  getResultViewTitle,
+  isProjectionViewControlId,
+  RESULT_VIEW_CONTROL_ITEMS,
+  THREE_CAMERA_CONTROL_ITEMS,
+  type ResultViewControlId,
+  type ResultViewMode
+} from "@/lib/workspace/result-viewer-controls";
+import {
   createPackingResultWarnings,
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
@@ -96,7 +104,6 @@ import {
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
-type ResultViewMode = "three" | ProjectionView;
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -143,13 +150,6 @@ const DEFAULT_BLOCK_FORM = {
 };
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
-const PROJECTION_VIEWS: ProjectionView[] = ["top", "front", "side"];
-const THREE_CAMERA_PRESETS: Array<{ preset: ThreeCameraPreset; label: string }> = [
-  { preset: "isometric", label: "사시" },
-  { preset: "top", label: "위" },
-  { preset: "front", label: "앞" },
-  { preset: "side", label: "옆" }
-];
 const STORAGE_PANEL_ID = "storage-reliability-panel";
 
 const Result3DCanvas = dynamic(
@@ -2002,6 +2002,26 @@ const ResultStage = ({
     setProjectionView(view);
   }
 
+  function selectResultViewControl(controlId: ResultViewControlId) {
+    if (controlId === "reset") {
+      resetResultViewer();
+      return;
+    }
+
+    if (controlId === "three") {
+      setResultViewMode("three");
+      return;
+    }
+
+    if (isProjectionViewControlId(controlId)) {
+      selectProjectionView(controlId);
+      return;
+    }
+
+    const exhaustiveControlId: never = controlId;
+    return exhaustiveControlId;
+  }
+
   function resetResultViewer() {
     if (resultViewMode === "three") {
       setThreeCameraPreset("isometric");
@@ -2159,47 +2179,50 @@ const ResultStage = ({
             <section className="projection-stage" aria-label="배치 뷰어">
               <div className="projection-toolbar">
                 <div>
-                          <strong>{resultViewMode === "three" ? "3D 보기" : `${getProjectionViewLabel(projectionView)} 보기`}</strong>
+                  <strong>{getResultViewTitle(resultViewMode)}</strong>
                   <span className="fine-print">
                     {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
                   </span>
                 </div>
                 <div className="view-buttons" aria-label="결과 보기 방식 선택">
-                  <button
-                    className="secondary-button"
-                    aria-pressed={resultViewMode === "three"}
-                    onClick={() => setResultViewMode("three")}
-                  >
-                    3D
-                  </button>
-                  {PROJECTION_VIEWS.map((view) => (
-                    <button
-                      key={view}
-                      className="secondary-button"
-                      aria-pressed={resultViewMode === view}
-                      onClick={() => selectProjectionView(view)}
-                    >
-                              {view === "top" ? "위" : view === "front" ? "앞" : "옆"}
-                    </button>
-                  ))}
-                  <button className="secondary-button" onClick={resetResultViewer}>
-                            <RotateCcw size={16} />
-                            처음
-                  </button>
+                  {RESULT_VIEW_CONTROL_ITEMS.map((item) =>
+                    item.id === "reset" ? (
+                      <button
+                        key={item.id}
+                        className="secondary-button"
+                        aria-label={item.ariaLabel}
+                        onClick={() => selectResultViewControl(item.id)}
+                      >
+                        <RotateCcw size={16} />
+                        {item.label}
+                      </button>
+                    ) : (
+                      <button
+                        key={item.id}
+                        className="secondary-button"
+                        aria-label={item.ariaLabel}
+                        aria-pressed={resultViewMode === item.id}
+                        onClick={() => selectResultViewControl(item.id)}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
 
               {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
                 <>
                   <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
-                    {THREE_CAMERA_PRESETS.map((item) => (
+                    {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
                       <button
                         key={item.preset}
                         className="secondary-button"
+                        aria-label={item.ariaLabel}
                         aria-pressed={threeCameraPreset === item.preset}
                         onClick={() => setThreeCameraPreset(item.preset)}
                       >
-                                {item.preset === "isometric" ? "사시" : item.preset === "top" ? "위" : item.preset === "front" ? "앞" : "옆"}
+                        {item.label}
                       </button>
                     ))}
                   </div>

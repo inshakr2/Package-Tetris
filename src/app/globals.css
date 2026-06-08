@@ -1770,10 +1770,27 @@ select:focus-visible {
     max-height: 340px;
   }
 
-  .view-buttons .secondary-button,
+  .projection-toolbar .view-buttons,
+  .three-camera-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+    padding-bottom: 2px;
+  }
+
+  .projection-toolbar .view-buttons .secondary-button,
   .three-camera-buttons .secondary-button {
+    flex: 0 0 auto;
     min-width: 48px;
     min-height: 48px;
+    justify-content: center;
+    padding-inline: 12px;
+    scroll-snap-align: start;
   }
 
   .result-panel-head,
