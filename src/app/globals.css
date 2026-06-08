@@ -325,7 +325,8 @@ select:focus-visible {
   gap: 18px;
 }
 
-.workspace-stack[data-readonly="true"] > :not(.workspace-readonly-banner) {
+.workspace-stack[data-readonly="true"]
+  > :not(.workspace-readonly-banner):not(.space-form-dialog):not(.delete-confirm-dialog) {
   pointer-events: none;
   opacity: 0.62;
 }
@@ -1411,6 +1412,36 @@ select:focus-visible {
   min-height: 48px;
 }
 
+.delete-confirm-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+}
+
+.delete-confirm-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.delete-confirm-sheet {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.delete-confirm-actions {
+  margin-top: 0;
+}
+
+.delete-confirm-actions .secondary-button,
+.delete-confirm-actions .danger-button {
+  min-height: 48px;
+}
+
 .sticky-mobile-actions {
   position: fixed;
   left: 0;
@@ -1679,6 +1710,22 @@ select:focus-visible {
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
+  .delete-confirm-dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: 90dvh;
+    margin: auto 0 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .delete-confirm-sheet {
+    border-radius: 18px 18px 0 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
   .preview-stack {
     inset: 18px 18px 112px;
     grid-template-columns: repeat(3, minmax(24px, 1fr));
@@ -1688,7 +1735,7 @@ select:focus-visible {
     display: grid;
   }
 
-  .app-shell[data-space-dialog-open="true"] .sticky-mobile-actions {
+  .app-shell[data-overlay-open="true"] .sticky-mobile-actions {
     display: none;
   }
 

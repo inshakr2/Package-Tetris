@@ -58,6 +58,10 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  getDeleteConfirmationCopy,
+  type DeleteConfirmationKind
+} from "@/lib/workspace/delete-confirmation-copy";
 import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
@@ -101,6 +105,12 @@ interface WorkspaceSaveConflictNotice {
   expectedRevision: number;
   storedUpdatedAt: string;
   source: "storage" | "remote";
+}
+
+interface PendingDelete {
+  kind: DeleteConfirmationKind;
+  entityId: string;
+  name: string;
 }
 
 const DEFAULT_SPACE_FORM = {
@@ -156,6 +166,7 @@ export function TetrisWorkspaceApp() {
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
   const lastPersistedRevisionRef = useRef<number | null>(null);
   const lastSpaceDialogTriggerRef = useRef<HTMLElement | null>(null);
+  const lastDeleteDialogTriggerRef = useRef<HTMLElement | null>(null);
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -170,6 +181,7 @@ export function TetrisWorkspaceApp() {
   const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
   const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
@@ -428,6 +440,7 @@ export function TetrisWorkspaceApp() {
   const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
   const isWorkspaceLocked = Boolean(saveConflict);
   const spaceDialogMode: SpaceDialogMode = editingSpaceId ? "edit" : "add";
+  const hasBlockingDialog = spaceDialogOpen || Boolean(pendingDelete);
   const mobileStickyAction = useMemo(
     () =>
       createMobileStickyActionState({
@@ -578,6 +591,42 @@ export function TetrisWorkspaceApp() {
     if (saveSpace()) {
       closeSpaceDialog();
     }
+  }
+
+  function requestDelete(kind: DeleteConfirmationKind, entityId: string, name: string, trigger?: HTMLElement | null) {
+    lastDeleteDialogTriggerRef.current = trigger ?? lastDeleteDialogTriggerRef.current;
+    setPendingDelete({ kind, entityId, name });
+  }
+
+  function closeDeleteDialog() {
+    setPendingDelete(null);
+    const trigger = lastDeleteDialogTriggerRef.current;
+
+    if (trigger) {
+      window.setTimeout(() => {
+        trigger.focus();
+      }, 0);
+    }
+  }
+
+  function confirmPendingDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+
+    if (saveConflict) {
+      return;
+    }
+
+    if (pendingDelete.kind === "space") {
+      deleteSpace(pendingDelete.entityId);
+    } else if (pendingDelete.kind === "block-template") {
+      deleteBlockTemplate(pendingDelete.entityId);
+    } else {
+      deleteCurrentBlockItem(pendingDelete.entityId);
+    }
+
+    closeDeleteDialog();
   }
 
   function deleteSpace(spaceId: string) {
@@ -972,7 +1021,7 @@ export function TetrisWorkspaceApp() {
   }
 
   return (
-    <main className="app-shell" data-space-dialog-open={spaceDialogOpen ? "true" : undefined}>
+    <main className="app-shell" data-overlay-open={hasBlockingDialog ? "true" : undefined}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -1054,7 +1103,7 @@ export function TetrisWorkspaceApp() {
             onSelect={selectSpace}
             onOpenAdd={openAddSpaceDialog}
             onOpenEdit={openEditSpaceDialog}
-            onDelete={deleteSpace}
+            onDeleteRequest={requestDelete}
           />
         </section>
 
@@ -1068,6 +1117,14 @@ export function TetrisWorkspaceApp() {
           onChange={updateSpaceForm}
           onClose={closeSpaceDialog}
           onSave={saveSpaceAndClose}
+        />
+
+        <DeleteConfirmDialog
+          pendingDelete={pendingDelete}
+          confirmDisabled={isWorkspaceLocked}
+          confirmDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 삭제할 수 있습니다." : null}
+          onClose={closeDeleteDialog}
+          onConfirm={confirmPendingDelete}
         />
 
         <section className="panel workflow-section block-library-row" aria-labelledby="block-library-title">
@@ -1089,7 +1146,7 @@ export function TetrisWorkspaceApp() {
                 templates={workspace.blockTemplates}
                 onAddToDraft={addTemplateToDraft}
                 onEdit={editBlockTemplate}
-                onDelete={deleteBlockTemplate}
+                onDeleteRequest={requestDelete}
               />
             </div>
           </div>
@@ -1100,7 +1157,7 @@ export function TetrisWorkspaceApp() {
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
               onQuantityChange={updateCurrentQuantity}
-              onDelete={deleteCurrentBlockItem}
+              onDeleteRequest={requestDelete}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
@@ -1180,7 +1237,7 @@ function SpaceLibraryPanel({
   onSelect,
   onOpenAdd,
   onOpenEdit,
-  onDelete
+  onDeleteRequest
 }: {
   spaces: SpaceDefinition[];
   customSpaces: SpaceDefinition[];
@@ -1189,7 +1246,12 @@ function SpaceLibraryPanel({
   onSelect: (spaceId: string) => void;
   onOpenAdd: (trigger?: HTMLElement | null) => void;
   onOpenEdit: (space: SpaceDefinition, trigger?: HTMLElement | null) => void;
-  onDelete: (spaceId: string) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="workflow-row-content">
@@ -1263,7 +1325,10 @@ function SpaceLibraryPanel({
                     >
                       수정
                     </button>
-                    <button className="danger-button" onClick={() => onDelete(space.spaceId)}>
+                    <button
+                      className="danger-button"
+                      onClick={(event) => onDeleteRequest("space", space.spaceId, space.name, event.currentTarget)}
+                    >
                       <Trash2 size={16} />
                     </button>
                   </span>
@@ -1312,12 +1377,17 @@ function BlockLibraryPanel({
   templates,
   onAddToDraft,
   onEdit,
-  onDelete
+  onDeleteRequest
 }: {
   templates: BlockTemplate[];
   onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
   onEdit: (template: BlockTemplate) => void;
-  onDelete: (templateId: string) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="rail-section block-template-library">
@@ -1341,7 +1411,12 @@ function BlockLibraryPanel({
                 <button className="secondary-button" onClick={() => onEdit(template)}>
                   수정
                 </button>
-                <button className="danger-button" onClick={() => onDelete(template.blockTemplateId)}>
+                <button
+                  className="danger-button"
+                  onClick={(event) =>
+                    onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
+                  }
+                >
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -1454,11 +1529,16 @@ function BlockCreatePanel({
 function CurrentWorkBlocksPanel({
   blocks,
   onQuantityChange,
-  onDelete
+  onDeleteRequest
 }: {
   blocks: BlockDefinition[];
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
-  onDelete: (draftBlockItemId: string) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="current-block-panel">
@@ -1501,7 +1581,12 @@ function CurrentWorkBlocksPanel({
                   <span>총 부피</span>
                   <strong>{formatM3(calculateBlockVolumeM3(block))}</strong>
                 </div>
-                <button className="danger-button" onClick={() => onDelete(block.draftBlockItemId)}>
+                <button
+                  className="danger-button"
+                  onClick={(event) =>
+                    onDeleteRequest("draft-block", block.draftBlockItemId, block.name, event.currentTarget)
+                  }
+                >
                   <Trash2 size={16} />
                           이번 작업에서 제거
                 </button>
@@ -2766,6 +2851,12 @@ function SpaceFormDialog({
         event.preventDefault();
         onClose();
       }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
     >
       <div className="space-form-sheet">
         <div className="space-form-dialog-head">
@@ -2792,6 +2883,101 @@ function SpaceFormDialog({
           <button className="primary-button" onClick={onSave} disabled={saveDisabled}>
             <Plus size={16} />
             {copy.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function DeleteConfirmDialog({
+  pendingDelete,
+  confirmDisabled,
+  confirmDisabledReason,
+  onClose,
+  onConfirm
+}: {
+  pendingDelete: PendingDelete | null;
+  confirmDisabled: boolean;
+  confirmDisabledReason: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "delete-confirm-dialog-title";
+  const descriptionId = "delete-confirm-dialog-description";
+  const copy = pendingDelete ? getDeleteConfirmationCopy(pendingDelete.kind, pendingDelete.name) : null;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (pendingDelete) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-cancel-button='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [pendingDelete]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="delete-confirm-dialog"
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="delete-confirm-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id={titleId}>{copy?.title ?? "삭제 확인"}</h2>
+            <p id={descriptionId} className="fine-print">
+              {copy?.description ?? "삭제 전에 한 번 더 확인해 주세요."}
+            </p>
+            {confirmDisabledReason ? (
+              <p className="form-error" role="alert">
+                {confirmDisabledReason}
+              </p>
+            ) : null}
+          </div>
+          <button className="icon-button panel-close-button" onClick={onClose} aria-label="삭제 확인 닫기">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="form-actions delete-confirm-actions">
+          <button
+            data-cancel-button="true"
+            className="secondary-button"
+            autoFocus
+            onClick={onClose}
+          >
+            취소
+          </button>
+          <button className="danger-button" onClick={onConfirm} disabled={confirmDisabled}>
+            <Trash2 size={16} />
+            {copy?.confirmLabel ?? "삭제"}
           </button>
         </div>
       </div>
