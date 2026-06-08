@@ -1442,6 +1442,65 @@ select:focus-visible {
   min-height: 48px;
 }
 
+.draft-undo-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 28;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.draft-undo-toast[data-tone="green"] {
+  border-color: rgba(23, 130, 83, 0.24);
+}
+
+.draft-undo-toast[data-tone="amber"] {
+  border-color: rgba(183, 121, 31, 0.28);
+  background: #fffaf0;
+}
+
+.draft-undo-toast-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.draft-undo-toast-copy strong,
+.draft-undo-toast-copy span {
+  overflow-wrap: anywhere;
+}
+
+.draft-undo-toast-copy strong {
+  line-height: 1.25;
+}
+
+.draft-undo-toast-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.draft-undo-toast-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.draft-undo-toast-actions .secondary-button,
+.draft-undo-toast-actions .icon-button {
+  min-height: 48px;
+}
+
 .sticky-mobile-actions {
   position: fixed;
   left: 0;
@@ -1724,6 +1783,20 @@ select:focus-visible {
   .delete-confirm-sheet {
     border-radius: 18px 18px 0 0;
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .draft-undo-toast {
+    right: 12px;
+    left: 12px;
+    bottom: calc(90px + env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    grid-template-columns: 1fr;
+  }
+
+  .draft-undo-toast-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .preview-stack {

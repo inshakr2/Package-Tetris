@@ -48,6 +48,7 @@ import {
   createBlockTemplate,
   removeBlockTemplate,
   removeDraftBlockItem,
+  restoreDraftBlockItem,
   resolveDraftBlocks,
   updateBlockTemplate,
   updateDraftBlockItemQuantity
@@ -84,6 +85,7 @@ import {
   BlockDefinition,
   BlockTemplate,
   ChainHistoryItem,
+  DraftBlockItem,
   ImportConflict,
   ImportConflictOption,
   SpaceDefinition,
@@ -111,6 +113,12 @@ interface PendingDelete {
   kind: DeleteConfirmationKind;
   entityId: string;
   name: string;
+}
+
+interface PendingDraftUndo {
+  item: DraftBlockItem;
+  blockName: string;
+  index: number;
 }
 
 const DEFAULT_SPACE_FORM = {
@@ -182,6 +190,7 @@ export function TetrisWorkspaceApp() {
   const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [pendingDraftUndo, setPendingDraftUndo] = useState<PendingDraftUndo | null>(null);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
@@ -422,6 +431,20 @@ export function TetrisWorkspaceApp() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [storagePanelOpen]);
 
+  useEffect(() => {
+    if (!pendingDraftUndo || !workspace) {
+      return;
+    }
+
+    const itemStillExists = workspace.draft.blockItems.some(
+      (item) => item.draftBlockItemId === pendingDraftUndo.item.draftBlockItemId
+    );
+
+    if (itemStillExists) {
+      setPendingDraftUndo(null);
+    }
+  }, [pendingDraftUndo, workspace]);
+
   const allSpaces = useMemo(() => {
     return [...PRESET_SPACES, ...(workspace?.spaces ?? [])];
   }, [workspace?.spaces]);
@@ -594,6 +617,11 @@ export function TetrisWorkspaceApp() {
   }
 
   function requestDelete(kind: DeleteConfirmationKind, entityId: string, name: string, trigger?: HTMLElement | null) {
+    if (kind === "draft-block") {
+      deleteCurrentBlockItemWithUndo(entityId, name);
+      return;
+    }
+
     lastDeleteDialogTriggerRef.current = trigger ?? lastDeleteDialogTriggerRef.current;
     setPendingDelete({ kind, entityId, name });
   }
@@ -707,6 +735,7 @@ export function TetrisWorkspaceApp() {
   }
 
   function deleteBlockTemplate(templateId: string) {
+    setPendingDraftUndo((current) => (current?.item.blockTemplateId === templateId ? null : current));
     updateWorkspace((current, now) =>
       removeBlockTemplate(current, {
         blockTemplateId: templateId,
@@ -732,6 +761,59 @@ export function TetrisWorkspaceApp() {
         now
       })
     );
+  }
+
+  function deleteCurrentBlockItemWithUndo(draftBlockItemId: string, blockName: string) {
+    if (!workspace || saveConflict) {
+      return;
+    }
+
+    const removedIndex = workspace.draft.blockItems.findIndex((item) => item.draftBlockItemId === draftBlockItemId);
+    const removedItem = removedIndex >= 0 ? workspace.draft.blockItems[removedIndex] : null;
+
+    if (!removedItem) {
+      return;
+    }
+
+    setPendingDraftUndo({
+      item: removedItem,
+      blockName,
+      index: removedIndex
+    });
+
+    updateWorkspace((current, now) => {
+      const currentIndex = current.draft.blockItems.findIndex((item) => item.draftBlockItemId === draftBlockItemId);
+
+      if (currentIndex < 0) {
+        return current;
+      }
+
+      return removeDraftBlockItem(current, {
+        draftBlockItemId,
+        now
+      });
+    });
+  }
+
+  function closePendingDraftUndo() {
+    setPendingDraftUndo(null);
+  }
+
+  function undoDraftBlockRemoval() {
+    if (!pendingDraftUndo || saveConflict) {
+      return;
+    }
+
+    const draftUndo = pendingDraftUndo;
+
+    updateWorkspace((current, now) => {
+      return restoreDraftBlockItem(current, {
+        item: draftUndo.item,
+        index: draftUndo.index,
+        now
+      });
+    });
+    setPendingDraftUndo(null);
   }
 
   function createPackingResult() {
@@ -1192,6 +1274,18 @@ export function TetrisWorkspaceApp() {
                 />
       </div>
 
+      {pendingDraftUndo ? (
+        <DraftUndoToast
+          blockName={pendingDraftUndo.blockName}
+          undoDisabled={Boolean(saveConflict)}
+          undoDisabledReason={
+            saveConflict ? "최신본을 불러온 뒤에만 되돌릴 수 있습니다." : null
+          }
+          onUndo={undoDraftBlockRemoval}
+          onClose={closePendingDraftUndo}
+        />
+      ) : null}
+
       <div className="sticky-mobile-actions">
         <div className="sticky-mobile-summary" data-tone={mobileStickyAction.tone}>
           <SaveStatusPill
@@ -1596,6 +1690,38 @@ function CurrentWorkBlocksPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function DraftUndoToast({
+  blockName,
+  undoDisabled,
+  undoDisabledReason,
+  onUndo,
+  onClose
+}: {
+  blockName: string;
+  undoDisabled: boolean;
+  undoDisabledReason: string | null;
+  onUndo: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="draft-undo-toast" data-tone={undoDisabled ? "amber" : "green"}>
+      <div className="draft-undo-toast-copy" role="status" aria-live="polite">
+        <strong>이번 작업에서 제거했습니다.</strong>
+        <span>{undoDisabledReason ?? blockName}</span>
+      </div>
+      <div className="draft-undo-toast-actions">
+        <button className="secondary-button" onClick={onUndo} disabled={undoDisabled}>
+          <RotateCcw size={16} />
+          되돌리기
+        </button>
+        <button className="icon-button panel-close-button" onClick={onClose} aria-label="되돌리기 안내 닫기">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
   );
 }
 

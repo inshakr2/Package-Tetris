@@ -34,6 +34,12 @@ interface RemoveDraftBlockItemOptions {
   now: string;
 }
 
+interface RestoreDraftBlockItemOptions {
+  item: DraftBlockItem;
+  index: number;
+  now: string;
+}
+
 interface UpdateBlockTemplateOptions {
   blockTemplateId: string;
   name: string;
@@ -174,6 +180,43 @@ export function removeDraftBlockItem(
       blockItems: workspace.draft.blockItems.filter(
         (item) => item.draftBlockItemId !== options.draftBlockItemId
       ),
+      updatedAt: options.now
+    }
+  };
+}
+
+export function restoreDraftBlockItem(
+  workspace: TetrisWorkspace,
+  options: RestoreDraftBlockItemOptions
+): TetrisWorkspace {
+  const hasDuplicateDraftItem = workspace.draft.blockItems.some(
+    (item) => item.draftBlockItemId === options.item.draftBlockItemId
+  );
+
+  if (hasDuplicateDraftItem) {
+    return workspace;
+  }
+
+  const hasLinkedTemplate = workspace.blockTemplates.some(
+    (template) => template.blockTemplateId === options.item.blockTemplateId
+  );
+
+  if (!hasLinkedTemplate) {
+    return workspace;
+  }
+
+  const nextIndex = Math.min(Math.max(0, options.index), workspace.draft.blockItems.length);
+  const nextBlockItems = [...workspace.draft.blockItems];
+  nextBlockItems.splice(nextIndex, 0, options.item);
+
+  return {
+    ...workspace,
+    revision: workspace.revision + 1,
+    updatedAt: options.now,
+    draft: {
+      ...workspace.draft,
+      blockItems: nextBlockItems,
+      currentStep: "blocks",
       updatedAt: options.now
     }
   };
