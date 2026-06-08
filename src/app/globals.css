@@ -332,20 +332,52 @@ select:focus-visible {
 }
 
 .workspace-readonly-banner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
   padding: 12px 14px;
   border: 1px solid rgba(194, 65, 59, 0.28);
   border-radius: 8px;
   background: #fff6f5;
   color: #8f231e;
+  min-width: 0;
+}
+
+.workspace-readonly-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-readonly-copy strong,
+.workspace-readonly-copy span,
+.workspace-readonly-detail {
+  overflow-wrap: anywhere;
 }
 
 .workspace-readonly-banner span {
   color: #7f3f3a;
   font-size: 13px;
+}
+
+.workspace-readonly-detail {
+  color: #9a5a54;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.workspace-readonly-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.workspace-readonly-actions .primary-button,
+.workspace-readonly-actions .secondary-button {
+  min-height: 48px;
+  white-space: normal;
 }
 
 .panel {
@@ -1583,6 +1615,14 @@ select:focus-visible {
 }
 
 @media (max-width: 1279px) {
+  .workspace-readonly-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-readonly-actions {
+    justify-content: flex-start;
+  }
+
   .space-library-layout,
   .block-library-layout,
   .current-work-layout {

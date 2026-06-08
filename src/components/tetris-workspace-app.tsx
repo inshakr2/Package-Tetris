@@ -63,6 +63,7 @@ import {
   getDeleteConfirmationCopy,
   type DeleteConfirmationKind
 } from "@/lib/workspace/delete-confirmation-copy";
+import { getSaveConflictBannerCopy } from "@/lib/workspace/save-conflict-banner-copy";
 import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
@@ -477,6 +478,7 @@ export function TetrisWorkspaceApp() {
       }),
     [isWorkspaceLocked, latestResult, needsExport, review, saveStatus]
   );
+  const saveConflictBannerCopy = saveConflict ? getSaveConflictBannerCopy(saveConflict) : null;
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
@@ -1168,8 +1170,26 @@ export function TetrisWorkspaceApp() {
       <div className="workspace-stack" data-readonly={isWorkspaceLocked}>
         {isWorkspaceLocked ? (
           <div className="workspace-readonly-banner" role="alert">
-            <strong>다른 탭에서 최신 작업본이 저장되었습니다.</strong>
-            <span>충돌 방지를 위해 이 탭의 입력과 실행을 잠시 막았습니다.</span>
+            <div className="workspace-readonly-copy">
+              <strong>{saveConflictBannerCopy?.title ?? "최신 작업본이 있어 이 화면은 잠시 멈췄습니다."}</strong>
+              <span>
+                {saveConflictBannerCopy?.description ??
+                  "최신본을 불러오거나 현재 화면을 백업 파일로 남긴 뒤 다시 이어가세요."}
+              </span>
+              {saveConflictBannerCopy?.detail ? (
+                <small className="workspace-readonly-detail">{saveConflictBannerCopy.detail}</small>
+              ) : null}
+            </div>
+            <div className="workspace-readonly-actions">
+              <button className="primary-button" onClick={reloadLatestWorkspace}>
+                <RotateCcw size={16} />
+                {saveConflictBannerCopy?.primaryLabel ?? "최신본 불러오기"}
+              </button>
+              <button className="secondary-button" onClick={exportJson}>
+                <Download size={16} />
+                {saveConflictBannerCopy?.secondaryLabel ?? "현재 화면 백업"}
+              </button>
+            </div>
           </div>
         ) : null}
         <div className="workflow-progress">
