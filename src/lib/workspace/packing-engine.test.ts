@@ -252,6 +252,73 @@ describe("packing-engine v0", () => {
     );
     assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
   });
+
+  it("같은 fragile 그룹이면 큰 받침면이 되는 판형 박스를 먼저 깔아 불필요한 새 공간 생성을 줄인다", () => {
+    // Given
+    const input = createInput({
+      blocks: [
+        {
+          ...createInput().blocks[0],
+          blockId: "block-flat",
+          blockTemplateId: "template-flat",
+          name: "일반 판형 박스",
+          dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 150 },
+          quantity: 1,
+          fragile: false
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-solid",
+          blockTemplateId: "template-solid",
+          name: "일반 고형 박스",
+          dimensions: { widthMm: 500, depthMm: 500, heightMm: 700 },
+          quantity: 1,
+          fragile: false
+        }
+      ]
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+    const firstSpace = output.spaces[0];
+
+    // Then
+    assert.equal(output.usedSpaceCount, 1);
+    assert.equal(output.unloadedBlockCount, 0);
+    assert.ok(firstSpace);
+    assert.deepEqual(
+      firstSpace?.blocks.map((block) => ({
+        blockTemplateId: block.blockTemplateId,
+        xMm: block.xMm,
+        yMm: block.yMm,
+        zMm: block.zMm,
+        widthMm: block.widthMm,
+        depthMm: block.depthMm,
+        heightMm: block.heightMm
+      })),
+      [
+        {
+          blockTemplateId: "template-flat",
+          xMm: 0,
+          yMm: 0,
+          zMm: 0,
+          widthMm: 1000,
+          depthMm: 1000,
+          heightMm: 150
+        },
+        {
+          blockTemplateId: "template-solid",
+          xMm: 0,
+          yMm: 0,
+          zMm: 150,
+          widthMm: 500,
+          depthMm: 500,
+          heightMm: 700
+        }
+      ]
+    );
+    assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
+  });
 });
 
 function assertStablePackedBlocks(

@@ -1,5 +1,6 @@
 import { calculateUsableSize } from "./presets";
 import {
+  createRotationCandidates,
   findFirstStablePlacement,
   type PlacementBounds,
   type PlacementPolicy,
@@ -14,6 +15,12 @@ interface MutablePackedSpace {
   usedVolumeM3: number;
 }
 
+interface SortableBlockUnit {
+  block: BlockDefinition;
+  maxBaseAreaMm2: number;
+  volumeM3: number;
+}
+
 export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput {
   const usableSize = calculateUsableSize(input.space);
   const usableVolumeM3 = dimensionsVolumeM3(usableSize);
@@ -25,7 +32,7 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
   const warnings: string[] = [];
   let unloadedBlockCount = 0;
 
-  const blockUnits = expandBlockUnits(input.blocks);
+  const blockUnits = expandBlockUnits(input.blocks, usableSize);
 
   blockUnits.forEach((block) => {
     const packedBlock = placeBlock(input.runId, spaces, block, usableSize, placementPolicy);
@@ -57,7 +64,7 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
   };
 }
 
-function expandBlockUnits(blocks: BlockDefinition[]): BlockDefinition[] {
+function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds): BlockDefinition[] {
   return blocks
     .flatMap((block) =>
       Array.from({ length: Math.max(0, block.quantity) }, (_, index) => ({
@@ -66,13 +73,45 @@ function expandBlockUnits(blocks: BlockDefinition[]): BlockDefinition[] {
         quantity: 1
       }))
     )
-    .sort((left, right) => {
-      if (left.fragile !== right.fragile) {
-        return left.fragile ? 1 : -1;
-      }
+    .map((block) => ({
+      block,
+      maxBaseAreaMm2: getMaxStableBaseArea(block, usableSize),
+      volumeM3: dimensionsVolumeM3(block.dimensions)
+    }))
+    .sort(compareBlockUnits)
+    .map(({ block }) => block);
+}
 
-      return dimensionsVolumeM3(right.dimensions) - dimensionsVolumeM3(left.dimensions);
-    });
+function compareBlockUnits(left: SortableBlockUnit, right: SortableBlockUnit) {
+  if (left.block.fragile !== right.block.fragile) {
+    return left.block.fragile ? 1 : -1;
+  }
+
+  const baseAreaDiff = right.maxBaseAreaMm2 - left.maxBaseAreaMm2;
+
+  if (baseAreaDiff !== 0) {
+    return baseAreaDiff;
+  }
+
+  const volumeDiff = right.volumeM3 - left.volumeM3;
+
+  if (volumeDiff !== 0) {
+    return volumeDiff;
+  }
+
+  return left.block.blockId.localeCompare(right.block.blockId);
+}
+
+function getMaxStableBaseArea(block: BlockDefinition, usableSize: PlacementBounds) {
+  const candidates = createRotationCandidates(block.dimensions, usableSize);
+
+  if (candidates.length === 0) {
+    return block.dimensions.widthMm * block.dimensions.depthMm;
+  }
+
+  return candidates.reduce((maxArea, candidate) => {
+    return Math.max(maxArea, candidate.widthMm * candidate.depthMm);
+  }, 0);
 }
 
 function placeBlock(
