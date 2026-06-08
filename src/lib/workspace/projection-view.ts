@@ -83,14 +83,14 @@ export function createProjectionLegendItems(blocks: ProjectedBlock[]): Projectio
 
 export function getProjectionViewLabel(view: ProjectionView) {
   if (view === "front") {
-    return "정면";
+    return "앞";
   }
 
   if (view === "side") {
-    return "측면";
+    return "옆";
   }
 
-  return "상면";
+  return "위";
 }
 
 function createProjectionRect(block: PackedBlock, view: ProjectionView, bounds: ProjectionBounds) {

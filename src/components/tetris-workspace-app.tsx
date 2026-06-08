@@ -106,7 +106,7 @@ const DEFAULT_SPACE_FORM = {
 };
 
 const DEFAULT_BLOCK_FORM = {
-  name: "신규 블록",
+  name: "신규 박스",
   widthMm: 300,
   depthMm: 220,
   heightMm: 180,
@@ -118,9 +118,9 @@ type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const PROJECTION_VIEWS: ProjectionView[] = ["top", "front", "side"];
 const THREE_CAMERA_PRESETS: Array<{ preset: ThreeCameraPreset; label: string }> = [
   { preset: "isometric", label: "사시" },
-  { preset: "top", label: "상면" },
-  { preset: "front", label: "정면" },
-  { preset: "side", label: "측면" }
+  { preset: "top", label: "위" },
+  { preset: "front", label: "앞" },
+  { preset: "side", label: "옆" }
 ];
 const STORAGE_PANEL_ID = "storage-reliability-panel";
 
@@ -520,7 +520,7 @@ export function TetrisWorkspaceApp() {
       updateWorkspace((current, now) =>
         updateBlockTemplate(current, {
           blockTemplateId: editingTemplateId,
-          name: blockForm.name.trim() || "신규 블록",
+          name: blockForm.name.trim() || "신규 박스",
           dimensions: {
             widthMm: Number(blockForm.widthMm),
             depthMm: Number(blockForm.depthMm),
@@ -539,7 +539,7 @@ export function TetrisWorkspaceApp() {
     updateWorkspace((current, now) =>
       createBlockTemplate(current, {
         blockTemplateId,
-        name: blockForm.name.trim() || "신규 블록",
+        name: blockForm.name.trim() || "신규 박스",
         dimensions: {
           widthMm: Number(blockForm.widthMm),
           depthMm: Number(blockForm.depthMm),
@@ -875,11 +875,11 @@ export function TetrisWorkspaceApp() {
           <span className="brand-mark" aria-hidden="true">
             <Truck size={18} />
           </span>
-          <div>
-            <h1>테트리스 적재 최적화</h1>
-            <p>프론트 단독 · IndexedDB 작업본 · JSON 이동본</p>
-          </div>
-        </div>
+                  <div>
+                    <h1>테트리스 적재 최적화</h1>
+                    <p>이 기기에 자동 저장 · 백업 파일로 이동 가능</p>
+                  </div>
+                </div>
         <div className="toolbar">
           <div className="storage-status-wrapper">
             <SaveStatusPill
@@ -895,12 +895,12 @@ export function TetrisWorkspaceApp() {
           </div>
           <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} />
-            가져오기
+            백업 파일 가져오기
           </button>
-          <button className="primary-button desktop-export" onClick={exportJson}>
-            <Download size={16} />
-            JSON 내보내기
-          </button>
+                  <button className="primary-button desktop-export" onClick={exportJson}>
+                    <Download size={16} />
+                    백업 파일 만들기
+                  </button>
           <input
             ref={fileInputRef}
             className="file-input"
@@ -1010,19 +1010,20 @@ export function TetrisWorkspaceApp() {
           </div>
         </section>
 
-        <ResultStage
-          ref={resultStageRef}
-          latestResult={latestResult}
+                <ResultStage
+                  ref={resultStageRef}
+                  latestResult={latestResult}
           selectedSpace={selectedSpace}
           review={review}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
-          pendingImport={pendingImport}
-          onResolveImport={resolveImport}
-          onExportJson={exportJson}
-          onConfirmChainSimulation={confirmChainSimulation}
-          onUndoLastChainAddition={undoLastChainAddition}
-        />
+                  pendingImport={pendingImport}
+                  onResolveImport={resolveImport}
+                  onExportJson={exportJson}
+                  onCreateResult={createPackingResult}
+                  onConfirmChainSimulation={confirmChainSimulation}
+                  onUndoLastChainAddition={undoLastChainAddition}
+                />
       </div>
 
       <div className="sticky-mobile-actions">
@@ -1037,11 +1038,32 @@ export function TetrisWorkspaceApp() {
           controls={STORAGE_PANEL_ID}
           onClick={() => setStoragePanelOpen((open) => !open)}
         />
-        <button className="primary-button" onClick={isWorkspaceLocked ? reloadLatestWorkspace : exportJson}>
-          {isWorkspaceLocked ? <RotateCcw size={16} /> : <Download size={16} />}
-          {isWorkspaceLocked ? "최신본" : saveStatus === "error" ? "지금 백업" : "내보내기"}
-        </button>
-      </div>
+                <button
+                  className="primary-button"
+                  onClick={
+                    isWorkspaceLocked
+                      ? reloadLatestWorkspace
+                      : !latestResult && review && !review.cta.disabled
+                        ? createPackingResult
+                        : exportJson
+                  }
+                >
+                  {isWorkspaceLocked ? (
+                    <RotateCcw size={16} />
+                  ) : !latestResult && review && !review.cta.disabled ? (
+                    <Box size={16} />
+                  ) : (
+                    <Download size={16} />
+                  )}
+                  {isWorkspaceLocked
+                    ? "최신본"
+                    : !latestResult && review && !review.cta.disabled
+                      ? "결과 만들기"
+                      : saveStatus === "error"
+                        ? "지금 백업"
+                        : "백업 만들기"}
+                </button>
+              </div>
     </main>
   );
 }
@@ -1081,14 +1103,14 @@ function SpaceLibraryPanel({
         </span>
         <div>
           <h2 id="space-library-title">{getWorkspaceSectionTitle("space")}</h2>
-          <p className="panel-subtitle">preset 또는 커스텀 공간을 선택합니다. 트럭 preset은 2.5톤반입니다.</p>
+                  <p className="panel-subtitle">짐을 올릴 공간을 고릅니다. 트럭 기본값은 2.5톤반입니다.</p>
         </div>
       </div>
 
       <div className="section-layout space-library-layout">
         <div className="section-column">
           <h3>공간 선택</h3>
-          <div className="list library-card-grid" aria-label="공간 preset 및 커스텀 공간">
+          <div className="list library-card-grid" aria-label="기본 공간 및 내 공간">
             {spaces.map((space) => (
               <button
                 key={space.spaceId}
@@ -1098,12 +1120,12 @@ function SpaceLibraryPanel({
               >
                 <span className="card-heading">
                   <strong>{space.name}</strong>
-                  {space.isPreset ? <span className="badge">preset</span> : <span className="badge">custom</span>}
+                          {space.isPreset ? <span className="badge">기본</span> : <span className="badge">내 공간</span>}
                 </span>
                 <span className="meta">{formatDimensions(space.dimensions)}</span>
                 <span className="badge-row">
                   <span className="badge" data-tone="green">
-                    usable {formatDimensions(calculateUsableSize(space))}
+                            적재 가능 {formatDimensions(calculateUsableSize(space))}
                   </span>
                 </span>
               </button>
@@ -1168,13 +1190,13 @@ function SelectedSpaceSummary({ selectedSpace }: { selectedSpace: SpaceDefinitio
       <strong>{selectedSpace?.name ?? "공간 미선택"}</strong>
       <p className="meta">
         {selectedSpace
-          ? `${formatDimensions(selectedSpace.dimensions)} · ${selectedSpace.isPreset ? "preset" : "custom"}`
-          : "공간을 선택하면 usable 크기와 offset을 확인할 수 있습니다."}
+          ? `${formatDimensions(selectedSpace.dimensions)} · ${selectedSpace.isPreset ? "기본 공간" : "내 공간"}`
+                  : "공간을 선택하면 실제 적재 가능 크기와 여유치를 확인할 수 있습니다."}
       </p>
       <div className="summary-grid compact-summary">
-        <SummaryTile label="usable" value={usableSize ? formatDimensions(usableSize) : "-"} />
-        <SummaryTile
-          label="offset"
+                <SummaryTile label="적재 가능 크기" value={usableSize ? formatDimensions(usableSize) : "-"} />
+                <SummaryTile
+                  label="안전 여유"
           value={
             selectedSpace
               ? `${selectedSpace.offset.widthMm} / ${selectedSpace.offset.depthMm} / ${selectedSpace.offset.heightMm}mm`
@@ -1199,22 +1221,22 @@ function BlockLibraryPanel({
 }) {
   return (
     <section className="rail-section block-template-library">
-      <h3>저장된 블록</h3>
-      <p className="panel-subtitle">저장된 커스텀 블록을 현재 작업에 재사용합니다.</p>
+      <h3>저장된 박스</h3>
+              <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
       <div className="list library-card-grid">
-        {templates.length === 0 ? (
-          <p className="fine-print">저장된 블록이 없습니다. 왼쪽 입력 영역에서 첫 블록을 저장하세요.</p>
+                {templates.length === 0 ? (
+                  <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
         ) : (
           templates.map((template) => (
             <article key={template.blockTemplateId} className="library-card">
               <div className="card-heading">
                 <strong>{template.name}</strong>
-                {template.fragile ? <span className="badge" data-tone="amber">fragile</span> : <span className="badge">normal</span>}
+                        {template.fragile ? <span className="badge" data-tone="amber">깨짐주의</span> : <span className="badge">일반</span>}
               </div>
               <p className="meta">{formatDimensions(template.dimensions)} · v{template.entityVersion}</p>
               <div className="form-actions">
                 <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
-                  현재 작업에 추가
+                          이번 작업에 추가
                 </button>
                 <button className="secondary-button" onClick={() => onEdit(template)}>
                   수정
@@ -1252,15 +1274,12 @@ function BlockCreatePanel({
         </span>
         <div>
           <h2 id="block-library-title">{getWorkspaceSectionTitle("blocks")}</h2>
-          <p className="panel-subtitle">
-            블록은 라이브러리에 저장한 뒤 현재 작업에 여러 번 재사용합니다. 수량은 현재 작업 항목별로 따로
-            관리합니다.
-          </p>
+                  <p className="panel-subtitle">박스 크기와 수량을 입력합니다. 저장한 박스는 다음 작업에도 다시 쓸 수 있습니다.</p>
         </div>
       </div>
       <div className="form-grid block-template-form">
         <label>
-          블록명
+          박스명
           <input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} />
         </label>
         <label>
@@ -1309,17 +1328,17 @@ function BlockCreatePanel({
             checked={form.fragile}
             onChange={(event) => onChange({ ...form, fragile: event.target.checked })}
           />
-          fragile
+                  깨짐주의
         </label>
       </div>
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
-          {editingTemplateId ? "템플릿 수정" : "저장 후 작업에 추가"}
+                  {editingTemplateId ? "박스 수정" : "저장 후 이번 작업에 추가"}
         </button>
         {!editingTemplateId ? (
           <button className="secondary-button" onClick={() => onSave(false)}>
-            라이브러리에만 저장
+                    저장만 하기
           </button>
         ) : (
           <button className="secondary-button" onClick={onCancel}>
@@ -1349,12 +1368,12 @@ function CurrentWorkBlocksPanel({
         </span>
         <div>
           <h2 id="current-work-title">{getWorkspaceSectionTitle("review")}</h2>
-          <p className="panel-subtitle">라이브러리에서 가져온 블록입니다. 수량 변경은 이 작업에만 적용됩니다.</p>
+                  <p className="panel-subtitle">이번에 실을 박스입니다. 수량 변경은 현재 작업에만 적용됩니다.</p>
         </div>
       </div>
       <div className="block-list">
         {blocks.length === 0 ? (
-          <p className="fine-print">라이브러리에서 블록을 추가하거나 새 블록을 저장 후 작업에 추가하세요.</p>
+                  <p className="fine-print">박스를 추가하거나 새 박스를 저장 후 이번 작업에 추가하세요.</p>
         ) : (
           blocks.map((block) => (
             <article key={block.draftBlockItemId} className="block-card">
@@ -1364,7 +1383,7 @@ function CurrentWorkBlocksPanel({
                   <p className="meta">{formatDimensions(block.dimensions)}</p>
                 </div>
                 <span className="badge" data-tone={block.fragile ? "amber" : undefined}>
-                  {block.fragile ? "fragile" : "normal"}
+                          {block.fragile ? "깨짐주의" : "일반"}
                 </span>
               </div>
               <div className="block-detail-grid">
@@ -1384,7 +1403,7 @@ function CurrentWorkBlocksPanel({
                 </div>
                 <button className="danger-button" onClick={() => onDelete(block.draftBlockItemId)}>
                   <Trash2 size={16} />
-                  현재 작업에서 제거
+                          이번 작업에서 제거
                 </button>
               </div>
             </article>
@@ -1430,7 +1449,7 @@ function ReviewCompactCard({
           {
             code: "review-ready",
             level: "valid" as const,
-            text: "입력 조건이 충족되었습니다. 결과 요약을 생성할 수 있습니다."
+                    text: "입력 조건이 충족되었습니다. 결과를 만들 수 있습니다."
           }
         ];
 
@@ -1442,14 +1461,14 @@ function ReviewCompactCard({
           {statusLabel}
         </span>
         <p className="fine-print">
-          fragile끼리 적층 허용, fragile 위 non-fragile 적층 금지, 90도 직교 회전 기준으로 입력을 점검합니다.
+                  깨짐주의끼리 적층 허용, 깨짐주의 위 일반 박스 적층 금지, 90도 회전 기준으로 입력을 확인합니다.
         </p>
       </div>
       <div className="summary-grid compact-summary">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
-        <SummaryTile label="총 블록" value={`${review?.totals.totalBlockCount ?? 0}개`} />
-        <SummaryTile label="블록 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
-        <SummaryTile label="공간 usable 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
+        <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
+        <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
+                <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
         <SummaryTile label="예상 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
       <ul className="checklist compact-checklist">
@@ -1485,10 +1504,10 @@ function ReviewCompactCard({
           <li className="review-message" data-tone="amber">
             <AlertTriangle size={18} color="var(--amber)" />
             <span className="review-message-content">
-              다른 기기에서 이어가거나 복구하려면 JSON 백업을 최신으로 유지하세요.
-              <button className="inline-action" onClick={onExportJson}>
-                지금 내보내기
-              </button>
+                      다른 기기에서 이어가거나 복구하려면 백업 파일을 최신으로 유지하세요.
+                      <button className="inline-action" onClick={onExportJson}>
+                        백업 만들기
+                      </button>
             </span>
           </li>
         ) : null}
@@ -1496,7 +1515,7 @@ function ReviewCompactCard({
           <li className="review-message" data-tone="amber">
             <ShieldCheck size={18} color="var(--amber)" />
             <span className="review-message-content">
-              브라우저 정리로 작업본이 지워질 가능성을 줄이려면 저장 보호 강화를 권장합니다.
+                      브라우저 정리로 작업본이 지워질 가능성을 줄이려면 작업 보호 강화를 권장합니다.
               <button
                 className="inline-action"
                 onClick={onRequestStorageProtection}
@@ -1517,7 +1536,7 @@ function ReviewCompactCard({
           title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
         >
           <Box size={16} />
-          결과 요약 생성
+                  결과 만들기
         </button>
       </div>
     </section>
@@ -1530,24 +1549,26 @@ const ResultStage = ({
   review,
   draftBlocks,
   chainHistory,
-  pendingImport,
-  onResolveImport,
-  onExportJson,
-  onConfirmChainSimulation,
-  onUndoLastChainAddition,
-  ref
+          pendingImport,
+          onResolveImport,
+          onExportJson,
+          onCreateResult,
+          onConfirmChainSimulation,
+          onUndoLastChainAddition,
+          ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
-  pendingImport: PendingImport | null;
-  onResolveImport: (option: ImportConflictOption) => void;
-  onExportJson: () => void;
-  onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
-  onUndoLastChainAddition: (resultId: string) => void;
-  ref: React.Ref<HTMLElement>;
+          pendingImport: PendingImport | null;
+          onResolveImport: (option: ImportConflictOption) => void;
+          onExportJson: () => void;
+          onCreateResult: () => void;
+          onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
+          onUndoLastChainAddition: (resultId: string) => void;
+          ref: React.Ref<HTMLElement>;
 }) => {
   const [projectionView, setProjectionView] = useState<ProjectionView>("top");
   const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("three");
@@ -1558,7 +1579,7 @@ const ResultStage = ({
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
   const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
-  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 블록 1개를 선택하세요.");
+  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
   const selectedPackedSpace =
@@ -1613,7 +1634,7 @@ const ResultStage = ({
     setSelectedChainTemplateId(null);
     setChainPreview(null);
     setChainStatus("idle");
-    setChainStatusMessage("추가할 블록 1개를 선택하세요.");
+    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
   }, [latestResult?.resultId]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
@@ -1647,14 +1668,14 @@ const ResultStage = ({
     setChainStatus("idle");
     setSelectedBlockTemplateId(null);
     setChainStatusMessage(
-      chainPreview ? "다른 블록을 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산을 실행하세요."
+      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산을 실행하세요."
     );
   }
 
   function calculateChainPreview() {
     if (!latestResult || !selectedChainTemplate) {
       setChainStatus("idle");
-      setChainStatusMessage("블록을 선택해야 계산할 수 있습니다.");
+      setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
       return;
     }
 
@@ -1683,7 +1704,7 @@ const ResultStage = ({
       } catch {
         setChainPreview(null);
         setChainStatus("error");
-        setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 블록을 선택하세요.");
+        setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 박스를 선택하세요.");
       }
     }, 0);
   }
@@ -1704,7 +1725,7 @@ const ResultStage = ({
     setChainPreview(null);
     setSelectedBlockTemplateId(null);
     setChainStatus("idle");
-    setChainStatusMessage("추가할 블록 1개를 선택하세요.");
+    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
   }
 
   return (
@@ -1715,9 +1736,9 @@ const ResultStage = ({
             메인 결과
           </span>
           <h2>{getWorkspaceSectionTitle("result")}</h2>
-          <p className="panel-subtitle">
-            v0 엔진이 계산한 좌표를 3D 장면과 2D 투영 작업대로 검토합니다.
-          </p>
+                  <p className="panel-subtitle">
+                    계산 결과를 3D로 먼저 확인하고, 위/앞/옆 보기로 위치를 다시 점검합니다.
+                  </p>
         </div>
       </div>
 
@@ -1737,7 +1758,7 @@ const ResultStage = ({
             <aside className="result-space-panel" aria-label="공간 인스턴스 선택">
               <div className="result-panel-head">
                 <strong>공간</strong>
-                <span className="fine-print">{displayedSpaces.length}개 인스턴스</span>
+                        <span className="fine-print">{displayedSpaces.length}개 공간</span>
               </div>
               <div className="space-instance-list">
                 {displayedSpaces.map((space, index) => (
@@ -1762,7 +1783,7 @@ const ResultStage = ({
             <section className="projection-stage" aria-label="배치 뷰어">
               <div className="projection-toolbar">
                 <div>
-                  <strong>{resultViewMode === "three" ? "3D 적재 뷰" : `${getProjectionViewLabel(projectionView)} 투영`}</strong>
+                          <strong>{resultViewMode === "three" ? "3D 보기" : `${getProjectionViewLabel(projectionView)} 보기`}</strong>
                   <span className="fine-print">
                     {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
                   </span>
@@ -1782,12 +1803,12 @@ const ResultStage = ({
                       aria-pressed={resultViewMode === view}
                       onClick={() => selectProjectionView(view)}
                     >
-                      {getProjectionViewLabel(view)}
+                              {view === "top" ? "위" : view === "front" ? "앞" : "옆"}
                     </button>
                   ))}
                   <button className="secondary-button" onClick={resetResultViewer}>
-                    <RotateCcw size={16} />
-                    리셋
+                            <RotateCcw size={16} />
+                            처음
                   </button>
                 </div>
               </div>
@@ -1802,7 +1823,7 @@ const ResultStage = ({
                         aria-pressed={threeCameraPreset === item.preset}
                         onClick={() => setThreeCameraPreset(item.preset)}
                       >
-                        {item.label}
+                                {item.preset === "isometric" ? "사시" : item.preset === "top" ? "위" : item.preset === "front" ? "앞" : "옆"}
                       </button>
                     ))}
                   </div>
@@ -1850,7 +1871,7 @@ const ResultStage = ({
                             role="button"
                             tabIndex={0}
                             aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
-                            title={`${block.name} · ${block.fragile ? "fragile" : "normal"}`}
+                            title={`${block.name} · ${block.fragile ? "깨짐주의" : "일반"}`}
                             style={blockStyle}
                             onClick={() => toggleSelectedBlockTemplate(block.blockTemplateId)}
                             onKeyDown={(event) => {
@@ -1867,7 +1888,7 @@ const ResultStage = ({
                     ) : (
                       <div className="projection-empty">
                         <strong>표시할 배치 좌표가 없습니다.</strong>
-                        <span className="fine-print">결과 요약을 다시 생성하면 v0 좌표를 확인할 수 있습니다.</span>
+                                <span className="fine-print">결과를 다시 만들면 배치 위치를 확인할 수 있습니다.</span>
                       </div>
                     )}
                   </div>
@@ -1877,16 +1898,16 @@ const ResultStage = ({
                       {selectedBlockTemplateId ? "강조" : "표시"} {visibleBlockCount}개
                     </span>
                     <span className="fine-print">
-                      {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 블록 표시"}
+                      {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 박스 표시"}
                     </span>
                   </div>
                 </>
               )}
             </section>
 
-            <aside className="result-legend-panel" aria-label="블록 유형 범례">
+            <aside className="result-legend-panel" aria-label="박스 유형 범례">
               <div className="result-panel-head">
-                <strong>블록 범례</strong>
+                <strong>박스 범례</strong>
                 <span className="fine-print">{legendItems.length}개 유형</span>
               </div>
               <div className="projection-legend-list">
@@ -1901,7 +1922,7 @@ const ResultStage = ({
                     <span>
                       <strong>{item.name}</strong>
                       <small>
-                        {item.quantity}개 · {item.fragile ? "fragile" : "normal"}
+                              {item.quantity}개 · {item.fragile ? "깨짐주의" : "일반"}
                       </small>
                     </span>
                   </button>
@@ -1911,10 +1932,20 @@ const ResultStage = ({
           </div>
         </div>
       ) : (
-        <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
-          <strong>결과 요약 대기</strong>
-          <span className="fine-print">공간과 블록을 확인한 뒤 3번 영역에서 결과 요약을 생성하세요.</span>
-        </div>
+                <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
+                  <strong>결과 대기 중</strong>
+                  <span className="fine-print">
+                    {review && !review.cta.disabled
+                      ? "입력이 준비되었습니다. 결과를 만들면 3D 적재 보기를 확인할 수 있습니다."
+                      : (review?.cta.disabledReason ?? "공간과 박스를 확인한 뒤 3번 영역에서 결과를 만드세요.")}
+                  </span>
+                  {review && !review.cta.disabled ? (
+                    <button className="primary-button result-empty-action" onClick={onCreateResult}>
+                      <Box size={16} />
+                      결과 만들기
+                    </button>
+                  ) : null}
+                </div>
       )}
 
       <ChainSimulationPanel
@@ -1945,12 +1976,12 @@ const ResultStage = ({
         <section className="sub-panel">
           <h3>입력 요약</h3>
           <p className="meta">
-            현재 작업 블록 {review?.totals.totalBlockCount ?? 0}개 · 총 부피{" "}
+            현재 작업 박스 {review?.totals.totalBlockCount ?? 0}개 · 총 부피{" "}
             {formatM3(review?.totals.totalBlockVolumeM3 ?? 0)}
           </p>
         </section>
         <section className="sub-panel">
-          <h3>v0 배치 결과</h3>
+                  <h3>공간별 적재 결과</h3>
           {latestResult?.spaces?.length ? (
             <div className="compact-list">
               {latestResult.spaces.map((space, index) => (
@@ -1965,7 +1996,7 @@ const ResultStage = ({
               ))}
             </div>
           ) : (
-            <p className="meta">결과 요약을 생성하면 공간별 v0 배치 좌표가 저장됩니다.</p>
+                    <p className="meta">결과를 만들면 공간별 박스 배치가 저장됩니다.</p>
           )}
           {latestResult?.warnings?.length ? (
             <ul className="checklist compact-checklist">
@@ -2027,9 +2058,9 @@ function ChainSimulationPanel({
           <span className="badge" data-tone={hasResult ? "green" : undefined}>
             기준 결과 잠금
           </span>
-          <h3 id="chain-simulation-title">추가 블록 시뮬레이션</h3>
+          <h3 id="chain-simulation-title">추가 박스 시뮬레이션</h3>
           <p className="panel-subtitle">
-            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 블록을 얼마나 더 넣을 수 있는지 확인합니다.
+            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 박스를 얼마나 더 넣을 수 있는지 확인합니다.
           </p>
         </div>
         <div className="chain-history-row" aria-label="체이닝 이력">
@@ -2050,10 +2081,10 @@ function ChainSimulationPanel({
       ) : (
         <div className="chain-panel-grid">
           <div>
-            <strong className="chain-field-title">추가할 블록</strong>
-            <div className="chain-option-list" role="radiogroup" aria-label="추가할 블록 유형">
+            <strong className="chain-field-title">추가할 박스</strong>
+            <div className="chain-option-list" role="radiogroup" aria-label="추가할 박스 유형">
               {blockOptions.length === 0 ? (
-                <p className="fine-print">현재 작업에 추가된 블록 유형이 없습니다.</p>
+                <p className="fine-print">현재 작업에 추가된 박스 유형이 없습니다.</p>
               ) : (
                 blockOptions.map((template) => (
                   <button
@@ -2065,7 +2096,7 @@ function ChainSimulationPanel({
                   >
                     <strong>{template.name}</strong>
                     <span>
-                      {formatDimensions(template.dimensions)} · {template.fragile ? "fragile" : "normal"}
+                            {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
                     </span>
                   </button>
                 ))
@@ -2101,12 +2132,12 @@ function ChainSimulationPanel({
               </button>
               {chainStatus === "empty" ? (
                 <button className="secondary-button" onClick={onClearSelection}>
-                  다른 블록 선택
+                  다른 박스 선택
                 </button>
               ) : null}
             </div>
             {!selectedTemplateId ? (
-              <p className="fine-print review-cta-hint">블록을 선택해야 계산할 수 있습니다.</p>
+              <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
             ) : null}
           </div>
         </div>
@@ -2158,8 +2189,8 @@ function SaveStatusPill({
         aria-live="polite"
         onClick={onClick}
       >
-        <AlertTriangle size={16} />
-        {compact ? "읽기 전용" : "다른 탭 저장 감지 · 읽기 전용"}
+                <AlertTriangle size={16} />
+                {compact ? "최신본 필요" : "다른 탭 저장됨 · 최신본 필요"}
       </button>
     );
   }
@@ -2175,8 +2206,8 @@ function SaveStatusPill({
         onClick={onClick}
         title={error ?? undefined}
       >
-        <AlertTriangle size={16} />
-        {compact ? "저장 실패" : "이 기기 저장 실패 · 지금 백업 필요"}
+                <AlertTriangle size={16} />
+                {compact ? "저장 실패" : "저장 실패 · 백업 만들기"}
       </button>
     );
   }
@@ -2210,14 +2241,14 @@ function SaveStatusPill({
       {compact
         ? otherTabCount > 0
           ? "편집 중"
-          : needsExport
-            ? "백업 필요"
-            : "저장됨"
+                  : needsExport
+                    ? "백업 필요"
+                    : "저장됨"
         : otherTabCount > 0
           ? "이 기기에 저장됨 · 다른 탭 열림"
           : needsExport
-            ? "이 기기에 저장됨 · 백업 업데이트 필요"
-            : "이 기기에 저장됨"}
+                    ? "이 기기에 저장됨 · 백업 필요"
+                    : "이 기기에 저장됨"}
     </button>
   );
 }
@@ -2271,8 +2302,8 @@ function StorageReliabilityPanel({
     >
       <div className="storage-panel-head">
         <div>
-          <h2 id={`${id}-title`}>저장 보호</h2>
-          <p className="fine-print">자동저장과 JSON 백업은 서로 다른 안전장치입니다.</p>
+                  <h2 id={`${id}-title`}>작업 저장 상태</h2>
+                  <p className="fine-print">이 기기 자동저장과 백업 파일은 서로 다른 안전장치입니다.</p>
         </div>
         <button className="icon-button panel-close-button" onClick={onClose} aria-label="저장 보호 패널 닫기">
           <X size={16} />
@@ -2290,7 +2321,7 @@ function StorageReliabilityPanel({
         <StorageHealthRow
           icon={<Download size={18} />}
           tone={exportState.tone}
-          label="이동본(JSON)"
+                  label="백업 파일"
           value={exportState.value}
           description={exportState.description}
         />
@@ -2313,7 +2344,7 @@ function StorageReliabilityPanel({
         ) : null}
         <button className={saveConflict ? "secondary-button" : "primary-button"} onClick={onExportJson}>
           <Download size={16} />
-          {saveConflict ? "현재 작업 JSON 백업" : status === "error" ? "지금 백업" : "JSON 내보내기"}
+                  {saveConflict ? "현재 작업 백업 만들기" : status === "error" ? "지금 백업" : "백업 파일 만들기"}
         </button>
         <button
           className="secondary-button"
@@ -2322,7 +2353,7 @@ function StorageReliabilityPanel({
           title={!storageHealth?.persistSupported ? "이 브라우저에서는 저장 보호 요청을 지원하지 않습니다." : undefined}
         >
           <ShieldCheck size={16} />
-          {persistenceRequesting ? "보호 강화 요청 중" : "작업 보호 강화"}
+                  {persistenceRequesting ? "보호 요청 중" : "작업 보호 강화"}
         </button>
       </div>
     </section>
@@ -2372,10 +2403,10 @@ function getLocalSaveState(
     return {
       tone: "red" as const,
       value: "다른 탭 최신본 감지",
-      description: "충돌 방지를 위해 이 탭에서는 입력 변경과 실행을 막았습니다.",
+              description: "이 화면은 보호를 위해 잠겼습니다. 최신본을 불러오면 계속할 수 있습니다.",
       detail: saveConflict
         ? `저장소 revision ${saveConflict.storedRevision} · 이 탭 기준 ${saveConflict.expectedRevision}`
-        : "저장 보호 패널에서 최신 작업본을 불러오거나 현재 작업을 JSON으로 백업하세요."
+                : "최신 작업본을 불러오거나 현재 화면을 백업 파일로 남기세요."
     };
   }
 
@@ -2403,7 +2434,7 @@ function getLocalSaveState(
     return {
       tone: "amber" as const,
       value: "저장 중",
-      description: "현재 작업본을 이 기기 IndexedDB에 저장하고 있습니다.",
+              description: "현재 작업을 이 기기에 자동저장하고 있습니다.",
       detail: otherTabCount > 0 ? "다른 탭도 열려 있습니다. 저장 기준 revision을 확인합니다." : null
     };
   }
@@ -2426,9 +2457,9 @@ function getExportState(workspace: TetrisWorkspace, needsExport: boolean) {
     return {
       tone: "amber" as const,
       value: "업데이트 필요",
-      description: workspace.lastExportedAt
-        ? `마지막 백업 이후 변경됨. 마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
-        : "아직 다른 기기로 옮길 JSON 백업 파일이 없습니다."
+              description: workspace.lastExportedAt
+                ? `마지막 백업 이후 변경됨. 마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
+                : "아직 다른 기기로 옮길 백업 파일이 없습니다. 파일 형식은 JSON입니다."
     };
   }
 
@@ -2436,7 +2467,7 @@ function getExportState(workspace: TetrisWorkspace, needsExport: boolean) {
     return {
       tone: "neutral" as const,
       value: "대기",
-      description: "작업 데이터가 생기면 JSON 백업 필요 여부를 표시합니다."
+              description: "작업 데이터가 생기면 백업 파일 필요 여부를 표시합니다."
     };
   }
 
@@ -2475,7 +2506,7 @@ function getBrowserProtectionState(
     return {
       tone: "amber" as const,
       value: "보호되지 않음",
-      description: "요청이 허용되지 않았습니다. JSON 백업 파일을 함께 보관하세요.",
+              description: "요청이 허용되지 않았습니다. 백업 파일을 함께 보관하세요.",
       detail
     };
   }
@@ -2493,7 +2524,7 @@ function getBrowserProtectionState(
     return {
       tone: "neutral" as const,
       value: "지원되지 않음",
-      description: "이 환경에서는 Storage API 보호 요청을 사용할 수 없습니다. JSON 백업을 보관하세요.",
+              description: "이 환경에서는 브라우저 보호 요청을 사용할 수 없습니다. 백업 파일을 보관하세요.",
       detail
     };
   }
@@ -2501,7 +2532,7 @@ function getBrowserProtectionState(
   return {
     tone: "amber" as const,
     value: "보호 강화 가능",
-    description: "브라우저 정책에 따라 로컬 데이터가 정리될 수 있습니다.",
+              description: "브라우저 정책에 따라 이 기기 작업이 정리될 수 있습니다.",
     detail
   };
 }
@@ -2567,7 +2598,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 가로
+        안전 여유 가로(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -2577,7 +2608,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 세로
+        안전 여유 세로(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -2587,7 +2618,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 높이
+        안전 여유 높이(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -2620,7 +2651,7 @@ function ImportConflictPanel({
 }) {
   return (
     <div className="import-panel" role="alert">
-      <strong>JSON 가져오기 확인</strong>
+      <strong>백업 파일 가져오기 확인</strong>
       <p className="fine-print">
         충돌 유형: {pendingImport.conflict.kind}. 현재 작업을 보존하거나, 가져온 파일로 대체하거나, 복사본으로 열 수
         있습니다.
@@ -2629,7 +2660,7 @@ function ImportConflictPanel({
       <div className="form-actions">
         <button className="secondary-button" onClick={onExportJson}>
           <Download size={16} />
-          현재 작업 먼저 내보내기
+          현재 작업 먼저 백업
         </button>
         {pendingImport.conflict.options.includes("keep-current") ? (
           <button className="secondary-button" onClick={() => onResolve("keep-current")}>

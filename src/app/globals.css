@@ -38,7 +38,7 @@ select {
 }
 
 button {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 .app-shell {
@@ -108,7 +108,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -170,8 +170,8 @@ button {
 }
 
 .panel-close-button {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
 }
 
@@ -265,6 +265,12 @@ button {
     background 120ms ease,
     border-color 120ms ease,
     transform 120ms ease;
+}
+
+.icon-button,
+.danger-button,
+.view-buttons .secondary-button {
+  min-width: 44px;
 }
 
 .primary-button {
@@ -565,7 +571,7 @@ select:focus-visible {
 .field-row input,
 .field-row select {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 10px;
@@ -680,7 +686,7 @@ select:focus-visible {
 
 .block-detail-grid input {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 10px;
@@ -689,7 +695,7 @@ select:focus-visible {
 }
 
 .checkbox-line {
-  min-height: 40px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -698,8 +704,8 @@ select:focus-visible {
 }
 
 .checkbox-line input {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .summary-grid {
@@ -790,11 +796,10 @@ select:focus-visible {
 }
 
 .inline-action {
-  min-height: 0;
-  border: 0;
-  border-bottom: 1px solid currentColor;
-  border-radius: 0;
-  padding: 0;
+  min-height: 32px;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  border-radius: 8px;
+  padding: 5px 10px;
   background: transparent;
   color: var(--blue);
   cursor: pointer;
@@ -877,6 +882,11 @@ select:focus-visible {
 .result-preview-empty {
   min-height: 118px;
   align-content: center;
+}
+
+.result-empty-action {
+  width: fit-content;
+  margin-top: 4px;
 }
 
 .preview-stack {
@@ -1370,6 +1380,32 @@ select:focus-visible {
 }
 
 @media (max-width: 767px) {
+  button,
+  input,
+  select,
+  .status-pill,
+  .checkbox-line {
+    min-height: 48px;
+  }
+
+  .icon-button,
+  .danger-button,
+  .view-buttons .secondary-button {
+    min-width: 48px;
+  }
+
+  .form-grid input,
+  .field-row input,
+  .field-row select,
+  .block-detail-grid input {
+    min-height: 48px;
+  }
+
+  .checkbox-line input {
+    width: 22px;
+    height: 22px;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
@@ -1456,8 +1492,10 @@ select:focus-visible {
     max-height: 340px;
   }
 
+  .view-buttons .secondary-button,
   .three-camera-buttons .secondary-button {
-    min-height: 44px;
+    min-width: 48px;
+    min-height: 48px;
   }
 
   .result-panel-head,

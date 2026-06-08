@@ -52,7 +52,7 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
 
     if (!rotation) {
       unloadedBlockCount += 1;
-      warnings.push(`${block.name}은(는) usable size에 들어가지 않아 미적재 처리했습니다.`);
+      warnings.push(`${block.name}은(는) 적재 가능 크기에 들어가지 않아 미적재 처리했습니다.`);
       return;
     }
 
@@ -60,7 +60,7 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
 
     if (!packedBlock) {
       unloadedBlockCount += 1;
-      warnings.push(`${block.name}은(는) v0 배치 중 미적재 처리했습니다.`);
+      warnings.push(`${block.name}은(는) 계산 중 배치하지 못해 미적재 처리했습니다.`);
     }
   });
 

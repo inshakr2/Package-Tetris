@@ -78,7 +78,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "usable-size-invalid",
       level: "error",
-      text: "usable size가 0보다 커야 합니다. 공간 치수와 offset을 확인하세요."
+      text: "적재 가능 크기가 0보다 커야 합니다. 공간 치수와 안전 여유를 확인하세요."
     });
   }
 
@@ -86,7 +86,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "blocks-required",
       level: "error",
-      text: "블록을 1개 이상 현재 작업에 추가하세요."
+      text: "박스를 1개 이상 현재 작업에 추가하세요."
     });
   }
 
@@ -95,7 +95,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "block-quantity-invalid",
       level: "error",
-      text: "모든 블록 수량은 1 이상이어야 합니다."
+      text: "모든 박스 수량은 1 이상이어야 합니다."
     });
   }
 
@@ -104,7 +104,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "block-dimensions-invalid",
       level: "error",
-      text: "모든 블록 치수는 1mm 이상이어야 합니다."
+      text: "모든 박스 치수는 1mm 이상이어야 합니다."
     });
   }
 
@@ -117,7 +117,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "block-does-not-fit",
       level: "error",
-      text: `${blocksThatDoNotFit[0]?.name ?? "일부 블록"}은(는) 어떤 90도 직교 회전으로도 usable size에 들어가지 않습니다.`
+      text: `${blocksThatDoNotFit[0]?.name ?? "일부 박스"}은(는) 돌려 놓아도 선택한 공간의 적재 가능 크기에 들어가지 않습니다.`
     });
   }
 
