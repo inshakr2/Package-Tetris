@@ -128,7 +128,7 @@ export function reviewExecutionReadiness({
     messages.push({
       code: "multi-space-likely",
       level: "warning",
-      text: `총 부피 기준 최소 ${minimumSpaceCountLowerBound}개 공간이 필요할 수 있습니다.`
+      text: `부피로만 보면 최소 ${minimumSpaceCountLowerBound}개 공간이 필요할 수 있습니다. 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다.`
     });
   }
 

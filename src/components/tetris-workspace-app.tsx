@@ -65,6 +65,10 @@ import {
   getProjectionViewLabel,
   type ProjectionView
 } from "@/lib/workspace/projection-view";
+import {
+  createPackingResultWarnings,
+  SPACE_SPLIT_FLOOR_SUPPORT_WARNING
+} from "@/lib/workspace/result-warnings";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -618,6 +622,11 @@ export function TetrisWorkspaceApp() {
     }
 
     const optimizationOutput = runPackingEngineV0(optimizationInput);
+    const resultWarnings = createPackingResultWarnings({
+      warnings: optimizationOutput.warnings,
+      usedSpaceCount: optimizationOutput.usedSpaceCount,
+      minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
+    });
 
     updateWorkspace((current, now) => ({
       ...current,
@@ -638,7 +647,7 @@ export function TetrisWorkspaceApp() {
           averageUtilizationRate: optimizationOutput.averageUtilizationRate,
           unloadedBlockCount: optimizationOutput.unloadedBlockCount,
           spaces: optimizationOutput.spaces,
-          warnings: optimizationOutput.warnings
+          warnings: resultWarnings
         },
         ...current.recentResults
       ].slice(0, 5)
@@ -1014,6 +1023,7 @@ export function TetrisWorkspaceApp() {
                   ref={resultStageRef}
                   latestResult={latestResult}
           selectedSpace={selectedSpace}
+          workspacePolicy={workspace.policy}
           review={review}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
@@ -1461,7 +1471,7 @@ function ReviewCompactCard({
           {statusLabel}
         </span>
         <p className="fine-print">
-                  깨짐주의끼리 적층 허용, 깨짐주의 위 일반 박스 적층 금지, 90도 회전 기준으로 입력을 확인합니다.
+                  깨짐주의끼리 쌓기 허용, 깨짐주의 위 일반 박스 쌓기 금지, 90도 회전 기준으로 입력을 확인합니다. 부피 기준 최소 공간 수는 참고 최소값이며, 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다.
         </p>
       </div>
       <div className="summary-grid compact-summary">
@@ -1469,7 +1479,7 @@ function ReviewCompactCard({
         <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
         <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
                 <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
-        <SummaryTile label="예상 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
+        <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
       <ul className="checklist compact-checklist">
         {saveConflict ? (
@@ -1546,6 +1556,7 @@ function ReviewCompactCard({
 const ResultStage = ({
   latestResult,
   selectedSpace,
+  workspacePolicy,
   review,
   draftBlocks,
   chainHistory,
@@ -1559,6 +1570,7 @@ const ResultStage = ({
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   selectedSpace: SpaceDefinition | undefined;
+  workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
@@ -1623,6 +1635,10 @@ const ResultStage = ({
   const visibleBlockCount = selectedBlockTemplateId
     ? projectedBlocks.filter((block) => block.blockTemplateId === selectedBlockTemplateId).length
     : projectedBlocks.length;
+  const safetySpaceSplitWarning =
+    latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
+  const resultWarnings =
+    latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
 
   useEffect(() => {
     setResultViewMode("three");
@@ -1687,7 +1703,11 @@ const ResultStage = ({
         const preview = runChainSimulationV0({
           result: latestResult,
           blockTemplate: selectedChainTemplate,
-          runId: createClientId("chain-run")
+          runId: createClientId("chain-run"),
+          policy: {
+            fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
+            nonFragileOnFragileAllowed: false
+          }
         });
 
         setChainPreview(preview);
@@ -1751,6 +1771,15 @@ const ResultStage = ({
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
+
+      {safetySpaceSplitWarning ? (
+        <div className="review-status-banner" data-tone="amber" role="status">
+          <span className="badge" data-tone="amber">
+            현장 안내
+          </span>
+          <p className="fine-print">{safetySpaceSplitWarning}</p>
+        </div>
+      ) : null}
 
       {latestResult ? (
         <div className="result-preview result-preview-large" tabIndex={0} aria-label="3D 및 2D 배치 검토 작업대">
@@ -1998,9 +2027,9 @@ const ResultStage = ({
           ) : (
                     <p className="meta">결과를 만들면 공간별 박스 배치가 저장됩니다.</p>
           )}
-          {latestResult?.warnings?.length ? (
+          {resultWarnings.length ? (
             <ul className="checklist compact-checklist">
-              {latestResult.warnings.map((warning) => (
+              {resultWarnings.map((warning) => (
                 <li key={warning} className="review-message" data-tone="amber">
                   <AlertTriangle size={18} color="var(--amber)" />
                   {warning}

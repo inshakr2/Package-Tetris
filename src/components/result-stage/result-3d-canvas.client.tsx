@@ -419,7 +419,7 @@ export function Result3DCanvas({
             <strong>{hoverState.block.name}</strong>
             <span>
               {hoverState.block.source.widthMm} / {hoverState.block.source.depthMm} / {hoverState.block.source.heightMm}mm
-              · {hoverState.block.fragile ? "fragile" : "normal"}
+              · {hoverState.block.fragile ? "깨짐주의" : "일반"}
             </span>
           </div>
         ) : null}

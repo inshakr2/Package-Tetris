@@ -4,6 +4,10 @@ import { runChainSimulationV0 } from "./chain-simulation";
 import { BlockTemplate, PackedBlock, ResultSummary, SpaceDefinition } from "./types";
 
 const TIMESTAMP = "2026-06-08T00:00:00.000Z";
+const DEFAULT_POLICY = {
+  fragileStackOnFragileAllowed: true,
+  nonFragileOnFragileAllowed: false as const
+};
 
 function createSpace(): SpaceDefinition {
   return {
@@ -77,7 +81,8 @@ describe("chain-simulation v0", () => {
     const output = runChainSimulationV0({
       result,
       blockTemplate: template,
-      runId: "chain-run-a"
+      runId: "chain-run-a",
+      policy: DEFAULT_POLICY
     });
 
     // Then
@@ -109,7 +114,8 @@ describe("chain-simulation v0", () => {
     const output = runChainSimulationV0({
       result,
       blockTemplate: createTemplate(),
-      runId: "chain-run-full"
+      runId: "chain-run-full",
+      policy: DEFAULT_POLICY
     });
 
     // Then
@@ -132,7 +138,8 @@ describe("chain-simulation v0", () => {
     const output = runChainSimulationV0({
       result,
       blockTemplate: createTemplate({ fragile: false }),
-      runId: "chain-run-fragile-support"
+      runId: "chain-run-fragile-support",
+      policy: DEFAULT_POLICY
     });
 
     // Then
@@ -154,11 +161,41 @@ describe("chain-simulation v0", () => {
     const output = runChainSimulationV0({
       result,
       blockTemplate: createTemplate({ fragile: true }),
-      runId: "chain-run-fragile-on-fragile"
+      runId: "chain-run-fragile-on-fragile",
+      policy: {
+        fragileStackOnFragileAllowed: true,
+        nonFragileOnFragileAllowed: false
+      }
     });
 
     // Then
     assert.equal(output.addedQuantity, 4);
     assert.equal(output.spaces[0]?.blocks.at(-1)?.zMm, 500);
+  });
+
+  it("fragile 적층 금지 정책이면 fragile 추가 블록도 fragile 지지면 위에 배치하지 않는다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        fragile: true,
+        widthMm: 1000,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate({ fragile: true }),
+      runId: "chain-run-fragile-disallowed",
+      policy: {
+        fragileStackOnFragileAllowed: false,
+        nonFragileOnFragileAllowed: false
+      }
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
   });
 });

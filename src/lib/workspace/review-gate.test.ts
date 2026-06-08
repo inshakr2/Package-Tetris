@@ -165,6 +165,10 @@ describe("review-gate", () => {
     assert.equal(review.cta.disabled, false);
     assert.equal(review.totals.minimumSpaceCountLowerBound, 2);
     assert.equal(review.messages[0]?.code, "multi-space-likely");
+    assert.equal(
+      review.messages[0]?.text,
+      "부피로만 보면 최소 2개 공간이 필요할 수 있습니다. 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다."
+    );
     assert.equal(placeholder?.usedSpaceCount, 2);
     assert.equal(placeholder?.averageUtilizationRate, 0.768);
     assert.equal(placeholder?.unloadedBlockCount, 0);
