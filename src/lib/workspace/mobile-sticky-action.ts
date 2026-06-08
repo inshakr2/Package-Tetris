@@ -5,6 +5,7 @@ export type MobileStickySaveStatus = "loading" | "saving" | "saved" | "error" | 
 export interface MobileStickyActionStateInput {
   isWorkspaceLocked: boolean;
   hasResult: boolean;
+  isResultStale: boolean;
   canCreateResult: boolean;
   reviewCtaLabel: string;
   reviewCtaReason: string | null;
@@ -65,6 +66,17 @@ export function createMobileStickyActionState(
       action: "create",
       tone: "amber",
       disabled: true
+    };
+  }
+
+  if (input.hasResult && input.isResultStale) {
+    return {
+      statusLabel: "입력 변경됨",
+      helperLabel: "현재 결과는 이전 입력 기준입니다. 최신 입력으로 다시 계산하세요.",
+      buttonLabel: "결과 다시 만들기",
+      action: "create",
+      tone: "amber",
+      disabled: !input.canCreateResult
     };
   }
 

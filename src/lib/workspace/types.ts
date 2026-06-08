@@ -93,6 +93,7 @@ export interface ResultSummary {
   resultId: string;
   runId?: string;
   createdAt: string;
+  inputFingerprint?: string;
   spaceSnapshot?: SpaceDefinition;
   usedSpaceCount: number;
   averageUtilizationRate: number;

@@ -90,6 +90,11 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
+import {
+  createResultFreshnessState,
+  createResultInputFingerprint,
+  type ResultFreshnessState
+} from "@/lib/workspace/result-freshness";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
 import {
@@ -491,6 +496,19 @@ export function TetrisWorkspaceApp() {
       })
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
+  const currentResultInputFingerprint = workspace
+    ? createResultInputFingerprint({
+        selectedSpace,
+        blocks: draftBlocks,
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+      })
+    : null;
+  const resultFreshnessState = createResultFreshnessState({
+    currentFingerprint: currentResultInputFingerprint,
+    resultFingerprint: latestResult?.inputFingerprint,
+    canCreateResult: Boolean(review && !review.cta.disabled),
+    disabledReason: review?.cta.disabledReason ?? null
+  });
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
   const connectivityStatus = useMemo(
     () =>
@@ -509,13 +527,14 @@ export function TetrisWorkspaceApp() {
       createMobileStickyActionState({
         isWorkspaceLocked,
         hasResult: Boolean(latestResult),
+        isResultStale: resultFreshnessState.status === "stale",
         canCreateResult: Boolean(review && !review.cta.disabled),
         reviewCtaLabel: "결과 만들기",
         reviewCtaReason: review?.cta.disabledReason ?? null,
         saveStatus,
         needsExport
       }),
-    [isWorkspaceLocked, latestResult, needsExport, review, saveStatus]
+    [isWorkspaceLocked, latestResult, needsExport, resultFreshnessState.status, review, saveStatus]
   );
   const saveConflictBannerCopy = saveConflict ? getSaveConflictBannerCopy(saveConflict) : null;
 
@@ -869,6 +888,11 @@ export function TetrisWorkspaceApp() {
       return;
     }
 
+    const inputFingerprint = createResultInputFingerprint({
+      selectedSpace: optimizationInput.space,
+      blocks: optimizationInput.blocks,
+      fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+    });
     const optimizationOutput = runPackingEngineV0(optimizationInput);
     const resultWarnings = createPackingResultWarnings({
       warnings: optimizationOutput.warnings,
@@ -890,6 +914,7 @@ export function TetrisWorkspaceApp() {
           resultId,
           runId: optimizationOutput.runId,
           createdAt: now,
+          inputFingerprint: inputFingerprint ?? undefined,
           spaceSnapshot: optimizationInput.space,
           usedSpaceCount: optimizationOutput.usedSpaceCount,
           averageUtilizationRate: optimizationOutput.averageUtilizationRate,
@@ -1333,6 +1358,7 @@ export function TetrisWorkspaceApp() {
         <ResultStage
           ref={resultStageRef}
           latestResult={latestResult}
+          resultFreshnessState={resultFreshnessState}
           needsExport={needsExport}
           selectedSpace={selectedSpace}
           workspacePolicy={workspace.policy}
@@ -1930,6 +1956,7 @@ function ReviewCompactCard({
 
 const ResultStage = ({
   latestResult,
+  resultFreshnessState,
   needsExport,
   selectedSpace,
   workspacePolicy,
@@ -1945,6 +1972,7 @@ const ResultStage = ({
   ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
+  resultFreshnessState: ResultFreshnessState;
   needsExport: boolean;
   selectedSpace: SpaceDefinition | undefined;
   workspacePolicy: TetrisWorkspace["policy"];
@@ -2225,6 +2253,36 @@ const ResultStage = ({
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
+
+      {latestResult && resultFreshnessState.visible ? (
+        <div
+          className="result-freshness-banner"
+          data-tone={resultFreshnessState.tone}
+          role="status"
+          aria-label="입력이 바뀌었습니다"
+        >
+          <div>
+            <span className="badge" data-tone="amber">
+              재계산 필요
+            </span>
+            <strong>{resultFreshnessState.title}</strong>
+            <p className="fine-print">{resultFreshnessState.description}</p>
+            {resultFreshnessState.ctaDisabledReason ? (
+              <p className="fine-print">{resultFreshnessState.ctaDisabledReason}</p>
+            ) : null}
+          </div>
+          <button
+            className="secondary-button"
+            onClick={onCreateResult}
+            disabled={resultFreshnessState.ctaDisabled}
+            aria-label="결과 다시 만들기"
+            title={resultFreshnessState.ctaDisabledReason ?? undefined}
+          >
+            <Box size={16} />
+            {resultFreshnessState.ctaLabel}
+          </button>
+        </div>
+      ) : null}
 
       {unloadedWarningSummary.length > 0 ? (
         <div className="result-unloaded-callout" role="status" aria-label="미적재 안내">

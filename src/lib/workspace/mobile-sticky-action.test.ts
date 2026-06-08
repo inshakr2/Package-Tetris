@@ -105,6 +105,29 @@ describe("mobile-sticky-action", () => {
       disabled: false
     });
   });
+
+  it("결과가 있지만 입력이 바뀌었으면 모바일 주요 액션은 다시 계산을 우선한다", () => {
+    // Given
+    const input = createInput({
+      hasResult: true,
+      isResultStale: true,
+      canCreateResult: true,
+      needsExport: true
+    });
+
+    // When
+    const state = createMobileStickyActionState(input);
+
+    // Then
+    assert.deepEqual(state, {
+      statusLabel: "입력 변경됨",
+      helperLabel: "현재 결과는 이전 입력 기준입니다. 최신 입력으로 다시 계산하세요.",
+      buttonLabel: "결과 다시 만들기",
+      action: "create",
+      tone: "amber",
+      disabled: false
+    });
+  });
 });
 
 function createInput(
@@ -113,6 +136,7 @@ function createInput(
   return {
     isWorkspaceLocked: false,
     hasResult: false,
+    isResultStale: false,
     canCreateResult: false,
     reviewCtaLabel: "결과 만들기",
     reviewCtaReason: null,
