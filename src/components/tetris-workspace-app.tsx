@@ -6,14 +6,17 @@ import {
   CheckCircle2,
   Download,
   FileUp,
+  HardDrive,
   PackagePlus,
   Plus,
   RotateCcw,
   Save,
+  ShieldCheck,
   Trash2,
-  Truck
+  Truck,
+  X
 } from "lucide-react";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IndexedDbTetrisStorage } from "@/lib/persistence/indexed-db";
 import {
   copyWorkspaceForNewFile,
@@ -21,6 +24,13 @@ import {
   exportWorkspaceToJson,
   parseWorkspaceImport
 } from "@/lib/persistence/json-transfer";
+import {
+  readStorageHealth,
+  requestStoragePersistence,
+  shouldRemindExport,
+  type PersistenceRequestResult,
+  type StorageHealthSnapshot
+} from "@/lib/persistence/storage-health";
 import {
   addBlockTemplateToDraft,
   createBlockTemplate,
@@ -84,6 +94,7 @@ const DEFAULT_BLOCK_FORM = {
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const PROJECTION_VIEWS: ProjectionView[] = ["top", "front", "side"];
+const STORAGE_PANEL_ID = "storage-reliability-panel";
 
 export function TetrisWorkspaceApp() {
   const storage = useMemo(() => new IndexedDbTetrisStorage(), []);
@@ -92,11 +103,24 @@ export function TetrisWorkspaceApp() {
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastLocalSavedAt, setLastLocalSavedAt] = useState<string | null>(null);
+  const [storageHealth, setStorageHealth] = useState<StorageHealthSnapshot | null>(null);
+  const [storagePanelOpen, setStoragePanelOpen] = useState(false);
+  const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
+  const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+
+  const refreshStorageHealth = useCallback(async () => {
+    if (typeof navigator === "undefined" || typeof window === "undefined") {
+      return;
+    }
+
+    setStorageHealth(await readStorageHealth(navigator.storage, window.isSecureContext));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +131,7 @@ export function TetrisWorkspaceApp() {
         if (!cancelled) {
           setWorkspace(restored ? normalizeWorkspace(restored) : createDefaultWorkspace());
           setSaveStatus(restored ? "saved" : "saving");
+          setLastLocalSavedAt(restored?.updatedAt ?? null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -118,11 +143,12 @@ export function TetrisWorkspaceApp() {
     }
 
     loadWorkspace();
+    void refreshStorageHealth();
 
     return () => {
       cancelled = true;
     };
-  }, [storage]);
+  }, [refreshStorageHealth, storage]);
 
   useEffect(() => {
     if (!workspace) {
@@ -133,16 +159,34 @@ export function TetrisWorkspaceApp() {
     const timeoutId = window.setTimeout(async () => {
       try {
         await storage.saveWorkspace(workspace);
+        setLastLocalSavedAt(new Date().toISOString());
         setSaveStatus("saved");
         setSaveError(null);
+        void refreshStorageHealth();
       } catch (error) {
         setSaveStatus("error");
         setSaveError(toErrorMessage(error));
+        setStoragePanelOpen(true);
       }
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [storage, workspace]);
+  }, [refreshStorageHealth, storage, workspace]);
+
+  useEffect(() => {
+    if (!storagePanelOpen) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setStoragePanelOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [storagePanelOpen]);
 
   const allSpaces = useMemo(() => {
     return [...PRESET_SPACES, ...(workspace?.spaces ?? [])];
@@ -158,7 +202,7 @@ export function TetrisWorkspaceApp() {
       })
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
-  const needsExport = Boolean(workspace && workspace.lastExportedAt !== workspace.updatedAt);
+  const needsExport = Boolean(workspace && shouldRemindExport(workspace));
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
@@ -475,6 +519,31 @@ export function TetrisWorkspaceApp() {
     });
   }
 
+  async function requestBrowserStorageProtection() {
+    setPersistenceRequesting(true);
+    try {
+      const result = await requestStoragePersistence(
+        typeof navigator === "undefined" ? undefined : navigator.storage,
+        typeof window !== "undefined" && window.isSecureContext
+      );
+      setPersistenceRequestResult(result);
+
+      const refreshed = await readStorageHealth(
+        typeof navigator === "undefined" ? undefined : navigator.storage,
+        typeof window !== "undefined" && window.isSecureContext
+      );
+      setStorageHealth({
+        ...refreshed,
+        persistenceState:
+          result === "denied" || result === "error" || result === "unsupported"
+            ? result
+            : refreshed.persistenceState
+      });
+    } finally {
+      setPersistenceRequesting(false);
+    }
+  }
+
   function exportJson() {
     if (!workspace) {
       return;
@@ -578,7 +647,16 @@ export function TetrisWorkspaceApp() {
           </div>
         </div>
         <div className="toolbar">
-          <SaveStatusPill status={saveStatus} needsExport={needsExport} error={saveError} />
+          <div className="storage-status-wrapper">
+            <SaveStatusPill
+              status={saveStatus}
+              needsExport={needsExport}
+              error={saveError}
+              expanded={storagePanelOpen}
+              controls={STORAGE_PANEL_ID}
+              onClick={() => setStoragePanelOpen((open) => !open)}
+            />
+          </div>
           <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} />
             가져오기
@@ -596,6 +674,23 @@ export function TetrisWorkspaceApp() {
           />
         </div>
       </header>
+
+      {storagePanelOpen ? (
+        <StorageReliabilityPanel
+          id={STORAGE_PANEL_ID}
+          workspace={workspace}
+          status={saveStatus}
+          needsExport={needsExport}
+          error={saveError}
+          lastLocalSavedAt={lastLocalSavedAt}
+          storageHealth={storageHealth}
+          persistenceRequestResult={persistenceRequestResult}
+          persistenceRequesting={persistenceRequesting}
+          onClose={() => setStoragePanelOpen(false)}
+          onExportJson={exportJson}
+          onRequestStorageProtection={requestBrowserStorageProtection}
+        />
+      ) : null}
 
       <div className="workspace-stack">
         <div className="workflow-progress">
@@ -658,6 +753,10 @@ export function TetrisWorkspaceApp() {
               selectedSpace={selectedSpace}
               review={review}
               needsExport={needsExport}
+              storageHealth={storageHealth}
+              persistenceRequesting={persistenceRequesting}
+              onExportJson={exportJson}
+              onRequestStorageProtection={requestBrowserStorageProtection}
               onCreateResult={createPackingResult}
             />
           </div>
@@ -672,16 +771,25 @@ export function TetrisWorkspaceApp() {
           chainHistory={workspace.chainHistory}
           pendingImport={pendingImport}
           onResolveImport={resolveImport}
+          onExportJson={exportJson}
           onConfirmChainSimulation={confirmChainSimulation}
           onUndoLastChainAddition={undoLastChainAddition}
         />
       </div>
 
       <div className="sticky-mobile-actions">
-        <SaveStatusPill status={saveStatus} needsExport={needsExport} error={saveError} compact />
+        <SaveStatusPill
+          status={saveStatus}
+          needsExport={needsExport}
+          error={saveError}
+          compact
+          expanded={storagePanelOpen}
+          controls={STORAGE_PANEL_ID}
+          onClick={() => setStoragePanelOpen((open) => !open)}
+        />
         <button className="primary-button" onClick={exportJson}>
           <Download size={16} />
-          JSON
+          {saveStatus === "error" ? "지금 백업" : "내보내기"}
         </button>
       </div>
     </main>
@@ -1041,11 +1149,19 @@ function ReviewCompactCard({
   selectedSpace,
   review,
   needsExport,
+  storageHealth,
+  persistenceRequesting,
+  onExportJson,
+  onRequestStorageProtection,
   onCreateResult
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
   needsExport: boolean;
+  storageHealth: StorageHealthSnapshot | null;
+  persistenceRequesting: boolean;
+  onExportJson: () => void;
+  onRequestStorageProtection: () => void;
   onCreateResult: () => void;
 }) {
   const statusTone = review?.status === "error" ? "red" : review?.status === "warning" ? "amber" : "green";
@@ -1096,7 +1212,27 @@ function ReviewCompactCard({
         {needsExport ? (
           <li className="review-message" data-tone="amber">
             <AlertTriangle size={18} color="var(--amber)" />
-            다른 기기에서 이어가려면 JSON 내보내기가 필요합니다.
+            <span className="review-message-content">
+              다른 기기에서 이어가거나 복구하려면 JSON 백업을 최신으로 유지하세요.
+              <button className="inline-action" onClick={onExportJson}>
+                지금 내보내기
+              </button>
+            </span>
+          </li>
+        ) : null}
+        {storageHealth?.persistSupported && storageHealth.persistenceState !== "persisted" ? (
+          <li className="review-message" data-tone="amber">
+            <ShieldCheck size={18} color="var(--amber)" />
+            <span className="review-message-content">
+              브라우저 정리로 작업본이 지워질 가능성을 줄이려면 저장 보호 강화를 권장합니다.
+              <button
+                className="inline-action"
+                onClick={onRequestStorageProtection}
+                disabled={persistenceRequesting}
+              >
+                {persistenceRequesting ? "요청 중" : "보호 강화"}
+              </button>
+            </span>
           </li>
         ) : null}
       </ul>
@@ -1124,6 +1260,7 @@ const ResultStage = ({
   chainHistory,
   pendingImport,
   onResolveImport,
+  onExportJson,
   onConfirmChainSimulation,
   onUndoLastChainAddition,
   ref
@@ -1135,6 +1272,7 @@ const ResultStage = ({
   chainHistory: ChainHistoryItem[];
   pendingImport: PendingImport | null;
   onResolveImport: (option: ImportConflictOption) => void;
+  onExportJson: () => void;
   onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
   onUndoLastChainAddition: (resultId: string) => void;
   ref: React.Ref<HTMLElement>;
@@ -1505,7 +1643,9 @@ const ResultStage = ({
         </section>
       </div>
 
-      {pendingImport ? <ImportConflictPanel pendingImport={pendingImport} onResolve={onResolveImport} /> : null}
+      {pendingImport ? (
+        <ImportConflictPanel pendingImport={pendingImport} onResolve={onResolveImport} onExportJson={onExportJson} />
+      ) : null}
     </section>
   );
 };
@@ -1654,37 +1794,330 @@ function SaveStatusPill({
   status,
   needsExport,
   error,
-  compact = false
+  compact = false,
+  expanded,
+  controls,
+  onClick
 }: {
   status: SaveStatus;
   needsExport: boolean;
   error: string | null;
   compact?: boolean;
+  expanded: boolean;
+  controls: string;
+  onClick: () => void;
 }) {
   if (status === "error") {
     return (
-      <span className="status-pill" data-tone="red" role="status" title={error ?? undefined}>
+      <button
+        className="status-pill status-pill-button"
+        data-tone="red"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+        title={error ?? undefined}
+      >
         <AlertTriangle size={16} />
-        {compact ? "저장 실패" : "저장 실패 · JSON 내보내기 필요"}
-      </span>
+        {compact ? "저장 실패" : "이 기기 저장 실패 · 지금 백업 필요"}
+      </button>
     );
   }
 
   if (status === "saving" || status === "loading") {
     return (
-      <span className="status-pill" data-tone="amber" role="status">
+      <button
+        className="status-pill status-pill-button"
+        data-tone="amber"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+      >
         <Save size={16} />
-        {status === "loading" ? "불러오는 중" : "저장 중"}
-      </span>
+        {status === "loading" ? "작업본 불러오는 중" : "이 기기에 저장 중"}
+      </button>
     );
   }
 
   return (
-    <span className="status-pill" data-tone={needsExport ? "amber" : "green"} role="status">
+    <button
+      className="status-pill status-pill-button"
+      data-tone={needsExport ? "amber" : "green"}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      aria-live="polite"
+      onClick={onClick}
+    >
       <CheckCircle2 size={16} />
-      {needsExport ? "자동저장됨 · 내보내기 필요" : "자동저장됨"}
-    </span>
+      {needsExport ? "이 기기에 저장됨 · 백업 업데이트 필요" : "이 기기에 저장됨"}
+    </button>
   );
+}
+
+function StorageReliabilityPanel({
+  id,
+  workspace,
+  status,
+  needsExport,
+  error,
+  lastLocalSavedAt,
+  storageHealth,
+  persistenceRequestResult,
+  persistenceRequesting,
+  onClose,
+  onExportJson,
+  onRequestStorageProtection
+}: {
+  id: string;
+  workspace: TetrisWorkspace;
+  status: SaveStatus;
+  needsExport: boolean;
+  error: string | null;
+  lastLocalSavedAt: string | null;
+  storageHealth: StorageHealthSnapshot | null;
+  persistenceRequestResult: PersistenceRequestResult | null;
+  persistenceRequesting: boolean;
+  onClose: () => void;
+  onExportJson: () => void;
+  onRequestStorageProtection: () => void;
+}) {
+  const localState = getLocalSaveState(status, error, lastLocalSavedAt);
+  const exportState = getExportState(workspace, needsExport);
+  const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
+  const canRequestProtection =
+    Boolean(storageHealth?.persistSupported) && storageHealth?.persistenceState !== "persisted" && !persistenceRequesting;
+
+  return (
+    <section
+      id={id}
+      className="storage-reliability-panel"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={`${id}-title`}
+    >
+      <div className="storage-panel-head">
+        <div>
+          <h2 id={`${id}-title`}>저장 보호</h2>
+          <p className="fine-print">자동저장과 JSON 백업은 서로 다른 안전장치입니다.</p>
+        </div>
+        <button className="icon-button panel-close-button" onClick={onClose} aria-label="저장 보호 패널 닫기">
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="storage-health-list">
+        <StorageHealthRow
+          icon={<Save size={18} />}
+          tone={localState.tone}
+          label="이 기기 저장"
+          value={localState.value}
+          description={localState.description}
+        />
+        <StorageHealthRow
+          icon={<Download size={18} />}
+          tone={exportState.tone}
+          label="이동본(JSON)"
+          value={exportState.value}
+          description={exportState.description}
+        />
+        <StorageHealthRow
+          icon={<HardDrive size={18} />}
+          tone={browserState.tone}
+          label="브라우저 보호"
+          value={browserState.value}
+          description={browserState.description}
+          detail={browserState.detail}
+        />
+      </div>
+
+      <div className="storage-health-actions">
+        <button className="primary-button" onClick={onExportJson}>
+          <Download size={16} />
+          {status === "error" ? "지금 백업" : "JSON 내보내기"}
+        </button>
+        <button
+          className="secondary-button"
+          onClick={onRequestStorageProtection}
+          disabled={!canRequestProtection}
+          title={!storageHealth?.persistSupported ? "이 브라우저에서는 저장 보호 요청을 지원하지 않습니다." : undefined}
+        >
+          <ShieldCheck size={16} />
+          {persistenceRequesting ? "보호 강화 요청 중" : "작업 보호 강화"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function StorageHealthRow({
+  icon,
+  tone,
+  label,
+  value,
+  description,
+  detail
+}: {
+  icon: React.ReactNode;
+  tone: "green" | "amber" | "red" | "neutral";
+  label: string;
+  value: string;
+  description: string;
+  detail?: string | null;
+}) {
+  return (
+    <div className="storage-health-row" data-tone={tone}>
+      <span className="storage-health-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div>
+        <div className="storage-health-row-head">
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+        <p className="fine-print">{description}</p>
+        {detail ? <p className="fine-print storage-health-detail">{detail}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function getLocalSaveState(status: SaveStatus, error: string | null, lastLocalSavedAt: string | null) {
+  if (status === "error") {
+    return {
+      tone: "red" as const,
+      value: "저장 실패",
+      description: error
+        ? `브라우저 저장소에 쓰지 못했습니다. ${error}`
+        : "브라우저 저장소에 쓰지 못했습니다. 이 기기 저장이 불안정할 수 있습니다."
+    };
+  }
+
+  if (status === "loading") {
+    return {
+      tone: "amber" as const,
+      value: "불러오는 중",
+      description: "이 기기에 저장된 작업본을 확인하고 있습니다."
+    };
+  }
+
+  if (status === "saving") {
+    return {
+      tone: "amber" as const,
+      value: "저장 중",
+      description: "현재 작업본을 이 기기 IndexedDB에 저장하고 있습니다."
+    };
+  }
+
+  return {
+    tone: "green" as const,
+    value: "자동저장됨",
+    description: lastLocalSavedAt
+      ? `마지막 이 기기 저장: ${formatDateTime(lastLocalSavedAt)}`
+      : "브라우저를 닫아도 이 기기에서는 이어서 작업할 수 있습니다."
+  };
+}
+
+function getExportState(workspace: TetrisWorkspace, needsExport: boolean) {
+  if (needsExport) {
+    return {
+      tone: "amber" as const,
+      value: "업데이트 필요",
+      description: workspace.lastExportedAt
+        ? `마지막 백업 이후 변경됨. 마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
+        : "아직 다른 기기로 옮길 JSON 백업 파일이 없습니다."
+    };
+  }
+
+  if (!workspace.lastExportedAt) {
+    return {
+      tone: "neutral" as const,
+      value: "대기",
+      description: "작업 데이터가 생기면 JSON 백업 필요 여부를 표시합니다."
+    };
+  }
+
+  return {
+    tone: "green" as const,
+    value: "최신",
+    description: `마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
+  };
+}
+
+function getBrowserProtectionState(
+  storageHealth: StorageHealthSnapshot | null,
+  persistenceRequestResult: PersistenceRequestResult | null
+) {
+  if (!storageHealth) {
+    return {
+      tone: "neutral" as const,
+      value: "확인 중",
+      description: "이 브라우저에서 작업 보호를 강화할 수 있는지 확인합니다.",
+      detail: null
+    };
+  }
+
+  const detail = getStorageUsageDetail(storageHealth);
+
+  if (storageHealth.persistenceState === "persisted") {
+    return {
+      tone: "green" as const,
+      value: "보호됨",
+      description: "브라우저 저장 공간 정리로 삭제될 가능성을 낮췄습니다.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "denied" || persistenceRequestResult === "denied") {
+    return {
+      tone: "amber" as const,
+      value: "보호되지 않음",
+      description: "요청이 허용되지 않았습니다. JSON 백업 파일을 함께 보관하세요.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "error" || persistenceRequestResult === "error") {
+    return {
+      tone: "red" as const,
+      value: "확인 실패",
+      description: storageHealth.errorMessage ?? "브라우저 저장 보호 상태를 확인하지 못했습니다.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "unsupported") {
+    return {
+      tone: "neutral" as const,
+      value: "지원되지 않음",
+      description: "이 환경에서는 Storage API 보호 요청을 사용할 수 없습니다. JSON 백업을 보관하세요.",
+      detail
+    };
+  }
+
+  return {
+    tone: "amber" as const,
+    value: "보호 강화 가능",
+    description: "브라우저 정책에 따라 로컬 데이터가 정리될 수 있습니다.",
+    detail
+  };
+}
+
+function getStorageUsageDetail(storageHealth: StorageHealthSnapshot) {
+  if (storageHealth.usageLabel && storageHealth.quotaLabel) {
+    const ratio = storageHealth.usageRatioLabel ? ` (${storageHealth.usageRatioLabel})` : "";
+    return `브라우저 추정 사용량 ${storageHealth.usageLabel} / ${storageHealth.quotaLabel}${ratio}`;
+  }
+
+  if (storageHealth.usageLabel) {
+    return `브라우저 추정 사용량 ${storageHealth.usageLabel}`;
+  }
+
+  if (!storageHealth.estimateSupported) {
+    return "이 브라우저는 저장 용량 추정값을 제공하지 않습니다.";
+  }
+
+  return "브라우저가 제공한 대략치를 표시합니다.";
 }
 
 function SpaceForm({
@@ -1775,10 +2208,12 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
 
 function ImportConflictPanel({
   pendingImport,
-  onResolve
+  onResolve,
+  onExportJson
 }: {
   pendingImport: PendingImport;
   onResolve: (option: ImportConflictOption) => void;
+  onExportJson: () => void;
 }) {
   return (
     <div className="import-panel" role="alert">
@@ -1787,7 +2222,12 @@ function ImportConflictPanel({
         충돌 유형: {pendingImport.conflict.kind}. 현재 작업을 보존하거나, 가져온 파일로 대체하거나, 복사본으로 열 수
         있습니다.
       </p>
+      <p className="fine-print">현재 작업을 아직 내보내지 않았다면 먼저 백업한 뒤 대체를 선택하세요.</p>
       <div className="form-actions">
+        <button className="secondary-button" onClick={onExportJson}>
+          <Download size={16} />
+          현재 작업 먼저 내보내기
+        </button>
         {pendingImport.conflict.options.includes("keep-current") ? (
           <button className="secondary-button" onClick={() => onResolve("keep-current")}>
             현재 작업 유지
@@ -1847,6 +2287,21 @@ function formatDimensions(dimensions: { widthMm: number; depthMm: number; height
 
 function formatM3(value: number) {
   return `${value.toFixed(3)}m³`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function createClientId(prefix: string) {
