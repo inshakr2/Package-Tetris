@@ -7,6 +7,7 @@ import {
   Download,
   FileUp,
   HardDrive,
+  Maximize2,
   PackagePlus,
   Plus,
   RotateCcw,
@@ -105,6 +106,7 @@ import {
   DraftBlockItem,
   ImportConflict,
   ImportConflictOption,
+  PackedBlock,
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
@@ -1957,12 +1959,14 @@ const ResultStage = ({
   const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("three");
   const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [threeResetToken, setThreeResetToken] = useState(0);
+  const [threeDialogOpen, setThreeDialogOpen] = useState(false);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
   const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
   const selectedPackedSpace =
@@ -2034,6 +2038,7 @@ const ResultStage = ({
     setSelectedBlockTemplateId(null);
     setSelectedChainTemplateId(null);
     setChainPreview(null);
+    setThreeDialogOpen(false);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
   }, [latestResult?.resultId]);
@@ -2081,6 +2086,19 @@ const ResultStage = ({
     }
 
     setSelectedBlockTemplateId(null);
+  }
+
+  function openExpandedThreeView(trigger: HTMLButtonElement) {
+    threeDialogTriggerRef.current = trigger;
+    setThreeDialogOpen(true);
+  }
+
+  function closeExpandedThreeView() {
+    setThreeDialogOpen(false);
+
+    window.setTimeout(() => {
+      threeDialogTriggerRef.current?.focus();
+    }, 0);
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -2274,6 +2292,16 @@ const ResultStage = ({
                         {item.label}
                       </button>
                     ))}
+                    <button
+                      className="secondary-button result-three-expand-button"
+                      aria-haspopup="dialog"
+                      aria-expanded={threeDialogOpen}
+                      aria-controls="expanded-three-view-dialog"
+                      onClick={(event) => openExpandedThreeView(event.currentTarget)}
+                    >
+                      <Maximize2 size={16} />
+                      크게 보기
+                    </button>
                   </div>
                   <Result3DCanvas
                     blocks={selectedPackedSpace.blocks}
@@ -2286,6 +2314,23 @@ const ResultStage = ({
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
+                  />
+                  <ExpandedThreeViewDialog
+                    open={threeDialogOpen}
+                    blocks={selectedPackedSpace.blocks}
+                    bounds={usableSize}
+                    selectedBlockTemplateId={selectedBlockTemplateId}
+                    chainPreviewBlockIds={chainPreviewBlockIds}
+                    cameraPreset={threeCameraPreset}
+                    resetToken={threeResetToken}
+                    spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
+                    utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
+                    spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · ${formatDimensions(usableSize)}`}
+                    onSelectCameraPreset={setThreeCameraPreset}
+                    onResetViewer={resetResultViewer}
+                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
+                    onClearSelection={clearSelectedBlockTemplate}
+                    onClose={closeExpandedThreeView}
                   />
                 </>
               ) : (
@@ -2469,6 +2514,142 @@ const ResultStage = ({
     </section>
   );
 };
+
+function ExpandedThreeViewDialog({
+  open,
+  blocks,
+  bounds,
+  selectedBlockTemplateId,
+  chainPreviewBlockIds,
+  cameraPreset,
+  resetToken,
+  spaceLabel,
+  utilizationLabel,
+  spaceDescription,
+  onSelectCameraPreset,
+  onResetViewer,
+  onSelectBlockTemplate,
+  onClearSelection,
+  onClose
+}: {
+  open: boolean;
+  blocks: PackedBlock[];
+  bounds: NonNullable<ReturnType<typeof calculateUsableSize>>;
+  selectedBlockTemplateId: string | null;
+  chainPreviewBlockIds: Set<string>;
+  cameraPreset: ThreeCameraPreset;
+  resetToken: number;
+  spaceLabel: string;
+  utilizationLabel: string;
+  spaceDescription: string;
+  onSelectCameraPreset: (preset: ThreeCameraPreset) => void;
+  onResetViewer: () => void;
+  onSelectBlockTemplate: (blockTemplateId: string) => void;
+  onClearSelection: () => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "expanded-three-view-dialog-title";
+  const descriptionId = "expanded-three-view-dialog-description";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-expanded-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="expanded-three-view-dialog"
+      ref={dialogRef}
+      className="result-three-dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="result-three-dialog-sheet">
+        <div className="space-form-dialog-head result-three-dialog-head">
+          <div>
+            <h2 id={titleId}>3D 크게 보기</h2>
+            <p id={descriptionId} className="fine-print">
+              {spaceLabel} · {spaceDescription} · {utilizationLabel}
+            </p>
+          </div>
+          <button
+            className="icon-button panel-close-button"
+            data-expanded-close="true"
+            onClick={onClose}
+            aria-label="3D 크게 보기 닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="view-buttons three-camera-buttons expanded-three-camera-buttons" aria-label="확대 3D 카메라 시점 선택">
+          {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
+            <button
+              key={item.preset}
+              className="secondary-button"
+              aria-label={`확대 ${item.ariaLabel}`}
+              aria-pressed={cameraPreset === item.preset}
+              onClick={() => onSelectCameraPreset(item.preset)}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button className="secondary-button" onClick={onResetViewer} aria-label="확대 3D 처음 보기로 되돌리기">
+            <RotateCcw size={16} />
+            처음
+          </button>
+        </div>
+
+        <div className="result-three-dialog-body">
+          {open ? (
+            <Result3DCanvas
+              blocks={blocks}
+              bounds={bounds}
+              selectedBlockTemplateId={selectedBlockTemplateId}
+              chainPreviewBlockIds={chainPreviewBlockIds}
+              cameraPreset={cameraPreset}
+              resetToken={resetToken}
+              spaceLabel={spaceLabel}
+              utilizationLabel={utilizationLabel}
+              onSelectBlockTemplate={onSelectBlockTemplate}
+              onClearSelection={onClearSelection}
+            />
+          ) : null}
+        </div>
+      </div>
+    </dialog>
+  );
+}
 
 function ChainSimulationPanel({
   latestResult,
