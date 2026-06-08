@@ -4,7 +4,7 @@
 
 **Goal:** 결과 화면에서 기존 배치를 잠근 상태로 저장된 블록 유형을 추가로 몇 개 더 넣을 수 있는지 계산하고, 확정 시 결과 좌표와 체이닝 이력을 갱신한다.
 
-**Architecture:** V1 체이닝은 새 공간을 만들지 않고 `latestResult.spaces` 내부의 빈 공간만 대상으로 한다. `src/lib/workspace/chain-simulation.ts`는 충돌 검사, 직교 회전 후보, 기본 지지면 검사를 담당하고, React 화면은 블록 유형 선택, 최대 적재 계산, 확정, 이력 표시만 담당한다.
+**Architecture:** V1 체이닝은 새 공간을 만들지 않고 `latestResult.spaces` 내부의 빈 공간만 대상으로 한다. `src/lib/workspace/chain-simulation.ts`는 충돌 검사, 직교 회전 후보, 기본 지지면 검사를 담당하고, React 화면은 현재 작업 블록 유형 선택, 최대 적재 계산, 확정, 직전 취소, 이력 표시만 담당한다.
 
 **Tech Stack:** Next.js App Router, React client component, TypeScript, Node test runner, IndexedDB workspace persistence.
 
@@ -63,17 +63,18 @@ npx tsc --noEmit
 
 **Step 1: Wire data**
 
-- `ResultStage`에 `blockTemplates`, `chainHistory`, `onConfirmChainSimulation` props를 추가한다.
+- `ResultStage`에 `draftBlocks`, `chainHistory`, `onConfirmChainSimulation`, `onUndoLastChainAddition` props를 추가한다.
 - parent에서 확정 시 `recentResults[0].spaces`와 `averageUtilizationRate`를 preview 결과로 갱신한다.
-- `chainHistory`에는 `chainId`, `resultId`, `blockId`, `blockTemplateId`, `blockName`, `addedQuantity`, `createdAt`을 저장한다.
+- `chainHistory`에는 `chainId`, `resultId`, `blockId`, `blockTemplateId`, `blockName`, `addedQuantity`, `previousSpaces`, `previousAverageUtilizationRate`, `createdAt`을 저장한다.
 
 **Step 2: Build panel**
 
-- 기존 "추가 블록 시뮬레이션" placeholder를 실제 패널로 교체한다.
-- 블록 유형 select, `최대 적재 계산`, `확정` CTA를 제공한다.
+- 기존 "추가 블록 시뮬레이션" placeholder를 결과 보드 바로 아래 full-width panel로 교체한다.
+- 블록 유형 single-select button list, `최대 적재 계산`, `이 결과 반영`, `직전 추가 취소` CTA를 제공한다.
 - preview 성공 시 "추가 가능 N개"를 표시한다.
 - 0개 가능은 실패가 아니라 중립 안내로 표시한다.
 - 확정 후 2D 투영 작업대는 추가된 좌표를 즉시 반영한다.
+- `수량 직접 지정`은 V1-small에서 제외한다.
 
 **Step 3: Responsive CSS**
 

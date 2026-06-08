@@ -37,7 +37,10 @@ describe("json-transfer", () => {
       chainId: "chain-a",
       resultId: "result-a",
       blockId: "block-a",
+      blockTemplateId: "template-a",
+      blockName: "추가 박스",
       addedQuantity: 3,
+      previousAverageUtilizationRate: 0.82,
       createdAt: workspace.updatedAt
     });
 
@@ -53,6 +56,8 @@ describe("json-transfer", () => {
     assert.equal(parsed.recent_results.length, 1);
     assert.equal(parsed.recent_results[0].spaceSnapshot.name, "결과 기준 공간");
     assert.equal(parsed.chain_history.length, 1);
+    assert.equal(parsed.chain_history[0].blockName, "추가 박스");
+    assert.equal(parsed.chain_history[0].previousAverageUtilizationRate, 0.82);
     assert.ok(Array.isArray(parsed.custom_blocks));
   });
 

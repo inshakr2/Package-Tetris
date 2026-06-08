@@ -35,6 +35,7 @@ import {
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
+import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
 import {
   createProjectedBlocks,
@@ -48,6 +49,7 @@ import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
   BlockDefinition,
   BlockTemplate,
+  ChainHistoryItem,
   ImportConflict,
   ImportConflictOption,
   SpaceDefinition,
@@ -388,6 +390,91 @@ export function TetrisWorkspaceApp() {
     }, 0);
   }
 
+  function confirmChainSimulation(preview: ChainSimulationOutput, resultId: string) {
+    if (preview.addedQuantity <= 0) {
+      return;
+    }
+
+    updateWorkspace((current, now) => {
+      const targetResult = current.recentResults.find((result) => result.resultId === resultId);
+
+      if (!targetResult) {
+        return current;
+      }
+
+      const chainHistoryItem: ChainHistoryItem = {
+        chainId: createClientId("chain"),
+        resultId,
+        blockId: preview.blockTemplateId,
+        blockTemplateId: preview.blockTemplateId,
+        blockName: preview.blockName,
+        addedQuantity: preview.addedQuantity,
+        previousSpaces: targetResult.spaces,
+        previousAverageUtilizationRate: targetResult.averageUtilizationRate,
+        createdAt: now
+      };
+
+      return {
+        ...current,
+        revision: current.revision + 1,
+        updatedAt: now,
+        draft: {
+          ...current.draft,
+          currentStep: "chain",
+          updatedAt: now
+        },
+        recentResults: current.recentResults.map((result) =>
+          result.resultId === resultId
+            ? {
+                ...result,
+                spaces: preview.spaces,
+                usedSpaceCount: preview.spaces.length,
+                averageUtilizationRate: preview.averageUtilizationRate
+              }
+            : result
+        ),
+        chainHistory: [chainHistoryItem, ...current.chainHistory]
+      };
+    });
+  }
+
+  function undoLastChainAddition(resultId: string) {
+    updateWorkspace((current, now) => {
+      const latestChainItem = current.chainHistory.find(
+        (item) => item.resultId === resultId && item.previousSpaces?.length
+      );
+
+      if (!latestChainItem?.previousSpaces) {
+        return current;
+      }
+
+      const previousSpaces = latestChainItem.previousSpaces;
+
+      return {
+        ...current,
+        revision: current.revision + 1,
+        updatedAt: now,
+        draft: {
+          ...current.draft,
+          currentStep: "chain",
+          updatedAt: now
+        },
+        recentResults: current.recentResults.map((result) =>
+          result.resultId === resultId
+            ? {
+                ...result,
+                spaces: previousSpaces,
+                usedSpaceCount: previousSpaces.length,
+                averageUtilizationRate:
+                  latestChainItem.previousAverageUtilizationRate ?? result.averageUtilizationRate
+              }
+            : result
+        ),
+        chainHistory: current.chainHistory.filter((item) => item.chainId !== latestChainItem.chainId)
+      };
+    });
+  }
+
   function exportJson() {
     if (!workspace) {
       return;
@@ -581,8 +668,12 @@ export function TetrisWorkspaceApp() {
           latestResult={latestResult}
           selectedSpace={selectedSpace}
           review={review}
+          draftBlocks={draftBlocks}
+          chainHistory={workspace.chainHistory}
           pendingImport={pendingImport}
           onResolveImport={resolveImport}
+          onConfirmChainSimulation={confirmChainSimulation}
+          onUndoLastChainAddition={undoLastChainAddition}
         />
       </div>
 
@@ -1029,25 +1120,56 @@ const ResultStage = ({
   latestResult,
   selectedSpace,
   review,
+  draftBlocks,
+  chainHistory,
   pendingImport,
   onResolveImport,
+  onConfirmChainSimulation,
+  onUndoLastChainAddition,
   ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
+  draftBlocks: BlockDefinition[];
+  chainHistory: ChainHistoryItem[];
   pendingImport: PendingImport | null;
   onResolveImport: (option: ImportConflictOption) => void;
+  onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
+  onUndoLastChainAddition: (resultId: string) => void;
   ref: React.Ref<HTMLElement>;
 }) => {
   const [projectionView, setProjectionView] = useState<ProjectionView>("top");
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
+  const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
+  const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
+  const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
+  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 블록 1개를 선택하세요.");
   const packedSpaces = latestResult?.spaces ?? [];
+  const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
   const selectedPackedSpace =
-    packedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? packedSpaces[0] ?? null;
+    displayedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? displayedSpaces[0] ?? null;
   const resultSpace = latestResult?.spaceSnapshot ?? selectedSpace;
   const usableSize = resultSpace ? calculateUsableSize(resultSpace) : null;
+  const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
+  const selectedChainTemplate =
+    chainBlockOptions.find((template) => template.blockTemplateId === selectedChainTemplateId) ?? null;
+  const latestResultChainHistory = latestResult
+    ? chainHistory.filter((item) => item.resultId === latestResult.resultId)
+    : [];
+  const latestChainItem = latestResultChainHistory[0] ?? null;
+  const chainPreviewBlockIds = useMemo(() => {
+    if (!chainPreview) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      chainPreview.spaces.flatMap((space) =>
+        space.blocks.filter((block) => block.blockId.startsWith(chainPreview.runId)).map((block) => block.blockId)
+      )
+    );
+  }, [chainPreview]);
   const projectedBlocks = useMemo(() => {
     if (!selectedPackedSpace || !usableSize) {
       return [];
@@ -1066,10 +1188,80 @@ const ResultStage = ({
     setProjectionView("top");
     setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
     setSelectedBlockTemplateId(null);
+    setSelectedChainTemplateId(null);
+    setChainPreview(null);
+    setChainStatus("idle");
+    setChainStatusMessage("추가할 블록 1개를 선택하세요.");
   }, [latestResult?.resultId]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
     setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
+  }
+
+  function selectChainTemplate(blockTemplateId: string) {
+    setSelectedChainTemplateId(blockTemplateId);
+    setChainPreview(null);
+    setChainStatus("idle");
+    setSelectedBlockTemplateId(null);
+    setChainStatusMessage(
+      chainPreview ? "다른 블록을 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산을 실행하세요."
+    );
+  }
+
+  function calculateChainPreview() {
+    if (!latestResult || !selectedChainTemplate) {
+      setChainStatus("idle");
+      setChainStatusMessage("블록을 선택해야 계산할 수 있습니다.");
+      return;
+    }
+
+    setChainStatus("calculating");
+    setChainStatusMessage("남은 공간 기준으로 계산하고 있습니다.");
+
+    window.setTimeout(() => {
+      try {
+        const preview = runChainSimulationV0({
+          result: latestResult,
+          blockTemplate: selectedChainTemplate,
+          runId: createClientId("chain-run")
+        });
+
+        setChainPreview(preview);
+        setSelectedBlockTemplateId(preview.blockTemplateId);
+
+        if (preview.addedQuantity > 0) {
+          setChainStatus("preview");
+          setChainStatusMessage(`${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`);
+          return;
+        }
+
+        setChainStatus("empty");
+        setChainStatusMessage(`${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`);
+      } catch {
+        setChainPreview(null);
+        setChainStatus("error");
+        setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 블록을 선택하세요.");
+      }
+    }, 0);
+  }
+
+  function confirmChainPreview() {
+    if (!latestResult || !chainPreview || chainPreview.addedQuantity <= 0) {
+      return;
+    }
+
+    onConfirmChainSimulation(chainPreview, latestResult.resultId);
+    setChainPreview(null);
+    setChainStatus("idle");
+    setChainStatusMessage("추가 결과를 반영했습니다.");
+  }
+
+  function clearChainSelection() {
+    setSelectedChainTemplateId(null);
+    setChainPreview(null);
+    setSelectedBlockTemplateId(null);
+    setChainStatus("idle");
+    setChainStatusMessage("추가할 블록 1개를 선택하세요.");
   }
 
   return (
@@ -1102,10 +1294,10 @@ const ResultStage = ({
             <aside className="result-space-panel" aria-label="공간 인스턴스 선택">
               <div className="result-panel-head">
                 <strong>공간</strong>
-                <span className="fine-print">{packedSpaces.length}개 인스턴스</span>
+                <span className="fine-print">{displayedSpaces.length}개 인스턴스</span>
               </div>
               <div className="space-instance-list">
-                {packedSpaces.map((space, index) => (
+                {displayedSpaces.map((space, index) => (
                   <button
                     key={space.spaceInstanceId}
                     className="space-instance-button"
@@ -1161,6 +1353,11 @@ const ResultStage = ({
                   projectedBlocks.map((block) => {
                     const isSelected =
                       selectedBlockTemplateId === null || selectedBlockTemplateId === block.blockTemplateId;
+                    const previewState = chainPreview
+                      ? chainPreviewBlockIds.has(block.blockId)
+                        ? "new"
+                        : "base"
+                      : undefined;
                     const blockStyle = {
                       "--block-color": block.color,
                       left: `${block.leftPercent}%`,
@@ -1176,6 +1373,7 @@ const ResultStage = ({
                         className="projected-block"
                         data-muted={!isSelected}
                         data-fragile={block.fragile}
+                        data-chain-preview={previewState}
                         role="button"
                         tabIndex={0}
                         aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
@@ -1244,6 +1442,30 @@ const ResultStage = ({
         </div>
       )}
 
+      <ChainSimulationPanel
+        latestResult={latestResult}
+        blockOptions={chainBlockOptions}
+        selectedTemplateId={selectedChainTemplateId}
+        chainStatus={chainStatus}
+        statusMessage={chainStatusMessage}
+        preview={chainPreview}
+        chainHistory={latestResultChainHistory}
+        latestChainItem={latestChainItem}
+        onSelectTemplate={selectChainTemplate}
+        onCalculate={calculateChainPreview}
+        onConfirm={confirmChainPreview}
+        onClearSelection={clearChainSelection}
+        onUndo={() => {
+          if (latestResult) {
+            onUndoLastChainAddition(latestResult.resultId);
+            setChainPreview(null);
+            setSelectedBlockTemplateId(null);
+            setChainStatus("idle");
+            setChainStatusMessage("직전 추가를 취소했습니다.");
+          }
+        }}
+      />
+
       <div className="result-lower-grid">
         <section className="sub-panel">
           <h3>입력 요약</h3>
@@ -1281,20 +1503,140 @@ const ResultStage = ({
             </ul>
           ) : null}
         </section>
-        <section className="sub-panel">
-          <h3>추가 블록 시뮬레이션</h3>
-          <p className="meta">체이닝 계산은 후속 엔진 연결 범위입니다.</p>
-          <div className="badge-row">
-            <span className="badge">기존 배치 잠금</span>
-            <span className="badge">최대 적재 계산</span>
-          </div>
-        </section>
       </div>
 
       {pendingImport ? <ImportConflictPanel pendingImport={pendingImport} onResolve={onResolveImport} /> : null}
     </section>
   );
 };
+
+function ChainSimulationPanel({
+  latestResult,
+  blockOptions,
+  selectedTemplateId,
+  chainStatus,
+  statusMessage,
+  preview,
+  chainHistory,
+  latestChainItem,
+  onSelectTemplate,
+  onCalculate,
+  onConfirm,
+  onClearSelection,
+  onUndo
+}: {
+  latestResult: TetrisWorkspace["recentResults"][number] | null;
+  blockOptions: BlockTemplate[];
+  selectedTemplateId: string | null;
+  chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
+  statusMessage: string;
+  preview: ChainSimulationOutput | null;
+  chainHistory: ChainHistoryItem[];
+  latestChainItem: ChainHistoryItem | null;
+  onSelectTemplate: (blockTemplateId: string) => void;
+  onCalculate: () => void;
+  onConfirm: () => void;
+  onClearSelection: () => void;
+  onUndo: () => void;
+}) {
+  const hasResult = Boolean(latestResult);
+  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
+  const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
+
+  return (
+    <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
+      <div className="chain-panel-header">
+        <div>
+          <span className="badge" data-tone={hasResult ? "green" : undefined}>
+            기준 결과 잠금
+          </span>
+          <h3 id="chain-simulation-title">추가 블록 시뮬레이션</h3>
+          <p className="panel-subtitle">
+            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 블록을 얼마나 더 넣을 수 있는지 확인합니다.
+          </p>
+        </div>
+        <div className="chain-history-row" aria-label="체이닝 이력">
+          <span className="badge">기준 결과</span>
+          {chainHistory
+            .slice()
+            .reverse()
+            .map((item) => (
+              <span key={item.chainId} className="badge" data-tone="green">
+                + {item.blockName ?? item.blockId} {item.addedQuantity}개
+              </span>
+            ))}
+        </div>
+      </div>
+
+      {!hasResult ? (
+        <p className="meta">결과를 먼저 생성하면 추가 적재를 시험할 수 있습니다.</p>
+      ) : (
+        <div className="chain-panel-grid">
+          <div>
+            <strong className="chain-field-title">추가할 블록</strong>
+            <div className="chain-option-list" role="radiogroup" aria-label="추가할 블록 유형">
+              {blockOptions.length === 0 ? (
+                <p className="fine-print">현재 작업에 추가된 블록 유형이 없습니다.</p>
+              ) : (
+                blockOptions.map((template) => (
+                  <button
+                    key={template.blockTemplateId}
+                    className="chain-option-button"
+                    role="radio"
+                    aria-checked={selectedTemplateId === template.blockTemplateId}
+                    onClick={() => onSelectTemplate(template.blockTemplateId)}
+                  >
+                    <strong>{template.name}</strong>
+                    <span>
+                      {formatDimensions(template.dimensions)} · {template.fragile ? "fragile" : "normal"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="chain-result-panel">
+            <div className="chain-status-box" data-tone={chainStatus} role="status">
+              <strong>
+                {chainStatus === "preview"
+                  ? "추가 가능"
+                  : chainStatus === "empty"
+                    ? "추가 가능 0"
+                    : chainStatus === "error"
+                      ? "계산 실패"
+                      : chainStatus === "calculating"
+                        ? "계산 중"
+                        : "대기"}
+              </strong>
+              <span>{statusMessage}</span>
+            </div>
+
+            <div className="form-actions chain-actions">
+              <button className="primary-button" onClick={onCalculate} disabled={!canCalculate}>
+                {chainStatus === "calculating" ? "추가 가능 수량 계산 중..." : "최대 적재 계산"}
+              </button>
+              <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
+                이 결과 반영
+              </button>
+              <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>
+                직전 추가 취소
+              </button>
+              {chainStatus === "empty" ? (
+                <button className="secondary-button" onClick={onClearSelection}>
+                  다른 블록 선택
+                </button>
+              ) : null}
+            </div>
+            {!selectedTemplateId ? (
+              <p className="fine-print review-cta-hint">블록을 선택해야 계산할 수 있습니다.</p>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function Stepper({ activeStep }: { activeStep: string }) {
   return (
@@ -1471,6 +1813,28 @@ function ImportConflictPanel({
 
 function calculateBlockVolumeM3(block: BlockDefinition) {
   return dimensionsVolumeM3(block.dimensions) * block.quantity;
+}
+
+function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
+  const templateMap = new Map<string, BlockTemplate>();
+
+  blocks.forEach((block) => {
+    if (templateMap.has(block.blockTemplateId)) {
+      return;
+    }
+
+    templateMap.set(block.blockTemplateId, {
+      blockTemplateId: block.blockTemplateId,
+      entityVersion: block.entityVersion,
+      name: block.name,
+      dimensions: block.dimensions,
+      fragile: block.fragile,
+      createdAt: block.createdAt,
+      updatedAt: block.updatedAt
+    });
+  });
+
+  return Array.from(templateMap.values());
 }
 
 function dimensionsVolumeM3(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {

@@ -105,7 +105,11 @@ export interface ChainHistoryItem {
   chainId: string;
   resultId: string;
   blockId: string;
+  blockTemplateId?: string;
+  blockName?: string;
   addedQuantity: number;
+  previousSpaces?: PackedSpace[];
+  previousAverageUtilizationRate?: number;
   createdAt: string;
 }
 
