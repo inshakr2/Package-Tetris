@@ -62,6 +62,26 @@ export interface BlockDefinition {
   updatedAt: string;
 }
 
+export interface PackedBlock {
+  blockId: string;
+  blockTemplateId: string;
+  name: string;
+  fragile: boolean;
+  xMm: number;
+  yMm: number;
+  zMm: number;
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  rotation: "xyz" | "xzy" | "yxz" | "yzx" | "zxy" | "zyx";
+}
+
+export interface PackedSpace {
+  spaceInstanceId: string;
+  utilizationRate: number;
+  blocks: PackedBlock[];
+}
+
 export interface DraftState {
   selectedSpaceId: string | null;
   blockItems: DraftBlockItem[];
@@ -71,10 +91,13 @@ export interface DraftState {
 
 export interface ResultSummary {
   resultId: string;
+  runId?: string;
   createdAt: string;
   usedSpaceCount: number;
   averageUtilizationRate: number;
   unloadedBlockCount: number;
+  spaces?: PackedSpace[];
+  warnings?: string[];
 }
 
 export interface ChainHistoryItem {

@@ -32,10 +32,10 @@ import {
 } from "@/lib/workspace/block-library";
 import {
   createOptimizationInput,
-  createPlaceholderResultSummary,
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
+import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -336,20 +336,19 @@ export function TetrisWorkspaceApp() {
     );
   }
 
-  function createPlaceholderResult() {
+  function createPackingResult() {
     if (!workspace || !review) {
       return;
     }
 
+    const resultId = createClientId("result");
     const optimizationInput = createOptimizationInput(review, createClientId("run"));
-    const placeholderResult = createPlaceholderResultSummary(review, {
-      resultId: createClientId("result"),
-      createdAt: new Date().toISOString()
-    });
 
-    if (!optimizationInput || !placeholderResult) {
+    if (!optimizationInput) {
       return;
     }
+
+    const optimizationOutput = runPackingEngineV0(optimizationInput);
 
     updateWorkspace((current, now) => ({
       ...current,
@@ -362,8 +361,14 @@ export function TetrisWorkspaceApp() {
       },
       recentResults: [
         {
-          ...placeholderResult,
-          createdAt: now
+          resultId,
+          runId: optimizationOutput.runId,
+          createdAt: now,
+          usedSpaceCount: optimizationOutput.usedSpaceCount,
+          averageUtilizationRate: optimizationOutput.averageUtilizationRate,
+          unloadedBlockCount: optimizationOutput.unloadedBlockCount,
+          spaces: optimizationOutput.spaces,
+          warnings: optimizationOutput.warnings
         },
         ...current.recentResults
       ].slice(0, 5)
@@ -558,7 +563,7 @@ export function TetrisWorkspaceApp() {
               selectedSpace={selectedSpace}
               review={review}
               needsExport={needsExport}
-              onCreateResult={createPlaceholderResult}
+              onCreateResult={createPackingResult}
             />
           </div>
         </section>
@@ -1090,6 +1095,35 @@ const ResultStage = ({
             현재 작업 블록 {review?.totals.totalBlockCount ?? 0}개 · 총 부피{" "}
             {formatM3(review?.totals.totalBlockVolumeM3 ?? 0)}
           </p>
+        </section>
+        <section className="sub-panel">
+          <h3>v0 배치 결과</h3>
+          {latestResult?.spaces?.length ? (
+            <div className="compact-list">
+              {latestResult.spaces.map((space, index) => (
+                <div key={space.spaceInstanceId} className="compact-row">
+                  <span>
+                    <strong>Space {index + 1}</strong>
+                    <small>
+                      배치 {space.blocks.length}개 · 적재율 {Math.round(space.utilizationRate * 100)}%
+                    </small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="meta">결과 요약을 생성하면 공간별 v0 배치 좌표가 저장됩니다.</p>
+          )}
+          {latestResult?.warnings?.length ? (
+            <ul className="checklist compact-checklist">
+              {latestResult.warnings.map((warning) => (
+                <li key={warning} className="review-message" data-tone="amber">
+                  <AlertTriangle size={18} color="var(--amber)" />
+                  {warning}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
         <section className="sub-panel">
           <h3>추가 블록 시뮬레이션</h3>
