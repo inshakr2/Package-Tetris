@@ -3637,7 +3637,7 @@ function ChainSimulationPanel({
   onUndo: () => void;
 }) {
   const hasResult = Boolean(latestResult);
-  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating" && chainStatus !== "error";
+  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
 
   return (
@@ -3711,7 +3711,11 @@ function ChainSimulationPanel({
 
             <div className="form-actions chain-actions">
               <button className="primary-button" onClick={onCalculate} disabled={!canCalculate}>
-                {chainStatus === "calculating" ? "추가 가능 수량 계산 중..." : "최대 적재 계산"}
+                {chainStatus === "calculating"
+                  ? "추가 가능 수량 계산 중..."
+                  : chainStatus === "error"
+                    ? "다시 계산"
+                    : "최대 적재 계산"}
               </button>
               <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
                 이 결과 반영
