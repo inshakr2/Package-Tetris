@@ -962,6 +962,36 @@ select:focus-visible {
   background: #fffdf6;
 }
 
+.result-failure-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(194, 65, 59, 0.28);
+  border-radius: 8px;
+  background: #fff6f5;
+  overflow-wrap: anywhere;
+}
+
+.result-failure-banner > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.result-failure-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: min(320px, 100%);
+}
+
+.result-failure-actions button {
+  min-height: 48px;
+  white-space: normal;
+}
+
 .result-hero-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2186,6 +2216,15 @@ select:focus-visible {
   .result-freshness-banner .secondary-button {
     width: 100%;
     min-height: 48px;
+  }
+
+  .result-failure-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .result-failure-actions {
+    grid-template-columns: 1fr;
+    min-width: 0;
   }
 
   .storage-reliability-panel {

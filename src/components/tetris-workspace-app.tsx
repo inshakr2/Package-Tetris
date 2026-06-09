@@ -127,6 +127,10 @@ import {
   createResultInputFingerprint,
   type ResultFreshnessState
 } from "@/lib/workspace/result-freshness";
+import {
+  createResultCalculationFailure,
+  type ResultCalculationFailure
+} from "@/lib/workspace/result-calculation-failure";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
 import { createWorkspaceBackupFilename } from "@/lib/workspace/workspace-backup-file";
@@ -261,6 +265,7 @@ export function TetrisWorkspaceApp() {
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [creatingResult, setCreatingResult] = useState(false);
+  const [resultFailure, setResultFailure] = useState<ResultCalculationFailure | null>(null);
 
   const setWorkspaceSaveConflict = useCallback((nextConflict: WorkspaceSaveConflictNotice | null) => {
     saveConflictRef.current = nextConflict;
@@ -936,9 +941,15 @@ export function TetrisWorkspaceApp() {
     const optimizationInput = createOptimizationInput(review, createClientId("run"));
 
     if (!optimizationInput) {
+      setResultFailure(createResultCalculationFailure(new Error("input constraint violation")));
+      window.setTimeout(() => {
+        resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        resultStageRef.current?.focus({ preventScroll: true });
+      }, 0);
       return;
     }
 
+    setResultFailure(null);
     setCreatingResult(true);
 
     window.setTimeout(() => {
@@ -986,6 +997,12 @@ export function TetrisWorkspaceApp() {
           ].slice(0, 5)
         }));
 
+        window.setTimeout(() => {
+          resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          resultStageRef.current?.focus({ preventScroll: true });
+        }, 0);
+      } catch (error) {
+        setResultFailure(createResultCalculationFailure(error));
         window.setTimeout(() => {
           resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
           resultStageRef.current?.focus({ preventScroll: true });
@@ -1434,6 +1451,7 @@ export function TetrisWorkspaceApp() {
         <ResultStage
           ref={resultStageRef}
           latestResult={latestResult}
+          resultFailure={resultFailure}
           resultFreshnessState={resultFreshnessState}
           needsExport={needsExport}
           selectedSpace={selectedSpace}
@@ -2037,6 +2055,7 @@ function ReviewCompactCard({
 
 const ResultStage = ({
   latestResult,
+  resultFailure,
   resultFreshnessState,
   needsExport,
   selectedSpace,
@@ -2055,6 +2074,7 @@ const ResultStage = ({
   ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
+  resultFailure: ResultCalculationFailure | null;
   resultFreshnessState: ResultFreshnessState;
   needsExport: boolean;
   selectedSpace: SpaceDefinition | undefined;
@@ -2459,6 +2479,34 @@ const ResultStage = ({
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
+
+      {resultFailure ? (
+        <div className="result-failure-banner" role="alert" aria-label="계산 실패 안내">
+          <div>
+            <span className="badge" data-tone="red">
+              계산 실패
+            </span>
+            <strong>{resultFailure.title}</strong>
+            <p className="fine-print">{resultFailure.description}</p>
+            <p className="fine-print">{resultFailure.actionHint}</p>
+          </div>
+          <div className="result-failure-actions">
+            <button className="secondary-button" onClick={onEditInputs}>
+              <PencilLine size={16} />
+              입력 수정
+            </button>
+            <button
+              className="primary-button"
+              onClick={onCreateResult}
+              disabled={resultActionCtaDisabled}
+              title={resultActionCtaTitle}
+            >
+              <RotateCcw size={16} />
+              다시 계산
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {latestResult && resultFreshnessState.visible ? (
         <div
