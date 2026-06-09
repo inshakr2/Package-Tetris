@@ -7,7 +7,7 @@
 ## Context
 
 - 직전 증분에서 `쌓는 순서` 헤더와 복사/저장 본문에는 `공간명 · Space N`을 포함했다.
-- 하지만 다운로드 파일명은 여전히 `my-tetris-space-1-loading-YYYY-MM-DD.txt` 형태라, 여러 공간 결과를 저장하면 파일 목록만 보고 구분하기 어렵다.
+- 하지만 다운로드 파일명은 당시 `package-tetris-space-1-loading-YYYY-MM-DD.txt`처럼 공간명을 담지 않는 형태라, 여러 공간 결과를 저장하면 파일 목록만 보고 구분하기 어렵다.
 - MDN은 `HTMLAnchorElement.download` 값이 기본 파일명 역할을 하지만 OS에서 유효하지 않은 이름이면 브라우저가 조정할 수 있다고 설명한다: https://developer.mozilla.org/en-US/docs/Web/API/HTMLAnchorElement/download
 - Microsoft Windows 파일명 규칙은 `< > : " / \ | ? *`, 제어문자, 일부 예약 이름을 피해야 한다고 안내한다: https://learn.microsoft.com/windows/win32/fileio/naming-a-file
 

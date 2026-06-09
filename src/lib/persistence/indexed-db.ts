@@ -1,6 +1,7 @@
 import { TetrisWorkspace } from "../workspace/types";
 
-const DEFAULT_DB_NAME = "my-tetris";
+const DEFAULT_DB_NAME = "package-tetris";
+const LEGACY_DB_NAME = "my-tetris";
 const DB_VERSION = 1;
 const STORE_NAME = "workspace_snapshots";
 const ACTIVE_WORKSPACE_KEY = "active";
@@ -39,13 +40,18 @@ export class WorkspaceSaveConflictError extends Error {
 
 export class IndexedDbTetrisStorage {
   private readonly dbName: string;
+  private readonly legacyDbName: string | null;
 
-  constructor(dbName = DEFAULT_DB_NAME) {
+  constructor(
+    dbName = DEFAULT_DB_NAME,
+    legacyDbName: string | null = dbName === DEFAULT_DB_NAME ? LEGACY_DB_NAME : null
+  ) {
     this.dbName = dbName;
+    this.legacyDbName = legacyDbName === dbName ? null : legacyDbName;
   }
 
   async saveWorkspace(workspace: TetrisWorkspace, options: SaveWorkspaceOptions = {}) {
-    const db = await this.openDatabase();
+    const db = await this.openDatabase(this.dbName);
 
     try {
       const transaction = db.transaction(STORE_NAME, "readwrite");
@@ -67,7 +73,32 @@ export class IndexedDbTetrisStorage {
   }
 
   async loadWorkspace() {
-    const db = await this.openDatabase();
+    const workspace = await this.loadWorkspaceFromDatabase(this.dbName);
+
+    if (workspace || !this.legacyDbName) {
+      return workspace;
+    }
+
+    const legacyWorkspace = await this.loadWorkspaceFromDatabase(this.legacyDbName);
+
+    if (!legacyWorkspace) {
+      return null;
+    }
+
+    await this.saveWorkspace(legacyWorkspace);
+    return legacyWorkspace;
+  }
+
+  async clearWorkspace() {
+    await this.clearWorkspaceFromDatabase(this.dbName);
+
+    if (this.legacyDbName) {
+      await this.clearWorkspaceFromDatabase(this.legacyDbName);
+    }
+  }
+
+  private async loadWorkspaceFromDatabase(dbName: string) {
+    const db = await this.openDatabase(dbName);
 
     try {
       const transaction = db.transaction(STORE_NAME, "readonly");
@@ -82,8 +113,8 @@ export class IndexedDbTetrisStorage {
     }
   }
 
-  async clearWorkspace() {
-    const db = await this.openDatabase();
+  private async clearWorkspaceFromDatabase(dbName: string) {
+    const db = await this.openDatabase(dbName);
 
     try {
       const transaction = db.transaction(STORE_NAME, "readwrite");
@@ -94,9 +125,9 @@ export class IndexedDbTetrisStorage {
     }
   }
 
-  private openDatabase() {
+  private openDatabase(dbName: string) {
     return new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, DB_VERSION);
+      const request = indexedDB.open(dbName, DB_VERSION);
 
       request.onupgradeneeded = () => {
         const db = request.result;

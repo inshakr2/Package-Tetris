@@ -1,4 +1,4 @@
-export const WORKSPACE_SYNC_CHANNEL_NAME = "my-tetris-workspace-sync";
+export const WORKSPACE_SYNC_CHANNEL_NAME = "package-tetris-workspace-sync";
 export const DEFAULT_WORKSPACE_PEER_TTL_MS = 15_000;
 
 export type WorkspaceSyncMessage =

@@ -21,7 +21,7 @@ describe("text-file-download", () => {
     downloadTextFile(
       {
         text: "Space 1 쌓는 순서",
-        filename: "my-tetris-space-1-loading.txt"
+        filename: "package-tetris-space-1-loading.txt"
       },
       {
         Blob: class extends FakeBlob {
@@ -47,7 +47,7 @@ describe("text-file-download", () => {
 
     // Then
     assert.equal(anchor.href, "blob://download-text");
-    assert.equal(anchor.download, "my-tetris-space-1-loading.txt");
+    assert.equal(anchor.download, "package-tetris-space-1-loading.txt");
     assert.deepEqual(createdBlobs[0].parts, ["Space 1 쌓는 순서"]);
     assert.deepEqual(createdBlobs[0].options, { type: "text/plain;charset=utf-8" });
     assert.deepEqual(events, ["append", "click", "remove"]);

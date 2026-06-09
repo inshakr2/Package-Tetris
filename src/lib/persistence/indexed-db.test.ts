@@ -4,14 +4,51 @@ import "fake-indexeddb/auto";
 import { createDefaultWorkspace } from "../workspace/workspace-factory";
 import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "./indexed-db";
 
+const TEST_DB_NAME = "package-tetris-test";
+const LEGACY_TEST_DB_NAME = "my-tetris-test";
+
 describe("IndexedDbTetrisStorage", () => {
   beforeEach(async () => {
-    await deleteDatabase("my-tetris-test");
+    await deleteDatabase(TEST_DB_NAME);
+    await deleteDatabase(LEGACY_TEST_DB_NAME);
+  });
+
+  it("새 Package Tetris 저장소가 기존 my-tetris 작업본을 읽고 새 저장소로 옮긴다", async () => {
+    // Given
+    const legacyStorage = new IndexedDbTetrisStorage(LEGACY_TEST_DB_NAME, null);
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-09T00:00:00.000Z"
+    });
+    workspace.spaces.push({
+      spaceId: "space-legacy-1",
+      entityVersion: 1,
+      name: "기존 현장 공간",
+      type: "custom",
+      dimensions: { widthMm: 1100, depthMm: 1000, heightMm: 1400 },
+      offset: { widthMm: 20, depthMm: 20, heightMm: 60 },
+      createdAt: workspace.updatedAt,
+      updatedAt: workspace.updatedAt
+    });
+    await legacyStorage.saveWorkspace(workspace);
+
+    // When
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
+    const restored = await storage.loadWorkspace();
+
+    // Then
+    assert.equal(restored?.spaces[0]?.name, "기존 현장 공간");
+
+    const migratedStorage = new IndexedDbTetrisStorage(TEST_DB_NAME, null);
+    const migrated = await migratedStorage.loadWorkspace();
+    assert.equal(migrated?.fileId, "file-a");
+    assert.equal(migrated?.spaces[0]?.name, "기존 현장 공간");
   });
 
   it("커스텀 공간, 커스텀 블록, draft를 IndexedDB에 저장하고 다시 복원한다", async () => {
     // Given
-    const storage = new IndexedDbTetrisStorage("my-tetris-test");
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
     const workspace = createDefaultWorkspace({
       deviceId: "device-a",
       fileId: "file-a",
@@ -62,7 +99,7 @@ describe("IndexedDbTetrisStorage", () => {
 
   it("저장소 revision이 expectedRevision보다 최신이면 stale 탭 저장을 거부한다", async () => {
     // Given
-    const storage = new IndexedDbTetrisStorage("my-tetris-test");
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
     const firstTabWorkspace = createDefaultWorkspace({
       deviceId: "device-a",
       fileId: "file-a",
@@ -102,7 +139,7 @@ describe("IndexedDbTetrisStorage", () => {
 
   it("다른 fileId 작업본은 expectedRevision과 무관하게 active 작업본으로 저장한다", async () => {
     // Given
-    const storage = new IndexedDbTetrisStorage("my-tetris-test");
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
     const currentWorkspace = createDefaultWorkspace({
       deviceId: "device-a",
       fileId: "file-a",

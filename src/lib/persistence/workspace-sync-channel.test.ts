@@ -132,7 +132,7 @@ describe("workspace-sync-channel", () => {
     });
 
     // Then
-    assert.equal(signal.key, "my-tetris-workspace-sync");
+    assert.equal(signal.key, "package-tetris-workspace-sync");
     assert.match(signal.value, /workspace-saved/);
     assert.equal(JSON.parse(signal.value).revision, 3);
   });

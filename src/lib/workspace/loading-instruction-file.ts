@@ -1,5 +1,6 @@
 const FILE_NAME_UNSAFE_CHARACTERS = /[<>:"/\\|?*\u0000-\u001f\u007f]+/g;
 const MAX_SPACE_NAME_SLUG_LENGTH = 48;
+const PRODUCT_FILE_PREFIX = "package-tetris";
 
 export function createStackingInstructionFilename(
   selectedPackedSpaceIndex: number,
@@ -11,7 +12,7 @@ export function createStackingInstructionFilename(
   const spaceLabel = spaceNameSlug ? `${spaceNameSlug}-${spaceIndexLabel}` : spaceIndexLabel;
   const dateLabel = createLocalDateLabel(date);
 
-  return `my-tetris-${spaceLabel}-loading-${dateLabel}.txt`;
+  return `${PRODUCT_FILE_PREFIX}-${spaceLabel}-loading-${dateLabel}.txt`;
 }
 
 export function createStackingInstructionDownloadSuccessMessage(filename: string): string {

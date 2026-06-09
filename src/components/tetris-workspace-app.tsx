@@ -104,6 +104,7 @@ import {
 } from "@/lib/workspace/result-freshness";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
+import { createWorkspaceBackupFilename } from "@/lib/workspace/workspace-backup-file";
 import {
   createConnectivityStatus,
   type ConnectivityStatus,
@@ -1081,7 +1082,8 @@ export function TetrisWorkspaceApp() {
       return;
     }
 
-    const exportedAt = new Date().toISOString();
+    const exportedAtDate = new Date();
+    const exportedAt = exportedAtDate.toISOString();
     const workspaceForExport = {
       ...workspace,
       lastExportedAt: exportedAt,
@@ -1092,7 +1094,7 @@ export function TetrisWorkspaceApp() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `my-tetris-library-${exportedAt.slice(0, 10)}.json`;
+    anchor.download = createWorkspaceBackupFilename(exportedAtDate);
     anchor.click();
     URL.revokeObjectURL(url);
     setWorkspace(workspaceForExport);
