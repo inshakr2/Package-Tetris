@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -17,6 +18,10 @@ import {
   type PackingSceneBlock,
   type PackingSceneBoundsInput
 } from "@/lib/workspace/packing-scene";
+import {
+  RESULT_3D_KEYBOARD_HELP_TEXT,
+  getResult3DKeyboardAction
+} from "@/lib/workspace/result-3d-keyboard-controls";
 import { PackedBlock } from "@/lib/workspace/types";
 
 export type ThreeCameraPreset = "isometric" | "top" | "front" | "side";
@@ -46,6 +51,7 @@ interface HoverState {
 }
 
 const CAMERA_DISTANCE_MULTIPLIER = 1.45;
+const CAMERA_MIN_POLAR_RAD = 0.08;
 
 export function Result3DCanvas({
   blocks,
@@ -81,6 +87,7 @@ export function Result3DCanvas({
   const [renderState, setRenderState] = useState<"loading" | "ready" | "error">("loading");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [hoverState, setHoverState] = useState<HoverState | null>(null);
+  const keyboardHelpId = useId();
 
   const sceneBounds = useMemo(
     () => createPackingSceneBounds(bounds),
@@ -322,6 +329,19 @@ export function Result3DCanvas({
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const action = getResult3DKeyboardAction(event.key);
+
+    if (!action) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (action.type === "clearSelection") {
+      onClearSelection();
+      return;
+    }
+
     const camera = cameraRef.current;
     const controls = controlsRef.current;
 
@@ -329,38 +349,26 @@ export function Result3DCanvas({
       return;
     }
 
-    if (event.key === "Escape") {
-      onClearSelection();
-      return;
-    }
-
-    if (event.key === "0") {
-      event.preventDefault();
-      applyCameraPreset("isometric", camera, controls, sceneBounds);
-      return;
-    }
-
-    if (event.key === "1" || event.key === "2" || event.key === "3") {
-      event.preventDefault();
-      applyCameraPreset(event.key === "1" ? "top" : event.key === "2" ? "front" : "side", camera, controls, sceneBounds);
-      return;
-    }
-
-    if (event.key === "+" || event.key === "=" || event.key === "-") {
-      event.preventDefault();
-      const direction = event.key === "-" ? 1.12 : 0.88;
-      camera.position.multiplyScalar(direction);
-      controls.update();
+    if (action.type === "reset") {
+      applyCameraPreset(cameraPreset, camera, controls, sceneBounds);
       requestSceneRender();
       return;
     }
 
-    if (event.key.startsWith("Arrow")) {
-      event.preventDefault();
-      const angle = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -0.16 : 0.16;
-      const axis = event.key === "ArrowUp" || event.key === "ArrowDown" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-      camera.position.sub(controls.target).applyAxisAngle(axis, angle).add(controls.target);
-      controls.update();
+    if (action.type === "preset") {
+      applyCameraPreset(action.preset, camera, controls, sceneBounds);
+      requestSceneRender();
+      return;
+    }
+
+    if (action.type === "zoom") {
+      zoomCameraAroundTarget(camera, controls, action.scale);
+      requestSceneRender();
+      return;
+    }
+
+    if (action.type === "rotate") {
+      rotateCameraAroundTarget(camera, controls, action.thetaDelta, action.phiDelta);
       requestSceneRender();
     }
   }
@@ -395,14 +403,19 @@ export function Result3DCanvas({
         ref={hostRef}
         className="result-three-host"
         tabIndex={0}
-        role="img"
-        aria-label={`${statusText}. 드래그로 회전, 휠 또는 더하기/빼기로 확대 축소, 1 상면, 2 정면, 3 측면, 0 리셋, Esc 선택 해제.`}
+        role="region"
+        aria-roledescription="3D 적재 보기"
+        aria-label={`${statusText}. 3D 적재 결과 조작 영역.`}
+        aria-describedby={keyboardHelpId}
         data-render-state={renderState}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onPointerLeave={handlePointerLeave}
         onPointerMove={handlePointerMove}
       >
+        <p id={keyboardHelpId} className="three-keyboard-help">
+          {RESULT_3D_KEYBOARD_HELP_TEXT}
+        </p>
         {renderState === "loading" ? (
           <div className="projection-empty">
             <strong>3D 뷰 준비 중</strong>
@@ -540,6 +553,45 @@ function resizeRendererToHost(
   camera.updateProjectionMatrix();
 }
 
+function rotateCameraAroundTarget(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  thetaDelta: number,
+  phiDelta: number
+) {
+  const offset = camera.position.clone().sub(controls.target);
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+
+  spherical.theta += thetaDelta;
+  spherical.phi = clampNumber(spherical.phi + phiDelta, CAMERA_MIN_POLAR_RAD, Math.PI - CAMERA_MIN_POLAR_RAD);
+  offset.setFromSpherical(spherical);
+  camera.position.copy(controls.target).add(offset);
+  camera.lookAt(controls.target);
+  controls.update();
+}
+
+function zoomCameraAroundTarget(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  scale: number
+) {
+  const offset = camera.position.clone().sub(controls.target);
+  const distance = offset.length();
+
+  if (distance <= 0) {
+    return;
+  }
+
+  const minDistance = controls.minDistance || 0;
+  const maxDistance = Number.isFinite(controls.maxDistance) ? controls.maxDistance : Number.POSITIVE_INFINITY;
+  const nextDistance = clampNumber(distance * scale, minDistance, maxDistance);
+
+  offset.setLength(nextDistance);
+  camera.position.copy(controls.target).add(offset);
+  camera.lookAt(controls.target);
+  controls.update();
+}
+
 function applyCameraPreset(
   preset: ThreeCameraPreset,
   camera: THREE.PerspectiveCamera,
@@ -560,6 +612,10 @@ function applyCameraPreset(
   camera.position.copy(positions[preset]);
   camera.lookAt(target);
   controls.update();
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function cleanupSceneObjects(scene: THREE.Scene) {
