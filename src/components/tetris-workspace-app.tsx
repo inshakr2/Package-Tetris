@@ -145,7 +145,10 @@ import {
   type OffsetAdjustmentRecommendation
 } from "@/lib/workspace/result-offset-recommendation";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
-import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
+import {
+  createMobileStickyActionState,
+  getMobileStickyActionAriaLabel
+} from "@/lib/workspace/mobile-sticky-action";
 import { createWorkspaceBackupFilename } from "@/lib/workspace/workspace-backup-file";
 import {
   createConnectivityStatus,
@@ -1712,6 +1715,7 @@ export function TetrisWorkspaceApp() {
           className="primary-button sticky-mobile-primary"
           onClick={runMobileStickyAction}
           disabled={mobileStickyAction.disabled}
+          aria-label={getMobileStickyActionAriaLabel(mobileStickyAction.action, mobileStickyAction.buttonLabel)}
           aria-describedby={`${MOBILE_STICKY_STATUS_ID} ${MOBILE_STICKY_HELPER_ID}`}
         >
           {mobileStickyAction.action === "reload" ? (
@@ -2411,6 +2415,7 @@ function ReviewCompactCard({
           className="primary-button"
           onClick={onCreateResult}
           disabled={resultButtonDisabled}
+          aria-label={creatingResult ? "실행 전 확인에서 결과 계산 중" : "실행 전 확인에서 결과 만들기"}
           title={resultButtonTitle}
         >
           <Box size={16} />
@@ -3467,6 +3472,7 @@ const ResultStage = ({
                       className="primary-button result-empty-action"
                       onClick={onCreateResult}
                       disabled={resultCreating}
+                      aria-label={resultCreating ? "결과 대기 화면에서 결과 계산 중" : "결과 대기 화면에서 결과 만들기"}
                       aria-live="polite"
                     >
                       <Box size={16} />
@@ -3521,7 +3527,7 @@ const ResultStage = ({
               onClick={onCreateResult}
               disabled={resultActionCtaDisabled}
               title={resultActionCtaTitle}
-              aria-label={latestResult ? "현재 입력으로 다시 계산" : "결과 만들기"}
+              aria-label={latestResult ? "현재 입력으로 다시 계산" : "결과 작업에서 결과 만들기"}
             >
               <RotateCcw size={16} />
               {resultCreating ? resultCalculationProgress.buttonLabel : resultActionCtaLabel}

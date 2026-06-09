@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createMobileStickyActionState } from "./mobile-sticky-action";
+import { createMobileStickyActionState, getMobileStickyActionAriaLabel } from "./mobile-sticky-action";
 
 describe("mobile-sticky-action", () => {
   it("작업본이 잠기면 최신본 안내와 불러오기 액션을 반환한다", () => {
@@ -148,6 +148,22 @@ describe("mobile-sticky-action", () => {
       tone: "amber",
       disabled: false
     });
+  });
+
+  it("모바일 하단 주요 액션은 반복되는 버튼 문구를 위치 정보와 함께 읽게 한다", () => {
+    // Given
+    const createLabel = "결과 만들기";
+    const exportLabel = "백업 만들기";
+
+    // When
+    const createAriaLabel = getMobileStickyActionAriaLabel("create", createLabel);
+    const exportAriaLabel = getMobileStickyActionAriaLabel("export", exportLabel);
+    const reloadAriaLabel = getMobileStickyActionAriaLabel("reload", "최신본 불러오기");
+
+    // Then
+    assert.equal(createAriaLabel, "모바일 하단에서 결과 만들기");
+    assert.equal(exportAriaLabel, "모바일 하단에서 백업 만들기");
+    assert.equal(reloadAriaLabel, "모바일 하단에서 최신본 불러오기");
   });
 });
 

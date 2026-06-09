@@ -112,3 +112,15 @@ export function createMobileStickyActionState(
     disabled: false
   };
 }
+
+export function getMobileStickyActionAriaLabel(action: MobileStickyActionKind, buttonLabel: string) {
+  if (action === "reload") {
+    return "모바일 하단에서 최신본 불러오기";
+  }
+
+  if (action === "create") {
+    return `모바일 하단에서 ${buttonLabel}`;
+  }
+
+  return `모바일 하단에서 ${buttonLabel}`;
+}
