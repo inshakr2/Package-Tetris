@@ -94,6 +94,10 @@ import {
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
 import { downloadTextFile } from "@/lib/workspace/text-file-download";
 import {
+  createStackingInstructionDownloadSuccessMessage,
+  createStackingInstructionFilename
+} from "@/lib/workspace/loading-instruction-file";
+import {
   createResultFreshnessState,
   createResultInputFingerprint,
   type ResultFreshnessState
@@ -2010,6 +2014,7 @@ const ResultStage = ({
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
+  const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
@@ -2118,11 +2123,13 @@ const ResultStage = ({
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
     setInstructionCopyStatus("idle");
     setInstructionDownloadStatus("idle");
+    setInstructionDownloadFilename(null);
   }, [latestResult?.resultId]);
 
   useEffect(() => {
     setInstructionCopyStatus("idle");
     setInstructionDownloadStatus("idle");
+    setInstructionDownloadFilename(null);
   }, [stackingInstructionText]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
@@ -2209,12 +2216,16 @@ const ResultStage = ({
     }
 
     try {
+      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex);
+
       downloadTextFile({
         text: stackingInstructionText,
-        filename: createStackingInstructionFilename(selectedPackedSpaceIndex)
+        filename
       });
+      setInstructionDownloadFilename(filename);
       setInstructionDownloadStatus("downloaded");
     } catch {
+      setInstructionDownloadFilename(null);
       setInstructionDownloadStatus("error");
     }
   }
@@ -2719,7 +2730,7 @@ const ResultStage = ({
           ) : null}
           {instructionDownloadStatus === "downloaded" ? (
             <p className="loading-instruction-copy-status" data-tone="green" role="status">
-              작업 지시서 파일을 만들었습니다.
+              {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
             </p>
           ) : instructionDownloadStatus === "error" ? (
             <p className="loading-instruction-copy-status" data-tone="amber" role="status">
@@ -3825,13 +3836,6 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
-}
-
-function createStackingInstructionFilename(selectedPackedSpaceIndex: number): string {
-  const spaceLabel = selectedPackedSpaceIndex >= 0 ? `space-${selectedPackedSpaceIndex + 1}` : "space";
-  const dateLabel = new Date().toISOString().slice(0, 10);
-
-  return `my-tetris-${spaceLabel}-loading-${dateLabel}.txt`;
 }
 
 function createClientId(prefix: string) {

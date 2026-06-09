@@ -5,9 +5,11 @@ import { describe, it } from "node:test";
 
 const SOURCE_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
+const LOADING_INSTRUCTION_FILE_PATH = join(process.cwd(), "src/lib/workspace/loading-instruction-file.ts");
 
 const source = readFileSync(SOURCE_PATH, "utf8");
 const styles = readFileSync(GLOBALS_CSS_PATH, "utf8");
+const loadingInstructionFileSource = readFileSync(LOADING_INSTRUCTION_FILE_PATH, "utf8");
 
 describe("stacking-layer-summary-layout", () => {
   it("결과 화면은 선택 공간 기준의 쌓는 순서 패널을 표시한다", () => {
@@ -124,10 +126,12 @@ describe("stacking-layer-summary-layout", () => {
     const hasDownloadAction =
       source.includes("downloadStackingInstructions") &&
       source.includes("downloadTextFile") &&
+      source.includes("createStackingInstructionDownloadSuccessMessage") &&
       source.includes("작업 지시서 저장") &&
       source.includes("loading-instruction-download-button") &&
       source.includes("instructionDownloadStatus") &&
-      source.includes("작업 지시서 파일을 만들었습니다.");
+      source.includes("instructionDownloadFilename") &&
+      loadingInstructionFileSource.includes("다운로드 폴더에서");
     const hasDownloadActionStyle =
       /\.loading-instruction-actions\s*{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*8px;[\s\S]*?}/.test(
         styles
