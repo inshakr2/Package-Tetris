@@ -1067,6 +1067,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .result-hero-grid .summary-tile {
@@ -1218,6 +1219,7 @@ select:focus-visible {
 }
 
 .offset-preview-dialog-body .result-three-shell {
+  min-width: 0;
   height: 100%;
   max-height: none;
 }
@@ -1293,6 +1295,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .space-workflow-row,
@@ -1492,6 +1495,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(150px, 0.38fr) minmax(0, 1.45fr) minmax(190px, 0.52fr);
   gap: 12px;
+  min-width: 0;
 }
 
 .result-space-panel,
@@ -1708,6 +1712,7 @@ select:focus-visible {
 
 .projection-board {
   position: relative;
+  min-width: 0;
   min-height: 360px;
   overflow: hidden;
   border: 1px solid rgba(96, 112, 103, 0.45);
@@ -1723,6 +1728,7 @@ select:focus-visible {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
+  min-width: 0;
   min-height: 0;
   height: clamp(390px, 48vh, 540px);
   max-height: 540px;
@@ -1730,6 +1736,7 @@ select:focus-visible {
 
 .result-three-host {
   position: relative;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   overflow: hidden;
@@ -1876,6 +1883,7 @@ select:focus-visible {
 }
 
 .result-three-dialog-body .result-three-shell {
+  min-width: 0;
   height: 100%;
   max-height: none;
 }
