@@ -20,6 +20,8 @@
 
 V1 완료 기준과 운영 전 파일럿 확인 범위는 `docs/v1-readiness.md`를 기준으로 확인한다.
 
+처음 실행하는 사용자는 먼저 `docs/non-developer-start-guide.md`를 확인한다. Windows에서 명령어 입력이 어렵거나 PowerShell `npm.ps1` 오류가 나오면 `docs/windows-cmd-launch-guide.md`와 `scripts/windows-start-package-tetris.cmd`를 사용한다.
+
 ## 2. 준비물
 
 - Windows 10/11 또는 macOS PC

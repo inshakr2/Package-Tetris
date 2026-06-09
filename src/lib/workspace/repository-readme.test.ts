@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 const README_PATH = join(process.cwd(), "README.md");
 
 describe("repository README", () => {
-  it("현장 시연 담당자가 실행, audit, 상세 가이드 위치를 바로 확인할 수 있다", () => {
+  it("프로젝트 소개와 목적별 문서 허브를 제공하고 직접 실행 매뉴얼은 분리한다", () => {
     // Given / When
     const readmeExists = existsSync(README_PATH);
     const readme = readmeExists ? readFileSync(README_PATH, "utf8") : "";
@@ -14,9 +14,14 @@ describe("repository README", () => {
     // Then
     assert.equal(readmeExists, true);
     assert.match(readme, /Package Tetris/);
-    assert.match(readme, /npm run field:audit/);
-    assert.match(readme, /npm run dev/);
-    assert.match(readme, /docs\/field-demo-user-guide\.md/);
+    assert.match(readme, /프론트엔드 단독 V1/);
+    assert.match(readme, /적재 공간/);
+    assert.match(readme, /3D/);
+    assert.match(readme, /docs\/non-developer-start-guide\.md/);
+    assert.match(readme, /docs\/development-deliverables\.md/);
+    assert.match(readme, /docs\/v1-readiness\.md/);
     assert.match(readme, /https:\/\/github\.com\/inshakr2\/Package-Tetris/);
+    assert.doesNotMatch(readme, /npm install/);
+    assert.doesNotMatch(readme, /npm run dev/);
   });
 });
