@@ -1165,6 +1165,56 @@ select:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.stacking-layer-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.stacking-layer-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.stacking-layer-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.stacking-layer-row strong,
+.stacking-layer-row span,
+.stacking-layer-row small {
+  overflow-wrap: anywhere;
+}
+
+.stacking-layer-row > strong {
+  min-width: 44px;
+  color: var(--blue);
+}
+
+.stacking-layer-row span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stacking-layer-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stacking-layer-count {
+  justify-self: end;
+  white-space: nowrap;
+}
+
 .space-instance-button[aria-pressed="true"],
 .projection-legend-item[aria-pressed="true"] {
   border-color: rgba(37, 99, 235, 0.55);
@@ -1958,6 +2008,16 @@ select:focus-visible {
   .compact-row,
   .block-summary-row {
     grid-template-columns: 1fr;
+  }
+
+  .stacking-layer-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .stacking-layer-count {
+    justify-self: start;
+    white-space: normal;
   }
 
   .row-actions {
