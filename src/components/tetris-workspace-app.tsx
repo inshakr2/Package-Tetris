@@ -158,6 +158,7 @@ import {
 } from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
+import { loadFieldDemoCurrentWork } from "@/lib/workspace/field-demo-workspace";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
@@ -1057,6 +1058,22 @@ export function TetrisWorkspaceApp() {
     setResetWorkDialogOpen(false);
   }
 
+  function loadFieldDemoCurrentWorkIntoDraft() {
+    if (saveConflict) {
+      return;
+    }
+
+    updateWorkspace((current, now) => loadFieldDemoCurrentWork(current, now));
+    setPendingDraftUndo(null);
+    setResultFailure(null);
+    setResultCalculationStep("idle");
+    setCreatingResult(false);
+    window.setTimeout(() => {
+      currentWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      currentWorkSectionRef.current?.focus({ preventScroll: true });
+    }, 0);
+  }
+
   function createPackingResult() {
     if (!workspace || !review || creatingResult) {
       return;
@@ -1596,9 +1613,12 @@ export function TetrisWorkspaceApp() {
                     ? null
                     : "비울 현재 작업이 없습니다."
               }
+              demoDisabled={isWorkspaceLocked}
+              demoDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다." : null}
               onQuantityChange={updateCurrentQuantity}
               onDeleteRequest={requestDelete}
               onRequestResetCurrentWork={requestResetCurrentWork}
+              onLoadFieldDemo={loadFieldDemoCurrentWorkIntoDraft}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
@@ -2009,14 +2029,19 @@ function CurrentWorkBlocksPanel({
   canResetCurrentWork,
   resetDisabled,
   resetDisabledReason,
+  demoDisabled,
+  demoDisabledReason,
   onQuantityChange,
   onDeleteRequest,
-  onRequestResetCurrentWork
+  onRequestResetCurrentWork,
+  onLoadFieldDemo
 }: {
   blocks: BlockDefinition[];
   canResetCurrentWork: boolean;
   resetDisabled: boolean;
   resetDisabledReason: string | null;
+  demoDisabled: boolean;
+  demoDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
   onDeleteRequest: (
     kind: DeleteConfirmationKind,
@@ -2025,6 +2050,7 @@ function CurrentWorkBlocksPanel({
     trigger?: HTMLElement | null
   ) => void;
   onRequestResetCurrentWork: () => void;
+  onLoadFieldDemo: () => void;
 }) {
   return (
     <section className="current-block-panel">
@@ -2038,7 +2064,22 @@ function CurrentWorkBlocksPanel({
                     <p className="panel-subtitle">이번에 실을 박스입니다. 수량 변경은 현재 작업에만 적용됩니다.</p>
           </div>
         </div>
-        <div>
+        <div className="current-work-actions">
+          <button
+            className="secondary-button current-work-demo-action"
+            onClick={onLoadFieldDemo}
+            disabled={demoDisabled}
+            title={demoDisabledReason ?? undefined}
+            aria-describedby={demoDisabled ? "current-work-demo-disabled-reason" : undefined}
+          >
+            <Truck size={16} />
+            시연 예제 불러오기
+          </button>
+          {demoDisabled ? (
+            <span id="current-work-demo-disabled-reason" className="sr-only">
+              최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다.
+            </span>
+          ) : null}
           <button
             className="secondary-button current-work-reset-action"
             onClick={onRequestResetCurrentWork}

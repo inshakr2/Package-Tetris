@@ -468,6 +468,14 @@ select:focus-visible {
   align-items: start;
 }
 
+.current-work-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, auto));
+  gap: 8px;
+  justify-content: end;
+}
+
+.current-work-demo-action,
 .current-work-reset-action {
   min-height: 48px;
   white-space: normal;
@@ -2545,6 +2553,12 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .current-work-actions {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .current-work-demo-action,
   .current-work-reset-action {
     width: 100%;
   }
