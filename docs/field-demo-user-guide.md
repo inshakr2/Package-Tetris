@@ -18,6 +18,8 @@
 - `main`
 - 시연 담당자는 GitHub 저장소의 `main` 브랜치 기준으로 프로젝트를 내려받으면 된다.
 
+V1 완료 기준과 운영 전 파일럿 확인 범위는 `docs/v1-readiness.md`를 기준으로 확인한다.
+
 ## 2. 준비물
 
 - Windows 10/11 또는 macOS PC

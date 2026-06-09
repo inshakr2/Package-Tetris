@@ -27,6 +27,8 @@ http://localhost:3000
 
 Node.js 설치, ZIP 다운로드, Git 다운로드, 포트 충돌, 오프라인 준비, 실제 시연 순서는 [docs/field-demo-user-guide.md](docs/field-demo-user-guide.md)를 확인하세요.
 
+V1 완료 기준과 운영 전 파일럿 확인 범위는 [docs/v1-readiness.md](docs/v1-readiness.md)를 기준으로 봅니다.
+
 ## 개발 검증
 
 ```bash
