@@ -12,25 +12,31 @@ const styles = readFileSync(GLOBALS_CSS_PATH, "utf8");
 const loadingInstructionFileSource = readFileSync(LOADING_INSTRUCTION_FILE_PATH, "utf8");
 
 describe("stacking-layer-summary-layout", () => {
-  it("결과 화면은 선택 공간 기준의 쌓는 순서 패널을 표시한다", () => {
+  it("결과 뷰어 근처에서 선택 공간 기준의 쌓는 순서 모달을 열 수 있다", () => {
     // Given / When
     const hasStackingPanel =
       source.includes("createStackingLayerSummaries") &&
       source.includes("stackingLayerSummaries") &&
-      source.includes('className="sub-panel stacking-layer-panel"') &&
+      source.includes('className="projection-controls-stack"') &&
+      source.includes('className="result-inspection-actions"') &&
+      source.includes('openResultInspectionDialog("stacking"') &&
+      source.includes("function ResultInspectionDialog") &&
+      source.includes("function StackingOrderContent") &&
+      source.includes("spaceLabel={stackingInstructionSpaceLabel}") &&
       source.includes("쌓는 순서") &&
       source.includes('className="stacking-layer-list"') &&
       source.includes('className="stacking-layer-row"') &&
-      source.includes("선택한 ${stackingInstructionSpaceLabel} 기준");
+      source.includes("선택한 ${spaceLabel} 기준");
 
     // Then
     assert.equal(hasStackingPanel, true);
+    assert.equal(source.includes('className="sub-panel stacking-layer-panel"'), false);
   });
 
   it("층별 요약 행은 긴 박스명을 줄바꿈하고 모바일에서 한 컬럼으로 접힌다", () => {
     // Given / When
     const hasPanelStyle =
-      /\.stacking-layer-panel\s*{[\s\S]*?grid-column:\s*1\s*\/\s*-1;[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(
+      /\.result-inspection-dialog-body\s+\.stacking-layer-list\s*{[\s\S]*?margin-top:\s*12px;[\s\S]*?}/.test(
         styles
       );
     const hasBaseListStyle =
@@ -89,19 +95,20 @@ describe("stacking-layer-summary-layout", () => {
     const hasCopyAction =
       source.includes("createStackingInstructionText") &&
       source.includes("stackingInstructionText") &&
+      source.includes('className="loading-instruction-actions"') &&
       source.includes("copyStackingInstructions") &&
       source.includes("writeClipboardText") &&
       source.includes("작업 순서 복사") &&
       source.includes('className="secondary-button loading-instruction-copy-button"') &&
       source.includes('role="status"');
     const hasCopyActionStyle =
-      /\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[\s\S]*?}/.test(
+      /\.loading-instruction-actions\s*{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?justify-content:\s*flex-end;[\s\S]*?}/.test(
         styles
       ) &&
       /\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
       ) &&
-      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.loading-instruction-actions\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
         .test(styles);
 
     // Then

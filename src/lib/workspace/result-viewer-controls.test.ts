@@ -24,7 +24,7 @@ describe("result-viewer-controls", () => {
     assert.equal(RESULT_VIEW_TOUCH_TARGET_MIN_PX, 48);
   });
 
-  it("3D 카메라 전환은 한 줄 chip row에 들어갈 수 있는 짧은 라벨을 제공한다", () => {
+  it("3D 카메라 전환은 현장 작업자가 이해하기 쉬운 시점 라벨을 제공한다", () => {
     // Given
     const labels = THREE_CAMERA_CONTROL_ITEMS.map((item) => item.label);
     const presets = THREE_CAMERA_CONTROL_ITEMS.map((item) => item.preset);
@@ -34,8 +34,9 @@ describe("result-viewer-controls", () => {
 
     // Then
     assert.deepEqual(presets, ["isometric", "top", "front", "side"]);
-    assert.deepEqual(labels, ["사시", "위", "앞", "옆"]);
-    assert.ok(longestLabelLength <= 2);
+    assert.deepEqual(labels, ["자유시점", "위", "앞", "옆"]);
+    assert.ok(longestLabelLength <= 4);
+    assert.notEqual(labels[0], "사시");
   });
 
   it("현재 결과 보기 제목은 선택된 보기 방식을 현장 용어로 반환한다", () => {

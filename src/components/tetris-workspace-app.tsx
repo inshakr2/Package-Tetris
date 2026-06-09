@@ -8,6 +8,7 @@ import {
   Download,
   FileUp,
   HardDrive,
+  ListOrdered,
   Maximize2,
   PackagePlus,
   PencilLine,
@@ -183,6 +184,7 @@ import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
 type InstructionCopyStatus = "idle" | "copied" | "error";
 type InstructionDownloadStatus = "idle" | "downloaded" | "error";
+type ResultInspectionDialogKind = "placement" | "stacking";
 
 interface PwaBeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -2227,6 +2229,7 @@ const ResultStage = ({
   const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [threeResetToken, setThreeResetToken] = useState(0);
   const [threeDialogOpen, setThreeDialogOpen] = useState(false);
+  const [resultInspectionDialog, setResultInspectionDialog] = useState<ResultInspectionDialogKind | null>(null);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
@@ -2238,6 +2241,7 @@ const ResultStage = ({
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
   const displayedSpaces = useMemo(
@@ -2380,6 +2384,7 @@ const ResultStage = ({
     setChainPreview(null);
     setChainComparisonMode("preview");
     setThreeDialogOpen(false);
+    setResultInspectionDialog(null);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
     setInstructionCopyStatus("idle");
@@ -2449,6 +2454,21 @@ const ResultStage = ({
     if (restoreFocus) {
       window.setTimeout(() => {
         threeDialogTriggerRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  function openResultInspectionDialog(kind: ResultInspectionDialogKind, trigger: HTMLButtonElement) {
+    resultInspectionDialogTriggerRef.current = trigger;
+    setResultInspectionDialog(kind);
+  }
+
+  function closeResultInspectionDialog({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
+    setResultInspectionDialog(null);
+
+    if (restoreFocus) {
+      window.setTimeout(() => {
+        resultInspectionDialogTriggerRef.current?.focus();
       }, 0);
     }
   }
@@ -2811,8 +2831,33 @@ const ResultStage = ({
                 ) : null}
               </div>
 
-              {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
-                <>
+              <div className="projection-controls-stack">
+                <div className="result-inspection-actions" aria-label="선택 공간 상세 확인">
+                  <button
+                    className="secondary-button"
+                    aria-haspopup="dialog"
+                    aria-controls="result-inspection-dialog"
+                    disabled={!selectedPackedSpace}
+                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
+                    onClick={(event) => openResultInspectionDialog("placement", event.currentTarget)}
+                  >
+                    <Box size={16} />
+                    배치 상세
+                  </button>
+                  <button
+                    className="secondary-button"
+                    aria-haspopup="dialog"
+                    aria-controls="result-inspection-dialog"
+                    disabled={!selectedPackedSpace}
+                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
+                    onClick={(event) => openResultInspectionDialog("stacking", event.currentTarget)}
+                  >
+                    <ListOrdered size={16} />
+                    쌓는 순서
+                  </button>
+                </div>
+
+                {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
                   <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
                     {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
                       <button
@@ -2836,6 +2881,11 @@ const ResultStage = ({
                       크게 보기
                     </button>
                   </div>
+                ) : null}
+              </div>
+
+              {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
+                <>
                   <Result3DCanvas
                     blocks={selectedPackedSpace.blocks}
                     bounds={usableSize}
@@ -2968,6 +3018,22 @@ const ResultStage = ({
               </div>
             </aside>
           </div>
+          <ResultInspectionDialog
+            openKind={resultInspectionDialog}
+            spaceLabel={stackingInstructionSpaceLabel}
+            placementDetailRows={placementDetailRows}
+            stackingInstructionSteps={stackingInstructionSteps}
+            stackingLayerSummaries={stackingLayerSummaries}
+            instructionCopyStatus={instructionCopyStatus}
+            instructionDownloadStatus={instructionDownloadStatus}
+            instructionDownloadFilename={instructionDownloadFilename}
+            hasLatestResult={Boolean(latestResult)}
+            hasSelectedSpace={Boolean(selectedPackedSpace)}
+            stackingInstructionText={stackingInstructionText}
+            onCopyStackingInstructions={copyStackingInstructions}
+            onDownloadStackingInstructions={downloadStackingInstructions}
+            onClose={closeResultInspectionDialog}
+          />
         </div>
       ) : (
                 <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
@@ -3043,130 +3109,6 @@ const ResultStage = ({
             <p className="fine-print review-cta-hint">{resultFreshnessState.ctaDisabledReason}</p>
           ) : null}
         </section>
-        <section className="sub-panel placement-detail-panel" aria-labelledby="placement-detail-title">
-          <div className="placement-detail-head">
-            <h3 id="placement-detail-title">배치 상세</h3>
-            <p className="meta">
-              {latestResult && selectedPackedSpace
-                ? `선택한 ${stackingInstructionSpaceLabel} 기준 · 박스별 위치와 회전 후 크기`
-                : "결과를 만들면 선택 공간의 박스별 위치가 표시됩니다."}
-            </p>
-          </div>
-          {placementDetailRows.length > 0 ? (
-            <div className="placement-detail-table" role="table" aria-labelledby="placement-detail-title">
-              <div className="placement-detail-header" role="row">
-                <span role="columnheader">순서</span>
-                <span role="columnheader">박스</span>
-                <span role="columnheader">위치</span>
-                <span role="columnheader">회전 후 크기</span>
-                <span role="columnheader">방향</span>
-              </div>
-              {placementDetailRows.map((row) => (
-                <div key={row.blockId} className="placement-detail-row" role="row">
-                  <span role="cell" data-label="순서">
-                    <strong>{row.sequenceLabel}</strong>
-                  </span>
-                  <span role="cell" data-label="박스">
-                    <strong>{row.name}</strong>
-                    <small>{row.handlingLabel}</small>
-                  </span>
-                  <span role="cell" data-label="위치">
-                    {row.positionLabel}
-                  </span>
-                  <span role="cell" data-label="회전 후 크기">
-                    {row.sizeLabel}
-                  </span>
-                  <span role="cell" data-label="방향">
-                    {row.directionLabel}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : latestResult && selectedPackedSpace ? (
-            <p className="meta">선택한 공간에 표시할 배치 좌표가 없습니다.</p>
-          ) : (
-            <p className="meta">결과를 만들면 배치 상세표가 표시됩니다.</p>
-          )}
-        </section>
-        <section className="sub-panel stacking-layer-panel">
-          <div className="stacking-layer-head">
-            <div>
-              <h3>쌓는 순서</h3>
-              <p className="meta">
-                {latestResult && selectedPackedSpace
-                  ? `선택한 ${stackingInstructionSpaceLabel} 기준 · 아래층부터 확인`
-                  : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
-              </p>
-            </div>
-            <div className="loading-instruction-actions">
-              <button
-                className="secondary-button loading-instruction-copy-button"
-                onClick={copyStackingInstructions}
-                disabled={!stackingInstructionText}
-                title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
-              >
-                <Copy size={16} />
-                작업 순서 복사
-              </button>
-              <button
-                className="secondary-button loading-instruction-download-button"
-                onClick={downloadStackingInstructions}
-                disabled={!stackingInstructionText}
-                title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
-              >
-                <Download size={16} />
-                작업 지시서 저장
-              </button>
-            </div>
-          </div>
-          {instructionCopyStatus === "copied" ? (
-            <p className="loading-instruction-copy-status" data-tone="green" role="status">
-              작업 순서를 복사했습니다.
-            </p>
-          ) : instructionCopyStatus === "error" ? (
-            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-              복사하지 못했습니다. 브라우저 권한을 확인하세요.
-            </p>
-          ) : null}
-          {instructionDownloadStatus === "downloaded" ? (
-            <p className="loading-instruction-copy-status" data-tone="green" role="status">
-              {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
-            </p>
-          ) : instructionDownloadStatus === "error" ? (
-            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-              작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
-            </p>
-          ) : null}
-          {stackingInstructionSteps.length > 0 ? (
-            <>
-              <div className="loading-instruction-list" aria-label="현장 작업 순서">
-                {stackingInstructionSteps.map((step) => (
-                  <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
-                    <strong>{step.title}</strong>
-                    <div className="loading-instruction-copy">
-                      <p>{step.instruction}</p>
-                      <small>{step.detail}</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="stacking-layer-list" aria-label="층별 적재 순서">
-                {stackingLayerSummaries.map((layer) => (
-                  <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
-                    <strong>{layer.layerIndex}층</strong>
-                    <span>
-                      {layer.heightLabel}
-                      <small>{layer.loadSummary}</small>
-                    </span>
-                    <small className="stacking-layer-count">총 {layer.blockCount}개</small>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : latestResult && selectedPackedSpace ? (
-            <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
-          ) : null}
-        </section>
         <section className="sub-panel">
           <h3>입력 요약</h3>
           <p className="meta">
@@ -3215,6 +3157,286 @@ const ResultStage = ({
     </section>
   );
 };
+
+function ResultInspectionDialog({
+  openKind,
+  spaceLabel,
+  placementDetailRows,
+  stackingInstructionSteps,
+  stackingLayerSummaries,
+  instructionCopyStatus,
+  instructionDownloadStatus,
+  instructionDownloadFilename,
+  hasLatestResult,
+  hasSelectedSpace,
+  stackingInstructionText,
+  onCopyStackingInstructions,
+  onDownloadStackingInstructions,
+  onClose
+}: {
+  openKind: ResultInspectionDialogKind | null;
+  spaceLabel: string;
+  placementDetailRows: ReturnType<typeof createPlacementDetailRows>;
+  stackingInstructionSteps: ReturnType<typeof createStackingInstructionSteps>;
+  stackingLayerSummaries: ReturnType<typeof createStackingLayerSummaries>;
+  instructionCopyStatus: InstructionCopyStatus;
+  instructionDownloadStatus: InstructionDownloadStatus;
+  instructionDownloadFilename: string | null;
+  hasLatestResult: boolean;
+  hasSelectedSpace: boolean;
+  stackingInstructionText: string;
+  onCopyStackingInstructions: () => void;
+  onDownloadStackingInstructions: () => void;
+  onClose: (options?: { restoreFocus?: boolean }) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "result-inspection-dialog-title";
+  const descriptionId = "result-inspection-dialog-description";
+  const isPlacement = openKind === "placement";
+  const title = isPlacement ? "배치 상세" : "쌓는 순서";
+  const description = isPlacement
+    ? `선택한 ${spaceLabel} 기준 · 박스별 위치와 회전 후 크기`
+    : `선택한 ${spaceLabel} 기준 · 아래층부터 확인`;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (openKind) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-result-inspection-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [openKind]);
+
+  return (
+    <dialog
+      id="result-inspection-dialog"
+      ref={dialogRef}
+      className="result-inspection-dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="result-inspection-dialog-sheet">
+        <div className="space-form-dialog-head result-inspection-dialog-head">
+          <div>
+            <h2 id={titleId}>{title}</h2>
+            <p id={descriptionId} className="fine-print">
+              {hasLatestResult && hasSelectedSpace
+                ? description
+                : "결과를 만들면 선택 공간의 상세 정보를 확인할 수 있습니다."}
+            </p>
+          </div>
+          <button
+            className="icon-button panel-close-button"
+            data-result-inspection-close="true"
+            onClick={() => onClose()}
+            aria-label={`${title} 닫기`}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="result-inspection-dialog-body">
+          {isPlacement ? (
+            <PlacementDetailContent
+              titleId={titleId}
+              rows={placementDetailRows}
+              hasLatestResult={hasLatestResult}
+              hasSelectedSpace={hasSelectedSpace}
+            />
+          ) : (
+            <StackingOrderContent
+              steps={stackingInstructionSteps}
+              layers={stackingLayerSummaries}
+              instructionCopyStatus={instructionCopyStatus}
+              instructionDownloadStatus={instructionDownloadStatus}
+              instructionDownloadFilename={instructionDownloadFilename}
+              hasLatestResult={hasLatestResult}
+              hasSelectedSpace={hasSelectedSpace}
+              stackingInstructionText={stackingInstructionText}
+              onCopyStackingInstructions={onCopyStackingInstructions}
+              onDownloadStackingInstructions={onDownloadStackingInstructions}
+            />
+          )}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function PlacementDetailContent({
+  titleId,
+  rows,
+  hasLatestResult,
+  hasSelectedSpace
+}: {
+  titleId: string;
+  rows: ReturnType<typeof createPlacementDetailRows>;
+  hasLatestResult: boolean;
+  hasSelectedSpace: boolean;
+}) {
+  if (rows.length > 0) {
+    return (
+      <div className="placement-detail-table" role="table" aria-labelledby={titleId}>
+        <div className="placement-detail-header" role="row">
+          <span role="columnheader">순서</span>
+          <span role="columnheader">박스</span>
+          <span role="columnheader">위치</span>
+          <span role="columnheader">회전 후 크기</span>
+          <span role="columnheader">방향</span>
+        </div>
+        {rows.map((row) => (
+          <div key={row.blockId} className="placement-detail-row" role="row">
+            <span role="cell" data-label="순서">
+              <strong>{row.sequenceLabel}</strong>
+            </span>
+            <span role="cell" data-label="박스">
+              <strong>{row.name}</strong>
+              <small>{row.handlingLabel}</small>
+            </span>
+            <span role="cell" data-label="위치">
+              {row.positionLabel}
+            </span>
+            <span role="cell" data-label="회전 후 크기">
+              {row.sizeLabel}
+            </span>
+            <span role="cell" data-label="방향">
+              {row.directionLabel}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (hasLatestResult && hasSelectedSpace) {
+    return <p className="meta">선택한 공간에 표시할 배치 좌표가 없습니다.</p>;
+  }
+
+  return <p className="meta">결과를 만들면 배치 상세표가 표시됩니다.</p>;
+}
+
+function StackingOrderContent({
+  steps,
+  layers,
+  instructionCopyStatus,
+  instructionDownloadStatus,
+  instructionDownloadFilename,
+  hasLatestResult,
+  hasSelectedSpace,
+  stackingInstructionText,
+  onCopyStackingInstructions,
+  onDownloadStackingInstructions
+}: {
+  steps: ReturnType<typeof createStackingInstructionSteps>;
+  layers: ReturnType<typeof createStackingLayerSummaries>;
+  instructionCopyStatus: InstructionCopyStatus;
+  instructionDownloadStatus: InstructionDownloadStatus;
+  instructionDownloadFilename: string | null;
+  hasLatestResult: boolean;
+  hasSelectedSpace: boolean;
+  stackingInstructionText: string;
+  onCopyStackingInstructions: () => void;
+  onDownloadStackingInstructions: () => void;
+}) {
+  return (
+    <>
+      <div className="loading-instruction-actions">
+        <button
+          className="secondary-button loading-instruction-copy-button"
+          onClick={onCopyStackingInstructions}
+          disabled={!stackingInstructionText}
+          title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
+        >
+          <Copy size={16} />
+          작업 순서 복사
+        </button>
+        <button
+          className="secondary-button loading-instruction-download-button"
+          onClick={onDownloadStackingInstructions}
+          disabled={!stackingInstructionText}
+          title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
+        >
+          <Download size={16} />
+          작업 지시서 저장
+        </button>
+      </div>
+      {instructionCopyStatus === "copied" ? (
+        <p className="loading-instruction-copy-status" data-tone="green" role="status">
+          작업 순서를 복사했습니다.
+        </p>
+      ) : instructionCopyStatus === "error" ? (
+        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+          복사하지 못했습니다. 브라우저 권한을 확인하세요.
+        </p>
+      ) : null}
+      {instructionDownloadStatus === "downloaded" ? (
+        <p className="loading-instruction-copy-status" data-tone="green" role="status">
+          {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
+        </p>
+      ) : instructionDownloadStatus === "error" ? (
+        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+          작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
+        </p>
+      ) : null}
+      {steps.length > 0 ? (
+        <>
+          <div className="loading-instruction-list" aria-label="현장 작업 순서">
+            {steps.map((step) => (
+              <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
+                <strong>{step.title}</strong>
+                <div className="loading-instruction-copy">
+                  <p>{step.instruction}</p>
+                  <small>{step.detail}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="stacking-layer-list" aria-label="층별 적재 순서">
+            {layers.map((layer) => (
+              <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
+                <strong>{layer.layerIndex}층</strong>
+                <span>
+                  {layer.heightLabel}
+                  <small>{layer.loadSummary}</small>
+                </span>
+                <small className="stacking-layer-count">총 {layer.blockCount}개</small>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : hasLatestResult && hasSelectedSpace ? (
+        <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
+      ) : (
+        <p className="meta">결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다.</p>
+      )}
+    </>
+  );
+}
 
 function ExpandedThreeViewDialog({
   open,

@@ -4,7 +4,7 @@ export const RESULT_3D_KEYBOARD_ROTATION_STEP_RAD = 0.16;
 export const RESULT_3D_KEYBOARD_ZOOM_IN_SCALE = 0.88;
 export const RESULT_3D_KEYBOARD_ZOOM_OUT_SCALE = 1.12;
 export const RESULT_3D_KEYBOARD_HELP_TEXT =
-  "Tab으로 3D 보기 선택 후 화살표로 회전, + / - 로 확대 축소, 1 사시, 2 위, 3 앞, 4 옆, 0 처음, Esc 전체 보기";
+  "Tab으로 3D 보기 선택 후 화살표로 회전, + / - 로 확대 축소, 1 자유시점, 2 위, 3 앞, 4 옆, 0 처음, Esc 전체 보기";
 
 export type Result3DKeyboardAction =
   | {

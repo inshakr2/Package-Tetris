@@ -27,7 +27,7 @@ export const RESULT_VIEW_CONTROL_ITEMS: ResultViewControlItem[] = [
 ];
 
 export const THREE_CAMERA_CONTROL_ITEMS: ThreeCameraControlItem[] = [
-  { preset: "isometric", label: "사시", ariaLabel: "사시 카메라" },
+  { preset: "isometric", label: "자유시점", ariaLabel: "자유시점 카메라" },
   { preset: "top", label: "위", ariaLabel: "위 카메라" },
   { preset: "front", label: "앞", ariaLabel: "앞 카메라" },
   { preset: "side", label: "옆", ariaLabel: "옆 카메라" }
