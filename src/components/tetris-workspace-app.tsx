@@ -148,6 +148,7 @@ import {
   getPwaOfflineReadinessCopy,
   type PwaOfflineReadinessStatus
 } from "@/lib/workspace/pwa-offline-readiness";
+import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
@@ -4155,36 +4156,35 @@ function ImportConflictPanel({
   onResolve: (option: ImportConflictOption) => void;
   onExportJson: () => void;
 }) {
+  const importConflictCopy = getImportConflictCopy(pendingImport.conflict);
+
   return (
     <div className="import-panel" role="alert">
-      <strong>백업 파일 가져오기 확인</strong>
-      <p className="fine-print">
-        충돌 유형: {pendingImport.conflict.kind}. 현재 작업을 보존하거나, 가져온 파일로 대체하거나, 복사본으로 열 수
-        있습니다.
-      </p>
-      <p className="fine-print">현재 작업을 아직 내보내지 않았다면 먼저 백업한 뒤 대체를 선택하세요.</p>
-      <div className="form-actions">
+      <strong>{importConflictCopy.title}</strong>
+      <p className="fine-print">{importConflictCopy.description}</p>
+      <p className="fine-print">{importConflictCopy.backupHint}</p>
+      <div className="form-actions import-conflict-actions">
         <button className="secondary-button" onClick={onExportJson}>
           <Download size={16} />
           현재 작업 먼저 백업
         </button>
         {pendingImport.conflict.options.includes("keep-current") ? (
           <button className="secondary-button" onClick={() => onResolve("keep-current")}>
-            현재 작업 유지
+            {importConflictCopy.actionLabels.keepCurrent}
           </button>
         ) : null}
         {pendingImport.conflict.options.includes("replace") ? (
           <button className="primary-button" onClick={() => onResolve("replace")}>
-            대체
+            {importConflictCopy.actionLabels.replace}
           </button>
         ) : null}
         {pendingImport.conflict.options.includes("open-copy") ? (
           <button className="secondary-button" onClick={() => onResolve("open-copy")}>
-            복사본으로 열기
+            {importConflictCopy.actionLabels.openCopy}
           </button>
         ) : null}
         <button className="secondary-button" onClick={() => onResolve("cancel")}>
-          취소
+          {importConflictCopy.actionLabels.cancel}
         </button>
       </div>
     </div>

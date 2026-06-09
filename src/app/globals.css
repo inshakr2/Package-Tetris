@@ -1899,6 +1899,13 @@ select:focus-visible {
   border-radius: 8px;
   padding: 12px;
   margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+
+.import-conflict-actions .primary-button,
+.import-conflict-actions .secondary-button {
+  min-height: 48px;
+  white-space: normal;
 }
 
 .file-input {
@@ -2243,6 +2250,11 @@ select:focus-visible {
   .result-freshness-banner .secondary-button {
     width: 100%;
     min-height: 48px;
+  }
+
+  .import-conflict-actions .primary-button,
+  .import-conflict-actions .secondary-button {
+    width: 100%;
   }
 
   .inline-action {
