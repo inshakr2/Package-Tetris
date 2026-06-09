@@ -87,6 +87,22 @@ export function createStackingInstructionSteps(
   }));
 }
 
+export function createStackingInstructionText(spaceLabel: string, steps: StackingInstructionStep[]): string {
+  if (steps.length === 0) {
+    return "";
+  }
+
+  const normalizedSpaceLabel = normalizeInstructionLine(spaceLabel) || "선택한 공간";
+  const instructionLines = steps.map(
+    (step) =>
+      `${normalizeInstructionLine(step.title)}: ${normalizeInstructionLine(step.instruction)} (${normalizeInstructionLine(
+        step.detail
+      )})`
+  );
+
+  return [`${normalizedSpaceLabel} 쌓는 순서`, ...instructionLines].join("\n");
+}
+
 function createHeightLabel(zMm: number): string {
   if (zMm === 0) {
     return "바닥층";
@@ -121,6 +137,10 @@ function getObjectParticle(text: string): "을" | "를" {
   }
 
   return (charCode - hangulStart) % 28 === 0 ? "를" : "을";
+}
+
+function normalizeInstructionLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function createLayerLoadSummary(blocks: PackedSpace["blocks"], maxTypes: number): string {

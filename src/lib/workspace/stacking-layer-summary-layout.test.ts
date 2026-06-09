@@ -81,4 +81,28 @@ describe("stacking-layer-summary-layout", () => {
     // Then
     assert.equal(hasListStyle && hasRowStyle && hasCopyStyle && hasWrapStyle && hasMobileStyle, true);
   });
+
+  it("현장 적재 지시는 복사 버튼과 상태 안내를 제공한다", () => {
+    // Given / When
+    const hasCopyAction =
+      source.includes("createStackingInstructionText") &&
+      source.includes("stackingInstructionText") &&
+      source.includes("copyStackingInstructions") &&
+      source.includes("writeClipboardText") &&
+      source.includes("작업 순서 복사") &&
+      source.includes('className="secondary-button loading-instruction-copy-button"') &&
+      source.includes('role="status"');
+    const hasCopyActionStyle =
+      /\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.loading-instruction-copy-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
+        .test(styles);
+
+    // Then
+    assert.equal(hasCopyAction && hasCopyActionStyle, true);
+  });
 });

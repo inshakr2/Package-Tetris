@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Box,
   CheckCircle2,
+  Copy,
   Download,
   FileUp,
   HardDrive,
@@ -62,6 +63,7 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import { writeClipboardText } from "@/lib/workspace/clipboard-text";
 import {
   getDeleteConfirmationCopy,
   type DeleteConfirmationKind
@@ -105,6 +107,7 @@ import {
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import {
+  createStackingInstructionText,
   createStackingInstructionSteps,
   createStackingLayerSummaries
 } from "@/lib/workspace/stacking-layer-summary";
@@ -123,6 +126,7 @@ import {
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
+type InstructionCopyStatus = "idle" | "copied" | "error";
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -2002,6 +2006,7 @@ const ResultStage = ({
   const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
@@ -2068,6 +2073,14 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
+  const stackingInstructionText = useMemo(
+    () =>
+      createStackingInstructionText(
+        selectedPackedSpaceIndex >= 0 ? `Space ${selectedPackedSpaceIndex + 1}` : "선택한 공간",
+        stackingInstructionSteps
+      ),
+    [selectedPackedSpaceIndex, stackingInstructionSteps]
+  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
@@ -2087,7 +2100,12 @@ const ResultStage = ({
     setThreeDialogOpen(false);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+    setInstructionCopyStatus("idle");
   }, [latestResult?.resultId]);
+
+  useEffect(() => {
+    setInstructionCopyStatus("idle");
+  }, [stackingInstructionText]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
     setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
@@ -2152,6 +2170,19 @@ const ResultStage = ({
   function openTopFallbackFromExpanded() {
     closeExpandedThreeView({ restoreFocus: false });
     selectProjectionView("top");
+  }
+
+  async function copyStackingInstructions() {
+    if (!stackingInstructionText) {
+      return;
+    }
+
+    try {
+      await writeClipboardText(stackingInstructionText);
+      setInstructionCopyStatus("copied");
+    } catch {
+      setInstructionCopyStatus("error");
+    }
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -2613,12 +2644,34 @@ const ResultStage = ({
 
       <div className="result-lower-grid">
         <section className="sub-panel stacking-layer-panel">
-          <h3>쌓는 순서</h3>
-          <p className="meta">
-            {latestResult && selectedPackedSpace
-              ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
-              : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
-          </p>
+          <div className="stacking-layer-head">
+            <div>
+              <h3>쌓는 순서</h3>
+              <p className="meta">
+                {latestResult && selectedPackedSpace
+                  ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
+                  : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
+              </p>
+            </div>
+            <button
+              className="secondary-button loading-instruction-copy-button"
+              onClick={copyStackingInstructions}
+              disabled={!stackingInstructionText}
+              title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
+            >
+              <Copy size={16} />
+              작업 순서 복사
+            </button>
+          </div>
+          {instructionCopyStatus === "copied" ? (
+            <p className="loading-instruction-copy-status" data-tone="green" role="status">
+              작업 순서를 복사했습니다.
+            </p>
+          ) : instructionCopyStatus === "error" ? (
+            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+              복사하지 못했습니다. 브라우저 권한을 확인하세요.
+            </p>
+          ) : null}
           {stackingInstructionSteps.length > 0 ? (
             <>
               <div className="loading-instruction-list" aria-label="현장 작업 순서">

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  createStackingInstructionText,
   createStackingInstructionSteps,
   createStackingLayerSummaries
 } from "./stacking-layer-summary";
@@ -157,6 +158,39 @@ describe("stacking-layer-summary", () => {
 
     // Then
     assert.deepEqual(instructions, []);
+  });
+
+  it("현장 적재 지시를 작업자가 전달하기 쉬운 여러 줄 텍스트로 만든다", () => {
+    // Given
+    const packedSpace = createPackedSpace([
+      createPackedBlock("block-1", "template-floor", "바닥 박스", 0),
+      createPackedBlock("block-2", "template-top", "상단 박스", 100)
+    ]);
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // When
+    const text = createStackingInstructionText("Space 1", instructions);
+
+    // Then
+    assert.equal(
+      text,
+      [
+        "Space 1 쌓는 순서",
+        "1층: 바닥 박스 1개를 바닥에 먼저 놓습니다. (바닥층 · 총 1개)",
+        "2층: 상단 박스 1개를 100mm 높이에 올립니다. (100mm 높이 · 총 1개)"
+      ].join("\n")
+    );
+  });
+
+  it("현장 적재 지시가 없으면 복사용 텍스트도 비운다", () => {
+    // Given
+    const instructions = createStackingInstructionSteps(createPackedSpace([]));
+
+    // When
+    const text = createStackingInstructionText("Space 1", instructions);
+
+    // Then
+    assert.equal(text, "");
   });
 });
 
