@@ -30,8 +30,17 @@ Node.js 설치, ZIP 다운로드, Git 다운로드, 포트 충돌, 오프라인 
 ## 개발 검증
 
 ```bash
+npm run v1:verify
+```
+
+위 명령은 V1 마감 기준으로 테스트, 타입 검사, 현장 audit, 프로덕션 빌드를 순서대로 실행합니다.
+
+개별로 확인할 때는 아래 명령을 사용합니다.
+
+```bash
 npm test
 npx tsc --noEmit
+npm run field:audit
 npm run build
 ```
 
