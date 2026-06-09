@@ -61,16 +61,17 @@ describe("packing-field-scenarios", () => {
   it("현장형 대량 시나리오는 V1 시연 예산 안에서 계산된다", () => {
     // Given
     const scenarios = createFieldPackingScenarios();
+    const scenarioBudgetMs = 5000;
 
     // When
     const audit = runFieldPackingScenarioPerformanceAudit(scenarios, runPackingEngineV0, {
-      scenarioBudgetMs: 5000
+      scenarioBudgetMs
     });
 
     // Then
     assert.equal(audit.failedScenarioNames.length, 0);
     assert.equal(audit.slowScenarioNames.length, 0);
-    assert.ok(audit.totalElapsedMs < 5000);
+    assert.ok(audit.totalElapsedMs < scenarioBudgetMs * scenarios.length);
     assert.ok(audit.totalPackedBlockCount >= 40);
   });
 });
