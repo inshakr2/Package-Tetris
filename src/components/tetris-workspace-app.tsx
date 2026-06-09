@@ -2221,7 +2221,7 @@ const ResultStage = ({
     }
 
     try {
-      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex);
+      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex, new Date(), resultSpace?.name);
 
       downloadTextFile({
         text: stackingInstructionText,

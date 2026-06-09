@@ -130,6 +130,7 @@ describe("stacking-layer-summary-layout", () => {
       source.includes("downloadStackingInstructions") &&
       source.includes("downloadTextFile") &&
       source.includes("createStackingInstructionDownloadSuccessMessage") &&
+      source.includes("createStackingInstructionFilename(selectedPackedSpaceIndex, new Date(), resultSpace?.name)") &&
       source.includes("작업 지시서 저장") &&
       source.includes("loading-instruction-download-button") &&
       source.includes("instructionDownloadStatus") &&
