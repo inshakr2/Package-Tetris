@@ -6,6 +6,7 @@ import {
   createBlockTemplate,
   removeDraftBlockItem,
   restoreDraftBlockItem,
+  searchBlockTemplates,
   updateDraftBlockItemQuantity
 } from "./block-library";
 
@@ -314,5 +315,41 @@ describe("block-library", () => {
       overflowIndexWorkspace.draft.blockItems.map((item) => item.draftBlockItemId),
       ["item-a", "item-after"]
     );
+  });
+
+  it("저장된 박스 검색은 이름, 치수, 깨짐주의 여부를 현장 문구로 찾는다", () => {
+    // Given
+    const templates = [
+      {
+        blockTemplateId: "template-a",
+        entityVersion: 1,
+        name: "긴 박스 A",
+        dimensions: { widthMm: 600, depthMm: 400, heightMm: 200 },
+        fragile: false,
+        createdAt: "2026-06-09T00:00:00.000Z",
+        updatedAt: "2026-06-09T00:00:00.000Z"
+      },
+      {
+        blockTemplateId: "template-b",
+        entityVersion: 1,
+        name: "유리컵 박스",
+        dimensions: { widthMm: 300, depthMm: 200, heightMm: 100 },
+        fragile: true,
+        createdAt: "2026-06-09T00:00:00.000Z",
+        updatedAt: "2026-06-09T00:00:00.000Z"
+      }
+    ];
+
+    // When
+    const nameMatches = searchBlockTemplates(templates, "유리컵");
+    const dimensionMatches = searchBlockTemplates(templates, "600");
+    const fragileMatches = searchBlockTemplates(templates, "깨짐주의");
+    const allMatches = searchBlockTemplates(templates, "   ");
+
+    // Then
+    assert.deepEqual(nameMatches.map((template) => template.blockTemplateId), ["template-b"]);
+    assert.deepEqual(dimensionMatches.map((template) => template.blockTemplateId), ["template-a"]);
+    assert.deepEqual(fragileMatches.map((template) => template.blockTemplateId), ["template-b"]);
+    assert.deepEqual(allMatches.map((template) => template.blockTemplateId), ["template-a", "template-b"]);
   });
 });

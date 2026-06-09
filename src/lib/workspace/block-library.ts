@@ -222,6 +222,28 @@ export function restoreDraftBlockItem(
   };
 }
 
+export function searchBlockTemplates(templates: BlockTemplate[], searchTerm: string) {
+  const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase("ko-KR");
+
+  if (!normalizedSearchTerm) {
+    return templates;
+  }
+
+  return templates.filter((template) => {
+    const searchableText = [
+      template.name,
+      template.dimensions.widthMm,
+      template.dimensions.depthMm,
+      template.dimensions.heightMm,
+      template.fragile ? "깨짐주의" : "일반"
+    ]
+      .join(" ")
+      .toLocaleLowerCase("ko-KR");
+
+    return searchableText.includes(normalizedSearchTerm);
+  });
+}
+
 export function resolveDraftBlocks(workspace: TetrisWorkspace): BlockDefinition[] {
   return workspace.draft.blockItems.flatMap((item) => {
     const template = workspace.blockTemplates.find(

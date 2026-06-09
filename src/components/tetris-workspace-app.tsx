@@ -67,6 +67,7 @@ import {
   removeDraftBlockItem,
   restoreDraftBlockItem,
   resolveDraftBlocks,
+  searchBlockTemplates,
   updateBlockTemplate,
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
@@ -1850,24 +1851,44 @@ function BlockLibraryPanel({
     trigger?: HTMLElement | null
   ) => void;
 }) {
+  const [blockLibrarySearchTerm, setBlockLibrarySearchTerm] = useState("");
+  const visibleTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
+
   return (
     <section className="rail-section block-template-library">
       <h3>저장된 박스</h3>
-              <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
+      <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
+      <label className="block-library-search">
+        저장된 박스 찾기
+        <input
+          aria-label="저장된 박스 검색"
+          placeholder="박스명, 치수, 깨짐주의 검색"
+          value={blockLibrarySearchTerm}
+          onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
+        />
+      </label>
       <div className="list library-card-grid">
-                {templates.length === 0 ? (
-                  <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
+        {templates.length === 0 ? (
+          <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
+        ) : visibleTemplates.length === 0 ? (
+          <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
         ) : (
-          templates.map((template) => (
+          visibleTemplates.map((template) => (
             <article key={template.blockTemplateId} className="library-card">
               <div className="card-heading">
                 <strong>{template.name}</strong>
-                        {template.fragile ? <span className="badge" data-tone="amber">깨짐주의</span> : <span className="badge">일반</span>}
+                {template.fragile ? (
+                  <span className="badge" data-tone="amber">
+                    깨짐주의
+                  </span>
+                ) : (
+                  <span className="badge">일반</span>
+                )}
               </div>
               <p className="meta">{formatDimensions(template.dimensions)} · v{template.entityVersion}</p>
               <div className="form-actions">
                 <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
-                          이번 작업에 추가
+                  이번 작업에 추가
                 </button>
                 <button className="secondary-button" onClick={() => onEdit(template)}>
                   수정

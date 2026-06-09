@@ -550,6 +550,18 @@ select:focus-visible {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.block-library-search {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.block-library-search input {
+  width: 100%;
+  min-height: 48px;
+}
+
 .library-card,
 .block-card,
 .summary-tile {
@@ -2512,6 +2524,10 @@ select:focus-visible {
   }
 
   .library-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .block-library-search {
     grid-template-columns: 1fr;
   }
 
