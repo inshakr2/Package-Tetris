@@ -1092,6 +1092,50 @@ select:focus-visible {
   margin-top: 6px;
 }
 
+.offset-recommendation-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(35, 119, 87, 0.28);
+  border-radius: 8px;
+  background: #f3fbf6;
+  overflow-wrap: anywhere;
+}
+
+.offset-recommendation-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.offset-recommendation-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.offset-recommendation-values span {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid rgba(35, 119, 87, 0.2);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.offset-recommendation-values strong {
+  color: var(--ink);
+}
+
+.offset-recommendation-card .secondary-button {
+  min-height: 48px;
+  white-space: normal;
+}
+
 .result-unloaded-callout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1165,6 +1209,7 @@ select:focus-visible {
   gap: 12px;
 }
 
+.space-workflow-row,
 .current-work-row {
   scroll-margin-top: 112px;
 }
@@ -2496,6 +2541,14 @@ select:focus-visible {
   }
 
   .result-backup-callout {
+    grid-template-columns: 1fr;
+  }
+
+  .offset-recommendation-card {
+    grid-template-columns: 1fr;
+  }
+
+  .offset-recommendation-values {
     grid-template-columns: 1fr;
   }
 

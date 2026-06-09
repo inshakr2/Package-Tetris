@@ -139,6 +139,10 @@ import {
   createResultCalculationFailure,
   type ResultCalculationFailure
 } from "@/lib/workspace/result-calculation-failure";
+import {
+  createOffsetAdjustmentRecommendation,
+  type OffsetAdjustmentRecommendation
+} from "@/lib/workspace/result-offset-recommendation";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
 import { createWorkspaceBackupFilename } from "@/lib/workspace/workspace-backup-file";
@@ -270,6 +274,7 @@ export function TetrisWorkspaceApp() {
   const tabSessionId = useMemo(() => createClientId("tab"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultStageRef = useRef<HTMLElement>(null);
+  const spaceWorkflowSectionRef = useRef<HTMLElement>(null);
   const currentWorkSectionRef = useRef<HTMLElement>(null);
   const workspaceRef = useRef<TetrisWorkspace | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
@@ -1182,6 +1187,11 @@ export function TetrisWorkspaceApp() {
     currentWorkSectionRef.current?.focus({ preventScroll: true });
   }
 
+  function focusSpaceInputs() {
+    spaceWorkflowSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    spaceWorkflowSectionRef.current?.focus({ preventScroll: true });
+  }
+
   function confirmChainSimulation(preview: ChainSimulationOutput, resultId: string) {
     if (preview.addedQuantity <= 0) {
       return;
@@ -1529,7 +1539,12 @@ export function TetrisWorkspaceApp() {
           <Stepper activeStep={workspace.draft.currentStep} />
         </div>
 
-        <section className="panel workflow-section space-workflow-row" aria-labelledby="space-library-title">
+        <section
+          ref={spaceWorkflowSectionRef}
+          className="panel workflow-section space-workflow-row"
+          aria-labelledby="space-library-title"
+          tabIndex={-1}
+        >
           <SpaceLibraryPanel
             spaces={allSpaces}
             customSpaces={workspace.spaces}
@@ -1653,6 +1668,7 @@ export function TetrisWorkspaceApp() {
           onResolveImport={resolveImport}
           onExportJson={exportJson}
           onEditInputs={focusCurrentWorkInputs}
+          onReviewSpaceOffset={focusSpaceInputs}
           onCreateResult={createPackingResult}
           resultCreating={creatingResult}
           resultCalculationProgress={resultCalculationProgress}
@@ -2418,6 +2434,7 @@ const ResultStage = ({
   onResolveImport,
   onExportJson,
   onEditInputs,
+  onReviewSpaceOffset,
   onCreateResult,
   resultCreating,
   resultCalculationProgress,
@@ -2438,6 +2455,7 @@ const ResultStage = ({
   onResolveImport: (option: ImportConflictOption) => void;
   onExportJson: () => void;
   onEditInputs: () => void;
+  onReviewSpaceOffset: () => void;
   onCreateResult: () => void;
   resultCreating: boolean;
   resultCalculationProgress: ResultCalculationProgressCopy;
@@ -2462,6 +2480,7 @@ const ResultStage = ({
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
+  const [offsetRecommendation, setOffsetRecommendation] = useState<OffsetAdjustmentRecommendation | null>(null);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
@@ -2619,6 +2638,63 @@ const ResultStage = ({
     setInstructionDownloadStatus("idle");
     setInstructionDownloadFilename(null);
   }, [stackingInstructionText]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function calculateOffsetRecommendation() {
+      if (
+        !latestResult ||
+        !resultSpace ||
+        latestResult.unloadedBlockCount > 0 ||
+        resultFreshnessState.status === "stale"
+      ) {
+        setOffsetRecommendation(null);
+        return;
+      }
+
+      const recommendationSpaces =
+        isChainComparisonActive && chainComparisonMode === "preview" ? displayedSpaces : packedSpaces;
+
+      setOffsetRecommendation(null);
+
+      try {
+        const recommendation = await createOffsetAdjustmentRecommendation({
+          space: resultSpace,
+          spaces: recommendationSpaces,
+          policy: {
+            fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
+            nonFragileOnFragileAllowed: false,
+            rotation: "orthogonal-90deg"
+          },
+          runPackingEngine: runPackingEngineInWorker
+        });
+
+        if (!cancelled) {
+          setOffsetRecommendation(recommendation);
+        }
+      } catch {
+        if (!cancelled) {
+          setOffsetRecommendation(null);
+        }
+      }
+    }
+
+    void calculateOffsetRecommendation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    chainComparisonMode,
+    displayedSpaces,
+    isChainComparisonActive,
+    latestResult,
+    packedSpaces,
+    resultFreshnessState.status,
+    resultSpace,
+    workspacePolicy.fragileStackOnFragileAllowed
+  ]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
     setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
@@ -2986,6 +3062,37 @@ const ResultStage = ({
           <button className="primary-button result-backup-action" onClick={onExportJson}>
             <Download size={16} />
             백업 파일 만들기
+          </button>
+        </div>
+      ) : null}
+
+      {offsetRecommendation ? (
+        <div className="offset-recommendation-card" role="status" aria-label="안전 여유 조정 추천">
+          <div className="offset-recommendation-copy">
+            <span className="badge" data-tone="green">
+              안전 여유 조정 추천
+            </span>
+            <strong>
+              안전 여유를 최대 {offsetRecommendation.reductionMm}mm 검토하면 공간을 더 적게 쓸 가능성이 있습니다.
+            </strong>
+            <p className="fine-print">
+              현재 {offsetRecommendation.originalUsedSpaceCount}개 공간이 필요하지만, 현장 책임자 확인 후 안전 여유를 조정하면{" "}
+              {offsetRecommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.
+            </p>
+            <div className="offset-recommendation-values" aria-label="추천 수치 비교">
+              <span>
+                현재 적재 가능
+                <strong>{formatDimensions(offsetRecommendation.usableSizeBefore)}</strong>
+              </span>
+              <span>
+                추천 검토값
+                <strong>{formatDimensions(offsetRecommendation.usableSizeAfter)}</strong>
+              </span>
+            </div>
+          </div>
+          <button className="secondary-button" onClick={onReviewSpaceOffset}>
+            <PencilLine size={16} />
+            공간 설정 확인
           </button>
         </div>
       ) : null}
