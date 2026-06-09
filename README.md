@@ -23,6 +23,8 @@ http://localhost:3000
 
 `npm run field:audit`은 팔레트, 20ft GP, 2.5톤반 기준 현장형 시나리오의 적재 안전성과 계산 시간을 현재 PC에서 다시 확인합니다.
 
+Windows PowerShell에서 `npm.ps1` 실행 정책 오류가 나오면 [docs/field-demo-user-guide.md](docs/field-demo-user-guide.md)의 `npm install` 문제 해결 항목을 확인하세요.
+
 ## 현장 시연 문서
 
 Node.js 설치, ZIP 다운로드, Git 다운로드, 포트 충돌, 오프라인 준비, 실제 시연 순서는 [docs/field-demo-user-guide.md](docs/field-demo-user-guide.md)를 확인하세요.

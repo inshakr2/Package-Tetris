@@ -34,6 +34,7 @@ V1 완료 기준과 운영 전 파일럿 확인 범위는 `docs/v1-readiness.md`
 - npm 공식 설치 안내: https://docs.npmjs.com/downloading-and-installing-node-js-and-npm
 - Next.js 실행 요구사항: https://nextjs.org/docs/pages/getting-started/installation
 - Windows winget 설치 명령: https://learn.microsoft.com/windows/package-manager/winget/install
+- Windows PowerShell 실행 정책 안내: https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_execution_policies
 - Homebrew 설치 명령: https://brew.sh/
 - Homebrew Node formula: https://formulae.brew.sh/formula/node
 - Git 공식 다운로드: https://git-scm.com/downloads/win
@@ -142,6 +143,41 @@ npm install
 ```
 
 이 명령어는 앱 실행에 필요한 파일을 내려받는다. 인터넷 연결이 필요하며, PC에 따라 몇 분 걸릴 수 있다.
+
+Windows PowerShell에서 `npm.ps1 파일을 로드할 수 없습니다` 또는 `이 시스템에서 스크립트를 실행할 수 없으므로` 오류가 나오면 PowerShell 실행 정책이 npm 실행 파일을 막은 것이다.
+
+가장 간단한 우회 방법은 같은 프로젝트 폴더에서 명령 프롬프트를 사용하는 것이다.
+
+```powershell
+cmd
+npm.cmd install
+```
+
+이후 실행도 같은 창에서 아래처럼 진행할 수 있다.
+
+```cmd
+npm run dev
+```
+
+PowerShell을 계속 사용해야 한다면 현재 사용자 범위만 허용하도록 아래 명령어를 실행한다. 관리자 권한은 필요 없다.
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+확인 문구가 나오면 `Y`를 입력한다. 이후 PowerShell을 닫고 새로 연 뒤 다시 실행한다.
+
+```powershell
+npm install
+```
+
+현재 적용된 정책을 확인하려면 아래 명령어를 사용한다.
+
+```powershell
+Get-ExecutionPolicy -List
+```
+
+회사 보안 정책 때문에 변경이 막히면 정책을 강제로 바꾸지 말고 `cmd`에서 `npm.cmd install`을 사용하거나 IT 담당자에게 Microsoft `about_Execution_Policies` 문서를 전달한다.
 
 ### 5.2 현장 PC audit
 
@@ -376,12 +412,17 @@ Ctrl + C
 - 인터넷 연결 문제
 - 회사 보안망 또는 프록시 문제
 - npm 저장소 접속 차단
+- Windows PowerShell 실행 정책이 `npm.ps1`을 차단함
 
 조치:
 
-1. 인터넷 연결을 확인한다.
-2. 다른 네트워크에서 다시 시도한다.
-3. 사내망이라면 IT 담당자에게 `npmjs.com` 접속 가능 여부를 확인한다.
+1. 오류에 `npm.ps1` 또는 `이 시스템에서 스크립트를 실행할 수 없으므로`가 보이면 프로젝트 폴더에서 `cmd`를 입력한 뒤 `npm.cmd install`을 실행한다.
+2. PowerShell을 계속 사용해야 한다면 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`를 실행하고 PowerShell을 새로 연다.
+3. `Get-ExecutionPolicy -List`로 `CurrentUser` 정책을 확인한다.
+4. 회사 보안 정책 때문에 변경이 막히면 IT 담당자에게 Microsoft `about_Execution_Policies` 문서를 전달한다.
+5. 위 오류가 아니라면 인터넷 연결을 확인한다.
+6. 다른 네트워크에서 다시 시도한다.
+7. 사내망이라면 IT 담당자에게 `npmjs.com` 접속 가능 여부를 확인한다.
 
 ### `http://localhost:3000`이 열리지 않는 경우
 
