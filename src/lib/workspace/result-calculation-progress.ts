@@ -20,7 +20,7 @@ export function getResultCalculationProgressCopy(
       return {
         statusLabel: "적재 계산 중",
         buttonLabel: "적재 계산 중...",
-        description: "쌓기 규칙과 빈 공간을 기준으로 박스 위치를 계산하고 있습니다."
+        description: "쌓기 규칙과 빈 공간을 기준으로 박스 위치를 계산하고 있습니다. 계산 중에도 화면은 유지됩니다."
       };
     case "rendering":
       return {

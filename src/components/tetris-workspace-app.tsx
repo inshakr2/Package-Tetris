@@ -93,7 +93,7 @@ import { createLocalSaveState } from "@/lib/workspace/storage-save-state";
 import { parseFieldIntegerInput } from "@/lib/workspace/field-number-input";
 import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
-import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
+import { runPackingEngineInWorker } from "@/lib/workspace/packing-worker-client";
 import {
   createProjectedBlocks,
   createProjectionLegendItems,
@@ -985,7 +985,7 @@ export function TetrisWorkspaceApp() {
 
       setResultCalculationStep("packing");
 
-      window.setTimeout(() => {
+      window.setTimeout(async () => {
         try {
           if (saveConflictRef.current) {
             finishResultCreation();
@@ -998,7 +998,7 @@ export function TetrisWorkspaceApp() {
             blocks: optimizationInput.blocks,
             fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
           });
-          const optimizationOutput = runPackingEngineV0(optimizationInput);
+          const optimizationOutput = await runPackingEngineInWorker(optimizationInput);
           const resultWarnings = createPackingResultWarnings({
             warnings: optimizationOutput.warnings,
             usedSpaceCount: optimizationOutput.usedSpaceCount,

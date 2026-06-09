@@ -21,6 +21,7 @@ describe("result-calculation-progress", () => {
     assert.equal(copy.statusLabel, "적재 계산 중");
     assert.equal(copy.buttonLabel, "적재 계산 중...");
     assert.match(copy.description, /빈 공간/);
+    assert.match(copy.description, /화면/);
   });
 
   it("3D 생성 단계 문구를 반환한다", () => {
