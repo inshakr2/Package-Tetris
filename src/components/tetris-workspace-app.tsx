@@ -207,6 +207,7 @@ export function TetrisWorkspaceApp() {
   const workspaceRef = useRef<TetrisWorkspace | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
   const lastPersistedRevisionRef = useRef<number | null>(null);
+  const saveConflictRef = useRef<WorkspaceSaveConflictNotice | null>(null);
   const lastSpaceDialogTriggerRef = useRef<HTMLElement | null>(null);
   const lastDeleteDialogTriggerRef = useRef<HTMLElement | null>(null);
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
@@ -232,6 +233,12 @@ export function TetrisWorkspaceApp() {
   const [spaceFormError, setSpaceFormError] = useState<string | null>(null);
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [creatingResult, setCreatingResult] = useState(false);
+
+  const setWorkspaceSaveConflict = useCallback((nextConflict: WorkspaceSaveConflictNotice | null) => {
+    saveConflictRef.current = nextConflict;
+    setSaveConflict(nextConflict);
+  }, []);
 
   const refreshStorageHealth = useCallback(async () => {
     if (typeof navigator === "undefined" || typeof window === "undefined") {
@@ -297,7 +304,7 @@ export function TetrisWorkspaceApp() {
         })
       ) {
         setSaveStatus("conflict");
-        setSaveConflict({
+        setWorkspaceSaveConflict({
           storedRevision: message.revision,
           incomingRevision: workspaceRef.current?.revision ?? message.revision,
           expectedRevision: lastPersistedRevisionRef.current ?? 0,
@@ -307,7 +314,7 @@ export function TetrisWorkspaceApp() {
         setStoragePanelOpen(true);
       }
     },
-    [publishWorkspaceSyncMessage, tabSessionId]
+    [publishWorkspaceSyncMessage, setWorkspaceSaveConflict, tabSessionId]
   );
 
   useEffect(() => {
@@ -400,7 +407,7 @@ export function TetrisWorkspaceApp() {
           setSaveStatus(restored ? "saved" : "saving");
           setLastLocalSavedAt(restored?.updatedAt ?? null);
           setLastPersistedRevision(restored?.revision ?? null);
-          setSaveConflict(null);
+          setWorkspaceSaveConflict(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -417,7 +424,7 @@ export function TetrisWorkspaceApp() {
     return () => {
       cancelled = true;
     };
-  }, [refreshStorageHealth, storage]);
+  }, [refreshStorageHealth, setWorkspaceSaveConflict, storage]);
 
   useEffect(() => {
     if (!workspace) {
@@ -450,7 +457,7 @@ export function TetrisWorkspaceApp() {
       } catch (error) {
         if (error instanceof WorkspaceSaveConflictError) {
           setSaveStatus("conflict");
-          setSaveConflict({
+          setWorkspaceSaveConflict({
             storedRevision: error.storedRevision,
             incomingRevision: error.incomingRevision,
             expectedRevision: error.expectedRevision,
@@ -468,7 +475,7 @@ export function TetrisWorkspaceApp() {
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [publishWorkspaceSyncMessage, refreshStorageHealth, saveConflict, storage, tabSessionId, workspace]);
+  }, [publishWorkspaceSyncMessage, refreshStorageHealth, saveConflict, setWorkspaceSaveConflict, storage, tabSessionId, workspace]);
 
   useEffect(() => {
     if (!storagePanelOpen) {
@@ -549,9 +556,10 @@ export function TetrisWorkspaceApp() {
         reviewCtaLabel: "결과 만들기",
         reviewCtaReason: review?.cta.disabledReason ?? null,
         saveStatus,
-        needsExport
+        needsExport,
+        isCreatingResult: creatingResult
       }),
-    [isWorkspaceLocked, latestResult, needsExport, resultFreshnessState.status, review, saveStatus]
+    [creatingResult, isWorkspaceLocked, latestResult, needsExport, resultFreshnessState.status, review, saveStatus]
   );
   const saveConflictBannerCopy = saveConflict ? getSaveConflictBannerCopy(saveConflict) : null;
 
@@ -560,7 +568,7 @@ export function TetrisWorkspaceApp() {
       if (!current) {
         return current;
       }
-      if (saveConflict) {
+      if (saveConflictRef.current) {
         return current;
       }
       const now = new Date().toISOString();
@@ -894,58 +902,70 @@ export function TetrisWorkspaceApp() {
   }
 
   function createPackingResult() {
-    if (!workspace || !review) {
+    if (!workspace || !review || creatingResult) {
       return;
     }
 
-    const resultId = createClientId("result");
     const optimizationInput = createOptimizationInput(review, createClientId("run"));
 
     if (!optimizationInput) {
       return;
     }
 
-    const inputFingerprint = createResultInputFingerprint({
-      selectedSpace: optimizationInput.space,
-      blocks: optimizationInput.blocks,
-      fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
-    });
-    const optimizationOutput = runPackingEngineV0(optimizationInput);
-    const resultWarnings = createPackingResultWarnings({
-      warnings: optimizationOutput.warnings,
-      usedSpaceCount: optimizationOutput.usedSpaceCount,
-      minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
-    });
-
-    updateWorkspace((current, now) => ({
-      ...current,
-      revision: current.revision + 1,
-      updatedAt: now,
-      draft: {
-        ...current.draft,
-        currentStep: "result",
-        updatedAt: now
-      },
-      recentResults: [
-        {
-          resultId,
-          runId: optimizationOutput.runId,
-          createdAt: now,
-          inputFingerprint: inputFingerprint ?? undefined,
-          spaceSnapshot: optimizationInput.space,
-          usedSpaceCount: optimizationOutput.usedSpaceCount,
-          averageUtilizationRate: optimizationOutput.averageUtilizationRate,
-          unloadedBlockCount: optimizationOutput.unloadedBlockCount,
-          spaces: optimizationOutput.spaces,
-          warnings: resultWarnings
-        },
-        ...current.recentResults
-      ].slice(0, 5)
-    }));
+    setCreatingResult(true);
 
     window.setTimeout(() => {
-      resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      resultStageRef.current?.focus({ preventScroll: true });
+      try {
+        if (saveConflictRef.current) {
+          return;
+        }
+
+        const resultId = createClientId("result");
+        const inputFingerprint = createResultInputFingerprint({
+          selectedSpace: optimizationInput.space,
+          blocks: optimizationInput.blocks,
+          fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+        });
+        const optimizationOutput = runPackingEngineV0(optimizationInput);
+        const resultWarnings = createPackingResultWarnings({
+          warnings: optimizationOutput.warnings,
+          usedSpaceCount: optimizationOutput.usedSpaceCount,
+          minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
+        });
+
+        updateWorkspace((current, now) => ({
+          ...current,
+          revision: current.revision + 1,
+          updatedAt: now,
+          draft: {
+            ...current.draft,
+            currentStep: "result",
+            updatedAt: now
+          },
+          recentResults: [
+            {
+              resultId,
+              runId: optimizationOutput.runId,
+              createdAt: now,
+              inputFingerprint: inputFingerprint ?? undefined,
+              spaceSnapshot: optimizationInput.space,
+              usedSpaceCount: optimizationOutput.usedSpaceCount,
+              averageUtilizationRate: optimizationOutput.averageUtilizationRate,
+              unloadedBlockCount: optimizationOutput.unloadedBlockCount,
+              spaces: optimizationOutput.spaces,
+              warnings: resultWarnings
+            },
+            ...current.recentResults
+          ].slice(0, 5)
+        }));
+
+        window.setTimeout(() => {
+          resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          resultStageRef.current?.focus({ preventScroll: true });
+        }, 0);
+      } finally {
+        setCreatingResult(false);
+      }
     }, 0);
   }
 
@@ -1041,7 +1061,7 @@ export function TetrisWorkspaceApp() {
       setWorkspace(nextWorkspace);
       setLastPersistedRevision(restored?.revision ?? null);
       setLastLocalSavedAt(restored?.updatedAt ?? null);
-      setSaveConflict(null);
+      setWorkspaceSaveConflict(null);
       setSaveError(null);
       setSaveStatus(restored ? "saved" : "saving");
       setStoragePanelOpen(false);
@@ -1369,6 +1389,7 @@ export function TetrisWorkspaceApp() {
               onReloadLatestWorkspace={reloadLatestWorkspace}
               onRequestStorageProtection={requestBrowserStorageProtection}
               onCreateResult={createPackingResult}
+              creatingResult={creatingResult}
             />
           </div>
         </section>
@@ -1387,6 +1408,7 @@ export function TetrisWorkspaceApp() {
           onResolveImport={resolveImport}
           onExportJson={exportJson}
           onCreateResult={createPackingResult}
+          resultCreating={creatingResult}
           onConfirmChainSimulation={confirmChainSimulation}
           onUndoLastChainAddition={undoLastChainAddition}
         />
@@ -1854,7 +1876,8 @@ function ReviewCompactCard({
   onExportJson,
   onReloadLatestWorkspace,
   onRequestStorageProtection,
-  onCreateResult
+  onCreateResult,
+  creatingResult
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
@@ -1867,10 +1890,17 @@ function ReviewCompactCard({
   onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
   onCreateResult: () => void;
+  creatingResult: boolean;
 }) {
   const statusTone = review?.status === "error" ? "red" : review?.status === "warning" ? "amber" : "green";
   const statusLabel =
     review?.status === "error" ? "입력 보완 필요" : review?.status === "warning" ? "주의 후 실행 가능" : "실행 가능";
+  const resultButtonDisabled = creatingResult || Boolean(saveConflict) || (review?.cta.disabled ?? true);
+  const resultButtonTitle = creatingResult
+    ? "결과를 계산하고 있습니다."
+    : saveConflict
+      ? "최신 작업본을 불러온 뒤 실행할 수 있습니다."
+      : (review?.cta.disabledReason ?? undefined);
   const reviewMessages =
     review && review.messages.length > 0
       ? review.messages
@@ -1957,16 +1987,16 @@ function ReviewCompactCard({
         ) : null}
       </ul>
       {review?.cta.disabledReason ? <p className="fine-print review-cta-hint">{review.cta.disabledReason}</p> : null}
-      <div className="form-actions">
+      <div className="form-actions" aria-live="polite">
         <button
           className="primary-button"
           onClick={onCreateResult}
-          disabled={Boolean(saveConflict) || (review?.cta.disabled ?? true)}
-        title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
-      >
-        <Box size={16} />
-        결과 만들기
-      </button>
+          disabled={resultButtonDisabled}
+          title={resultButtonTitle}
+        >
+          <Box size={16} />
+          {creatingResult ? "결과 계산 중..." : "결과 만들기"}
+        </button>
       </div>
     </section>
   );
@@ -1985,6 +2015,7 @@ const ResultStage = ({
   onResolveImport,
   onExportJson,
   onCreateResult,
+  resultCreating,
   onConfirmChainSimulation,
   onUndoLastChainAddition,
   ref
@@ -2001,6 +2032,7 @@ const ResultStage = ({
   onResolveImport: (option: ImportConflictOption) => void;
   onExportJson: () => void;
   onCreateResult: () => void;
+  resultCreating: boolean;
   onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
   onUndoLastChainAddition: (resultId: string) => void;
   ref: React.Ref<HTMLElement>;
@@ -2379,12 +2411,12 @@ const ResultStage = ({
           <button
             className="secondary-button"
             onClick={onCreateResult}
-            disabled={resultFreshnessState.ctaDisabled}
+            disabled={resultCreating || resultFreshnessState.ctaDisabled}
             aria-label="결과 다시 만들기"
-            title={resultFreshnessState.ctaDisabledReason ?? undefined}
+            title={resultCreating ? "결과를 계산하고 있습니다." : (resultFreshnessState.ctaDisabledReason ?? undefined)}
           >
             <Box size={16} />
-            {resultFreshnessState.ctaLabel}
+            {resultCreating ? "계산 중..." : resultFreshnessState.ctaLabel}
           </button>
         </div>
       ) : null}
@@ -2671,9 +2703,14 @@ const ResultStage = ({
                       : (review?.cta.disabledReason ?? "공간과 박스를 확인한 뒤 3번 영역에서 결과를 만드세요.")}
                   </span>
                   {review && !review.cta.disabled ? (
-                    <button className="primary-button result-empty-action" onClick={onCreateResult}>
+                    <button
+                      className="primary-button result-empty-action"
+                      onClick={onCreateResult}
+                      disabled={resultCreating}
+                      aria-live="polite"
+                    >
                       <Box size={16} />
-                      결과 만들기
+                      {resultCreating ? "결과 계산 중..." : "결과 만들기"}
                     </button>
                   ) : null}
                 </div>
@@ -2688,6 +2725,7 @@ const ResultStage = ({
         preview={chainPreview}
         chainHistory={latestResultChainHistory}
         latestChainItem={latestChainItem}
+        resultCreating={resultCreating}
         onSelectTemplate={selectChainTemplate}
         onCalculate={calculateChainPreview}
         onConfirm={confirmChainPreview}
@@ -2987,6 +3025,7 @@ function ChainSimulationPanel({
   preview,
   chainHistory,
   latestChainItem,
+  resultCreating,
   onSelectTemplate,
   onCalculate,
   onConfirm,
@@ -3002,6 +3041,7 @@ function ChainSimulationPanel({
   preview: ChainSimulationOutput | null;
   chainHistory: ChainHistoryItem[];
   latestChainItem: ChainHistoryItem | null;
+  resultCreating: boolean;
   onSelectTemplate: (blockTemplateId: string) => void;
   onCalculate: () => void;
   onConfirm: () => void;
@@ -3090,8 +3130,8 @@ function ChainSimulationPanel({
                 이 결과 반영
               </button>
               {chainStatus === "error" ? (
-                <button className="secondary-button" onClick={onCreateResult}>
-                  결과 다시 생성
+                <button className="secondary-button" onClick={onCreateResult} disabled={resultCreating}>
+                  {resultCreating ? "결과 계산 중..." : "결과 다시 생성"}
                 </button>
               ) : null}
               <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>

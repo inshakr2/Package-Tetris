@@ -11,6 +11,7 @@ export interface MobileStickyActionStateInput {
   reviewCtaReason: string | null;
   saveStatus: MobileStickySaveStatus;
   needsExport: boolean;
+  isCreatingResult: boolean;
 }
 
 export interface MobileStickyActionState {
@@ -44,6 +45,17 @@ export function createMobileStickyActionState(
       action: "export",
       tone: "red",
       disabled: false
+    };
+  }
+
+  if (input.isCreatingResult) {
+    return {
+      statusLabel: "결과 계산 중",
+      helperLabel: "잠시 기다리세요. 계산이 끝나면 결과 화면으로 이동합니다.",
+      buttonLabel: "계산 중...",
+      action: "create",
+      tone: "amber",
+      disabled: true
     };
   }
 

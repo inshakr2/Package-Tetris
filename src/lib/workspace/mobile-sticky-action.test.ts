@@ -44,6 +44,27 @@ describe("mobile-sticky-action", () => {
     });
   });
 
+  it("결과 계산 중이면 모바일 주요 액션은 계산 안내와 비활성 상태를 반환한다", () => {
+    // Given
+    const input = createInput({
+      canCreateResult: true,
+      isCreatingResult: true
+    });
+
+    // When
+    const state = createMobileStickyActionState(input);
+
+    // Then
+    assert.deepEqual(state, {
+      statusLabel: "결과 계산 중",
+      helperLabel: "잠시 기다리세요. 계산이 끝나면 결과 화면으로 이동합니다.",
+      buttonLabel: "계산 중...",
+      action: "create",
+      tone: "amber",
+      disabled: true
+    });
+  });
+
   it("결과가 없고 실행 불가면 막힌 이유를 보여주고 버튼을 비활성화한다", () => {
     // Given
     const input = createInput({
@@ -142,6 +163,7 @@ function createInput(
     reviewCtaReason: null,
     saveStatus: "saved",
     needsExport: false,
+    isCreatingResult: false,
     ...overrides
   };
 }
