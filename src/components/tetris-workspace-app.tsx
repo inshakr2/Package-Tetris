@@ -79,6 +79,10 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  resolveChainComparisonSpaces,
+  type ChainComparisonMode
+} from "@/lib/workspace/chain-comparison-view";
 import { writeClipboardText } from "@/lib/workspace/clipboard-text";
 import {
   getDeleteConfirmationCopy,
@@ -2077,6 +2081,7 @@ const ResultStage = ({
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
   const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
+  const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
@@ -2084,7 +2089,16 @@ const ResultStage = ({
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
-  const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
+  const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
+  const displayedSpaces = useMemo(
+    () =>
+      resolveChainComparisonSpaces({
+        mode: chainComparisonMode,
+        originalSpaces: packedSpaces,
+        previewSpaces: chainPreview?.spaces ?? null
+      }),
+    [chainComparisonMode, chainPreview?.spaces, packedSpaces]
+  );
   const selectedPackedSpace =
     displayedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? displayedSpaces[0] ?? null;
   const selectedPackedSpaceIndex = selectedPackedSpace
@@ -2107,7 +2121,7 @@ const ResultStage = ({
     : [];
   const latestChainItem = latestResultChainHistory[0] ?? null;
   const chainPreviewBlockIds = useMemo(() => {
-    if (!chainPreview) {
+    if (!chainPreview || chainComparisonMode === "original") {
       return new Set<string>();
     }
 
@@ -2116,7 +2130,7 @@ const ResultStage = ({
         space.blocks.filter((block) => block.blockId.startsWith(chainPreview.runId)).map((block) => block.blockId)
       )
     );
-  }, [chainPreview]);
+  }, [chainComparisonMode, chainPreview]);
   const projectedBlocks = useMemo(() => {
     if (!selectedPackedSpace || !usableSize) {
       return [];
@@ -2214,6 +2228,7 @@ const ResultStage = ({
     setSelectedBlockTemplateId(null);
     setSelectedChainTemplateId(null);
     setChainPreview(null);
+    setChainComparisonMode("preview");
     setThreeDialogOpen(false);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
@@ -2329,6 +2344,7 @@ const ResultStage = ({
   function selectChainTemplate(blockTemplateId: string) {
     setSelectedChainTemplateId(blockTemplateId);
     setChainPreview(null);
+    setChainComparisonMode("preview");
     setChainStatus("idle");
     setSelectedBlockTemplateId(null);
     setChainStatusMessage(
@@ -2360,6 +2376,7 @@ const ResultStage = ({
 
         if (preview.warnings.length > 0) {
           setChainPreview(null);
+          setChainComparisonMode("preview");
           setSelectedBlockTemplateId(null);
           setChainStatus("error");
           setChainStatusMessage(preview.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
@@ -2367,6 +2384,7 @@ const ResultStage = ({
         }
 
         setChainPreview(preview);
+        setChainComparisonMode("preview");
         setSelectedBlockTemplateId(preview.blockTemplateId);
 
         if (preview.addedQuantity > 0) {
@@ -2379,6 +2397,7 @@ const ResultStage = ({
         setChainStatusMessage(`${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`);
       } catch {
         setChainPreview(null);
+        setChainComparisonMode("preview");
         setChainStatus("error");
         setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 박스를 선택하세요.");
       }
@@ -2392,6 +2411,7 @@ const ResultStage = ({
 
     onConfirmChainSimulation(chainPreview, latestResult.resultId);
     setChainPreview(null);
+    setChainComparisonMode("preview");
     setChainStatus("idle");
     setChainStatusMessage("추가 결과를 반영했습니다.");
   }
@@ -2399,6 +2419,7 @@ const ResultStage = ({
   function clearChainSelection() {
     setSelectedChainTemplateId(null);
     setChainPreview(null);
+    setChainComparisonMode("preview");
     setSelectedBlockTemplateId(null);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
@@ -2582,6 +2603,27 @@ const ResultStage = ({
                     )
                   )}
                 </div>
+                {isChainComparisonActive ? (
+                  <div className="result-comparison-toggle" aria-label="원본 비교 보기">
+                    <span className="fine-print">원본 비교</span>
+                    <div className="comparison-segmented-control" role="group" aria-label="추가 결과와 원본 비교">
+                      <button
+                        className="secondary-button"
+                        aria-pressed={chainComparisonMode === "original"}
+                        onClick={() => setChainComparisonMode("original")}
+                      >
+                        원본
+                      </button>
+                      <button
+                        className="secondary-button"
+                        aria-pressed={chainComparisonMode === "preview"}
+                        onClick={() => setChainComparisonMode("preview")}
+                      >
+                        추가 결과
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
@@ -2783,6 +2825,7 @@ const ResultStage = ({
           if (latestResult) {
             onUndoLastChainAddition(latestResult.resultId);
             setChainPreview(null);
+            setChainComparisonMode("preview");
             setSelectedBlockTemplateId(null);
             setChainStatus("idle");
             setChainStatusMessage("직전 추가를 취소했습니다.");

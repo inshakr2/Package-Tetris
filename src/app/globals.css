@@ -1173,6 +1173,31 @@ select:focus-visible {
   gap: 8px;
 }
 
+.result-comparison-toggle {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.comparison-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.comparison-segmented-control button {
+  min-height: 48px;
+  white-space: normal;
+}
+
+.comparison-segmented-control button[aria-pressed="true"] {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: #dce9ff;
+  color: var(--blue);
+  font-weight: 700;
+}
+
 .three-camera-buttons {
   align-items: center;
   padding-bottom: 2px;
@@ -2208,6 +2233,14 @@ select:focus-visible {
   }
 
   .result-action-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .result-comparison-toggle {
+    width: 100%;
+  }
+
+  .comparison-segmented-control {
     grid-template-columns: 1fr;
   }
 
