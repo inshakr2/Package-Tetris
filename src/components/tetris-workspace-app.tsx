@@ -2808,28 +2808,43 @@ const ResultStage = ({
                     )
                   )}
                 </div>
-                {isChainComparisonActive ? (
-                  <div className="result-comparison-toggle" aria-label="원본 비교 보기">
-                    <span className="fine-print">원본 비교</span>
-                    <div className="comparison-segmented-control" role="group" aria-label="추가 결과와 원본 비교">
-                      <button
-                        className="secondary-button"
-                        aria-pressed={chainComparisonMode === "original"}
-                        onClick={() => setChainComparisonMode("original")}
-                      >
-                        원본
-                      </button>
-                      <button
-                        className="secondary-button"
-                        aria-pressed={chainComparisonMode === "preview"}
-                        onClick={() => setChainComparisonMode("preview")}
-                      >
-                        추가 결과
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
               </div>
+
+              {isChainComparisonActive ? (
+                <div className="chain-preview-notice" data-mode={chainComparisonMode}>
+                  <div className="chain-preview-copy">
+                    <span className="badge" data-tone="green">
+                      추가 결과 미리보기
+                    </span>
+                    <strong>
+                      {chainPreview?.blockName ?? "선택 박스"} {chainPreview?.addedQuantity ?? 0}개 추가 화면
+                    </strong>
+                    <p className="fine-print" aria-live="polite">
+                      현재 화면은 {chainComparisonMode === "preview" ? "추가 결과" : "원본"}입니다. 반영 전에는
+                      버튼으로 원본과 추가 결과를 비교하세요.
+                    </p>
+                  </div>
+                  <div className="chain-preview-actions" role="group" aria-label="추가 결과 비교">
+                    <button
+                      className="secondary-button"
+                      aria-pressed={chainComparisonMode === "preview"}
+                      onClick={() => setChainComparisonMode("preview")}
+                    >
+                      추가 결과 보기
+                    </button>
+                    <button
+                      className="secondary-button"
+                      aria-pressed={chainComparisonMode === "original"}
+                      onClick={() => setChainComparisonMode("original")}
+                    >
+                      원본 보기
+                    </button>
+                    <button className="secondary-button chain-preview-cancel-action" onClick={clearChainSelection}>
+                      미리보기 취소
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="projection-controls-stack">
                 <div className="result-inspection-actions" aria-label="선택 공간 상세 확인">
@@ -2985,7 +3000,7 @@ const ResultStage = ({
                     {selectedLegendItem ? (
                       <button className="secondary-button selection-clear-action" onClick={clearSelectedBlockTemplate}>
                         <X size={16} />
-                        전체 보기
+                        강조 해제
                       </button>
                     ) : null}
                   </div>

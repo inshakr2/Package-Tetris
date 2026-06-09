@@ -475,7 +475,7 @@ export function Result3DCanvas({
             onClick={onClearSelection}
           >
             <X size={16} />
-            전체 보기
+            강조 해제
           </button>
         </div>
       ) : null}

@@ -66,7 +66,7 @@ describe("result-3d-keyboard-controls", () => {
     assert.equal(helpText.includes("+ / -"), true);
     assert.equal(helpText.includes("1 자유시점"), true);
     assert.equal(helpText.includes("사시"), false);
-    assert.equal(helpText.includes("Esc 전체 보기"), true);
+    assert.equal(helpText.includes("Esc 강조 해제"), true);
     assert.equal(helpText.includes("OrbitControls"), false);
     assert.equal(helpText.includes("WebGL"), false);
   });

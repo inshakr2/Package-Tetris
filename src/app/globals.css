@@ -1214,34 +1214,77 @@ select:focus-visible {
   gap: 8px;
 }
 
-.result-comparison-toggle {
+.three-camera-buttons {
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.chain-preview-notice {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+}
+
+.chain-preview-notice[data-mode="preview"] {
+  border-color: rgba(22, 163, 74, 0.38);
+  background: linear-gradient(180deg, #edfdf2 0%, #f8fff9 100%);
+}
+
+.chain-preview-copy {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
-.comparison-segmented-control {
+.chain-preview-copy strong,
+.chain-preview-copy p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.chain-preview-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, auto));
+  gap: 8px;
   min-width: 0;
 }
 
-.comparison-segmented-control button {
+.chain-preview-actions button {
   min-height: 48px;
   white-space: normal;
 }
 
-.comparison-segmented-control button[aria-pressed="true"] {
+.chain-preview-actions button[aria-pressed="true"] {
   border-color: rgba(37, 99, 235, 0.55);
   background: #dce9ff;
   color: var(--blue);
   font-weight: 700;
 }
 
-.three-camera-buttons {
-  align-items: center;
-  padding-bottom: 2px;
+.chain-preview-cancel-action {
+  border-color: rgba(185, 28, 28, 0.18);
+  color: #9f1239;
+}
+
+@media (max-width: 900px) {
+  .chain-preview-notice {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-preview-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-preview-actions button {
+    width: 100%;
+  }
 }
 
 .projection-controls-stack {
@@ -2382,14 +2425,6 @@ select:focus-visible {
   }
 
   .result-action-buttons {
-    grid-template-columns: 1fr;
-  }
-
-  .result-comparison-toggle {
-    width: 100%;
-  }
-
-  .comparison-segmented-control {
     grid-template-columns: 1fr;
   }
 

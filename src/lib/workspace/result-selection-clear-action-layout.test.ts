@@ -7,24 +7,26 @@ const threeSource = readFileSync("src/components/result-stage/result-3d-canvas.c
 const styles = readFileSync("src/app/globals.css", "utf8");
 
 describe("result-selection-clear-action-layout", () => {
-  it("2D 결과 상태줄은 강조 중일 때 전체 보기 버튼을 제공한다", () => {
+  it("2D 결과 상태줄은 강조 중일 때 의미가 분명한 강조 해제 버튼을 제공한다", () => {
     const hasClearAction =
       workspaceSource.includes("selectedLegendItem ? (") &&
       workspaceSource.includes('className="secondary-button selection-clear-action"') &&
       workspaceSource.includes("onClick={clearSelectedBlockTemplate}") &&
-      workspaceSource.includes("전체 보기");
+      workspaceSource.includes("강조 해제");
 
     assert.equal(hasClearAction, true);
+    assert.equal(workspaceSource.includes("전체 보기"), false);
   });
 
-  it("3D 결과 상태 영역은 강조 중일 때 전체 보기 버튼을 제공한다", () => {
+  it("3D 결과 상태 영역은 강조 중일 때 의미가 분명한 강조 해제 버튼을 제공한다", () => {
     const hasThreeClearAction =
       threeSource.includes("selectedBlock ? (") &&
       threeSource.includes('className="secondary-button three-selection-clear-action"') &&
       threeSource.includes("onClick={onClearSelection}") &&
-      threeSource.includes("전체 보기");
+      threeSource.includes("강조 해제");
 
     assert.equal(hasThreeClearAction, true);
+    assert.equal(threeSource.includes("전체 보기"), false);
   });
 
   it("강조 해제 버튼은 현장 터치 타깃과 모바일 줄바꿈을 유지한다", () => {
