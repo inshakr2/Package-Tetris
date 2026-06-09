@@ -132,6 +132,7 @@ import {
   type NetworkState
 } from "@/lib/workspace/connectivity-status";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
+import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import {
   createStackingInstructionText,
@@ -2151,6 +2152,10 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
+  const placementDetailRows = useMemo(
+    () => (selectedPackedSpace ? createPlacementDetailRows(selectedPackedSpace) : []),
+    [selectedPackedSpace]
+  );
   const stackingInstructionSpaceLabel = useMemo(
     () => createStackingInstructionSpaceLabel(resultSpace?.name, selectedPackedSpaceIndex),
     [resultSpace?.name, selectedPackedSpaceIndex]
@@ -2808,6 +2813,51 @@ const ResultStage = ({
           {resultFreshnessState.ctaDisabledReason ? (
             <p className="fine-print review-cta-hint">{resultFreshnessState.ctaDisabledReason}</p>
           ) : null}
+        </section>
+        <section className="sub-panel placement-detail-panel" aria-labelledby="placement-detail-title">
+          <div className="placement-detail-head">
+            <h3 id="placement-detail-title">배치 상세</h3>
+            <p className="meta">
+              {latestResult && selectedPackedSpace
+                ? `선택한 ${stackingInstructionSpaceLabel} 기준 · 박스별 위치와 회전 후 크기`
+                : "결과를 만들면 선택 공간의 박스별 위치가 표시됩니다."}
+            </p>
+          </div>
+          {placementDetailRows.length > 0 ? (
+            <div className="placement-detail-table" role="table" aria-labelledby="placement-detail-title">
+              <div className="placement-detail-header" role="row">
+                <span role="columnheader">순서</span>
+                <span role="columnheader">박스</span>
+                <span role="columnheader">위치</span>
+                <span role="columnheader">회전 후 크기</span>
+                <span role="columnheader">방향</span>
+              </div>
+              {placementDetailRows.map((row) => (
+                <div key={row.blockId} className="placement-detail-row" role="row">
+                  <span role="cell" data-label="순서">
+                    <strong>{row.sequenceLabel}</strong>
+                  </span>
+                  <span role="cell" data-label="박스">
+                    <strong>{row.name}</strong>
+                    <small>{row.handlingLabel}</small>
+                  </span>
+                  <span role="cell" data-label="위치">
+                    {row.positionLabel}
+                  </span>
+                  <span role="cell" data-label="회전 후 크기">
+                    {row.sizeLabel}
+                  </span>
+                  <span role="cell" data-label="방향">
+                    {row.directionLabel}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : latestResult && selectedPackedSpace ? (
+            <p className="meta">선택한 공간에 표시할 배치 좌표가 없습니다.</p>
+          ) : (
+            <p className="meta">결과를 만들면 배치 상세표가 표시됩니다.</p>
+          )}
         </section>
         <section className="sub-panel stacking-layer-panel">
           <div className="stacking-layer-head">

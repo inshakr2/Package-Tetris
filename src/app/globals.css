@@ -1102,6 +1102,71 @@ select:focus-visible {
   flex: 0 0 auto;
 }
 
+.placement-detail-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.placement-detail-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.placement-detail-head h3,
+.placement-detail-head p {
+  margin: 0;
+}
+
+.placement-detail-table {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-height: min(520px, 70vh);
+  overflow: auto;
+}
+
+.placement-detail-header,
+.placement-detail-row {
+  display: grid;
+  grid-template-columns: minmax(48px, 0.35fr) minmax(140px, 1.2fr) minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(96px, 0.7fr);
+  gap: 8px;
+  min-width: 0;
+  align-items: start;
+}
+
+.placement-detail-header {
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.placement-detail-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.placement-detail-row [role="cell"],
+.placement-detail-header [role="columnheader"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.placement-detail-row [role="cell"] {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.placement-detail-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .view-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -2144,6 +2209,26 @@ select:focus-visible {
 
   .result-action-buttons {
     grid-template-columns: 1fr;
+  }
+
+  .placement-detail-table {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .placement-detail-header {
+    display: none;
+  }
+
+  .placement-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .placement-detail-row [role="cell"]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
   }
 
   .library-card-grid {
