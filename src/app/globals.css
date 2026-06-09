@@ -1170,6 +1170,51 @@ select:focus-visible {
   min-width: 0;
 }
 
+.loading-instruction-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.loading-instruction-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f4fbf6;
+}
+
+.loading-instruction-row strong,
+.loading-instruction-row p,
+.loading-instruction-row small {
+  overflow-wrap: anywhere;
+}
+
+.loading-instruction-row > strong {
+  min-width: 44px;
+  color: var(--green);
+}
+
+.loading-instruction-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.loading-instruction-row p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.loading-instruction-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .stacking-layer-list {
   display: grid;
   gap: 8px;
@@ -2013,6 +2058,10 @@ select:focus-visible {
   .stacking-layer-row {
     grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .loading-instruction-row {
+    grid-template-columns: 1fr;
   }
 
   .stacking-layer-count {

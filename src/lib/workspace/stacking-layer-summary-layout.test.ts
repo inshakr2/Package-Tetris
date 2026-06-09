@@ -46,4 +46,39 @@ describe("stacking-layer-summary-layout", () => {
     // Then
     assert.equal(hasPanelStyle && hasBaseListStyle && hasBaseRowStyle && hasWrapStyle && hasMobileStyle, true);
   });
+
+  it("결과 화면은 현장 적재 지시 문장을 별도 목록으로 표시한다", () => {
+    // Given / When
+    const hasInstructionList =
+      source.includes("createStackingInstructionSteps") &&
+      source.includes("stackingInstructionSteps") &&
+      source.includes('className="loading-instruction-list"') &&
+      source.includes('className="loading-instruction-row"') &&
+      source.includes('className="loading-instruction-copy"') &&
+      source.includes("현장 작업 순서");
+
+    // Then
+    assert.equal(hasInstructionList, true);
+  });
+
+  it("현장 적재 지시 목록은 모바일에서 한 컬럼과 긴 문구 줄바꿈을 유지한다", () => {
+    // Given / When
+    const hasListStyle =
+      /\.loading-instruction-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*8px;[\s\S]*?}/.test(styles);
+    const hasRowStyle =
+      /\.loading-instruction-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\);[\s\S]*?min-width:\s*0;[\s\S]*?}/
+        .test(styles);
+    const hasCopyStyle =
+      /\.loading-instruction-copy\s*{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*4px;[\s\S]*?min-width:\s*0;[\s\S]*?}/
+        .test(styles);
+    const hasWrapStyle =
+      /\.loading-instruction-row\s+strong,\s*\.loading-instruction-row\s+p,\s*\.loading-instruction-row\s+small\s*{[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?}/
+        .test(styles);
+    const hasMobileStyle =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.loading-instruction-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/
+        .test(styles);
+
+    // Then
+    assert.equal(hasListStyle && hasRowStyle && hasCopyStyle && hasWrapStyle && hasMobileStyle, true);
+  });
 });

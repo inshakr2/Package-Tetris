@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createStackingLayerSummaries } from "./stacking-layer-summary";
+import {
+  createStackingInstructionSteps,
+  createStackingLayerSummaries
+} from "./stacking-layer-summary";
 import { PackedSpace } from "./types";
 
 function createPackedSpace(blocks: PackedSpace["blocks"]): PackedSpace {
@@ -101,6 +104,59 @@ describe("stacking-layer-summary", () => {
 
     // Then
     assert.deepEqual(summaries, []);
+  });
+
+  it("층별 요약을 현장 적재 지시 문장으로 바꾼다", () => {
+    // Given
+    const packedSpace = createPackedSpace([
+      createPackedBlock("block-1", "template-floor", "바닥 박스", 0),
+      createPackedBlock("block-2", "template-top", "상단 박스", 100)
+    ]);
+
+    // When
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // Then
+    assert.deepEqual(instructions, [
+      {
+        stepIndex: 1,
+        title: "1층",
+        instruction: "바닥 박스 1개를 바닥에 먼저 놓습니다.",
+        detail: "바닥층 · 총 1개"
+      },
+      {
+        stepIndex: 2,
+        title: "2층",
+        instruction: "상단 박스 1개를 100mm 높이에 올립니다.",
+        detail: "100mm 높이 · 총 1개"
+      }
+    ]);
+  });
+
+  it("대표 유형 수가 줄어든 지시 문장도 외 N종으로 압축한다", () => {
+    // Given
+    const packedSpace = createPackedSpace([
+      createPackedBlock("block-1", "template-a", "A 박스", 0),
+      createPackedBlock("block-2", "template-b", "B 박스", 0),
+      createPackedBlock("block-3", "template-c", "C 박스", 0)
+    ]);
+
+    // When
+    const [instruction] = createStackingInstructionSteps(packedSpace, { maxTypes: 1 });
+
+    // Then
+    assert.equal(instruction.instruction, "A 박스 1개 · 외 2종을 바닥에 먼저 놓습니다.");
+  });
+
+  it("적재 박스가 없으면 현장 적재 지시도 만들지 않는다", () => {
+    // Given
+    const packedSpace = createPackedSpace([]);
+
+    // When
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // Then
+    assert.deepEqual(instructions, []);
   });
 });
 

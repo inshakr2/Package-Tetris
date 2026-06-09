@@ -12,6 +12,13 @@ export interface StackingLayerSummary {
   loadSummary: string;
 }
 
+export interface StackingInstructionStep {
+  stepIndex: number;
+  title: string;
+  instruction: string;
+  detail: string;
+}
+
 interface LayerGroup {
   zMm: number;
   blocks: PackedSpace["blocks"];
@@ -68,12 +75,52 @@ export function createStackingLayerSummaries(
     }));
 }
 
+export function createStackingInstructionSteps(
+  packedSpace: PackedSpace,
+  options: StackingLayerSummaryOptions = {}
+): StackingInstructionStep[] {
+  return createStackingLayerSummaries(packedSpace, options).map((layer) => ({
+    stepIndex: layer.layerIndex,
+    title: `${layer.layerIndex}층`,
+    instruction: createLayerInstruction(layer),
+    detail: `${layer.heightLabel} · 총 ${layer.blockCount}개`
+  }));
+}
+
 function createHeightLabel(zMm: number): string {
   if (zMm === 0) {
     return "바닥층";
   }
 
   return `${zMm}mm 높이`;
+}
+
+function createLayerInstruction(layer: StackingLayerSummary): string {
+  const objectParticle = getObjectParticle(layer.loadSummary);
+
+  if (layer.zMm === 0) {
+    return `${layer.loadSummary}${objectParticle} 바닥에 먼저 놓습니다.`;
+  }
+
+  return `${layer.loadSummary}${objectParticle} ${layer.heightLabel}에 올립니다.`;
+}
+
+function getObjectParticle(text: string): "을" | "를" {
+  const lastChar = text.trim().at(-1);
+
+  if (!lastChar) {
+    return "를";
+  }
+
+  const charCode = lastChar.charCodeAt(0);
+  const hangulStart = "가".charCodeAt(0);
+  const hangulEnd = "힣".charCodeAt(0);
+
+  if (charCode < hangulStart || charCode > hangulEnd) {
+    return "를";
+  }
+
+  return (charCode - hangulStart) % 28 === 0 ? "를" : "을";
 }
 
 function createLayerLoadSummary(blocks: PackedSpace["blocks"], maxTypes: number): string {

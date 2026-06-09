@@ -104,7 +104,10 @@ import {
 } from "@/lib/workspace/connectivity-status";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
-import { createStackingLayerSummaries } from "@/lib/workspace/stacking-layer-summary";
+import {
+  createStackingInstructionSteps,
+  createStackingLayerSummaries
+} from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
   BlockDefinition,
@@ -2061,6 +2064,10 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingLayerSummaries(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
+  const stackingInstructionSteps = useMemo(
+    () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
+    [selectedPackedSpace]
+  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
@@ -2612,19 +2619,32 @@ const ResultStage = ({
               ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
               : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
           </p>
-          {stackingLayerSummaries.length > 0 ? (
-            <div className="stacking-layer-list" aria-label="층별 적재 순서">
-              {stackingLayerSummaries.map((layer) => (
-                <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
-                  <strong>{layer.layerIndex}층</strong>
-                  <span>
-                    {layer.heightLabel}
-                    <small>{layer.loadSummary}</small>
-                  </span>
-                  <small className="stacking-layer-count">총 {layer.blockCount}개</small>
-                </div>
-              ))}
-            </div>
+          {stackingInstructionSteps.length > 0 ? (
+            <>
+              <div className="loading-instruction-list" aria-label="현장 작업 순서">
+                {stackingInstructionSteps.map((step) => (
+                  <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
+                    <strong>{step.title}</strong>
+                    <div className="loading-instruction-copy">
+                      <p>{step.instruction}</p>
+                      <small>{step.detail}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="stacking-layer-list" aria-label="층별 적재 순서">
+                {stackingLayerSummaries.map((layer) => (
+                  <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
+                    <strong>{layer.layerIndex}층</strong>
+                    <span>
+                      {layer.heightLabel}
+                      <small>{layer.loadSummary}</small>
+                    </span>
+                    <small className="stacking-layer-count">총 {layer.blockCount}개</small>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : latestResult && selectedPackedSpace ? (
             <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
           ) : null}
