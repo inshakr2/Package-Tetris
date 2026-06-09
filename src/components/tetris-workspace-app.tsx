@@ -2240,6 +2240,7 @@ const ResultStage = ({
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const [chainRequestedQuantity, setChainRequestedQuantity] = useState(1);
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
@@ -2521,11 +2522,33 @@ const ResultStage = ({
     setChainStatus("idle");
     setSelectedBlockTemplateId(null);
     setChainStatusMessage(
-      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산을 실행하세요."
+      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산 또는 지정 수량 계산을 실행하세요."
     );
   }
 
   function calculateChainPreview() {
+    calculateChainPreviewWithQuantity();
+  }
+
+  function calculateRequestedChainPreview() {
+    calculateChainPreviewWithQuantity(chainRequestedQuantity);
+  }
+
+  function changeChainRequestedQuantity(quantity: number) {
+    setChainRequestedQuantity(quantity);
+
+    if (!chainPreview) {
+      return;
+    }
+
+    setChainPreview(null);
+    setChainComparisonMode("preview");
+    setSelectedBlockTemplateId(null);
+    setChainStatus("idle");
+    setChainStatusMessage("수량이 바뀌었습니다. 다시 계산하세요.");
+  }
+
+  function calculateChainPreviewWithQuantity(requestedQuantity?: number) {
     if (!latestResult || !selectedChainTemplate) {
       setChainStatus("idle");
       setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
@@ -2533,7 +2556,9 @@ const ResultStage = ({
     }
 
     setChainStatus("calculating");
-    setChainStatusMessage("남은 공간 기준으로 계산하고 있습니다.");
+    setChainStatusMessage(
+      requestedQuantity ? `${requestedQuantity}개 추가 기준으로 계산하고 있습니다.` : "남은 공간 기준으로 계산하고 있습니다."
+    );
 
     window.setTimeout(() => {
       try {
@@ -2544,7 +2569,8 @@ const ResultStage = ({
           policy: {
             fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
             nonFragileOnFragileAllowed: false
-          }
+          },
+          requestedQuantity
         });
 
         if (preview.warnings.length > 0) {
@@ -2562,12 +2588,20 @@ const ResultStage = ({
 
         if (preview.addedQuantity > 0) {
           setChainStatus("preview");
-          setChainStatusMessage(`${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`);
+          setChainStatusMessage(
+            requestedQuantity
+              ? `${preview.blockName} 요청 ${requestedQuantity}개 중 ${preview.addedQuantity}개 추가 가능`
+              : `${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`
+          );
           return;
         }
 
         setChainStatus("empty");
-        setChainStatusMessage(`${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`);
+        setChainStatusMessage(
+          requestedQuantity
+            ? `${preview.blockName}은 요청한 ${requestedQuantity}개를 더 넣을 수 없습니다.`
+            : `${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`
+        );
       } catch {
         setChainPreview(null);
         setChainComparisonMode("preview");
@@ -3081,6 +3115,7 @@ const ResultStage = ({
         selectedTemplateId={selectedChainTemplateId}
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
+        requestedQuantity={chainRequestedQuantity}
         preview={chainPreview}
         chainHistory={latestResultChainHistory}
         latestChainItem={latestChainItem}
@@ -3088,6 +3123,8 @@ const ResultStage = ({
         resultCalculationProgress={resultCalculationProgress}
         onSelectTemplate={selectChainTemplate}
         onCalculate={calculateChainPreview}
+        onCalculateRequested={calculateRequestedChainPreview}
+        onRequestedQuantityChange={changeChainRequestedQuantity}
         onConfirm={confirmChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
@@ -3607,6 +3644,7 @@ function ChainSimulationPanel({
   selectedTemplateId,
   chainStatus,
   statusMessage,
+  requestedQuantity,
   preview,
   chainHistory,
   latestChainItem,
@@ -3614,6 +3652,8 @@ function ChainSimulationPanel({
   resultCalculationProgress,
   onSelectTemplate,
   onCalculate,
+  onCalculateRequested,
+  onRequestedQuantityChange,
   onConfirm,
   onCreateResult,
   onClearSelection,
@@ -3624,6 +3664,7 @@ function ChainSimulationPanel({
   selectedTemplateId: string | null;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
+  requestedQuantity: number;
   preview: ChainSimulationOutput | null;
   chainHistory: ChainHistoryItem[];
   latestChainItem: ChainHistoryItem | null;
@@ -3631,6 +3672,8 @@ function ChainSimulationPanel({
   resultCalculationProgress: ResultCalculationProgressCopy;
   onSelectTemplate: (blockTemplateId: string) => void;
   onCalculate: () => void;
+  onCalculateRequested: () => void;
+  onRequestedQuantityChange: (quantity: number) => void;
   onConfirm: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
@@ -3638,6 +3681,7 @@ function ChainSimulationPanel({
 }) {
   const hasResult = Boolean(latestResult);
   const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
+  const canCalculateRequested = canCalculate && requestedQuantity >= 1;
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
 
   return (
@@ -3707,6 +3751,21 @@ function ChainSimulationPanel({
                         : "대기"}
               </strong>
               <span>{statusMessage}</span>
+            </div>
+
+            <div className="chain-quantity-control">
+              <label className="chain-quantity-field">
+                원하는 추가 수량(개)
+                <NumberFieldInput
+                  aria-label="추가할 수량"
+                  min={1}
+                  value={requestedQuantity}
+                  onValidValueChange={onRequestedQuantityChange}
+                />
+              </label>
+              <button className="secondary-button" onClick={onCalculateRequested} disabled={!canCalculateRequested}>
+                지정 수량 계산
+              </button>
             </div>
 
             <div className="form-actions chain-actions">

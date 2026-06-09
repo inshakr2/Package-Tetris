@@ -123,6 +123,47 @@ describe("chain-simulation v0", () => {
     assert.equal(output.spaces[0]?.blocks.length, 1);
   });
 
+  it("요청 수량이 있으면 최대 적재량이 더 커도 요청한 수량까지만 추가한다", () => {
+    // Given
+    const result = createResult([createPackedBlock()]);
+    const template = createTemplate();
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: template,
+      runId: "chain-run-requested",
+      policy: DEFAULT_POLICY,
+      requestedQuantity: 2
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 2);
+    assert.equal(output.spaces[0]?.blocks.length, 3);
+    assert.deepEqual(
+      output.spaces[0]?.blocks.slice(1).map((block) => block.blockId),
+      ["chain-run-requested-block-1", "chain-run-requested-block-2"]
+    );
+  });
+
+  it("요청 수량이 1개 미만이면 추가 계산을 하지 않고 작업자 안내를 반환한다", () => {
+    // Given
+    const result = createResult([createPackedBlock()]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate(),
+      runId: "chain-run-invalid-requested",
+      policy: DEFAULT_POLICY,
+      requestedQuantity: 0
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
+    assert.deepEqual(output.warnings, ["추가할 수량은 1개 이상이어야 합니다."]);
+  });
+
   it("non-fragile 추가 블록은 fragile 지지면 위에 배치하지 않는다", () => {
     // Given
     const result = createResult([

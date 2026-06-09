@@ -15,6 +15,7 @@ export interface ChainSimulationInput {
   blockTemplate: BlockTemplate;
   runId: string;
   policy: PlacementPolicy;
+  requestedQuantity?: number;
 }
 
 export interface ChainSimulationOutput {
@@ -64,8 +65,24 @@ export function runChainSimulationV0(input: ChainSimulationInput): ChainSimulati
   const spaces = clonePackedSpaces(input.result.spaces);
   let addedQuantity = 0;
   const maxAdditionalByVolume = calculateMaxAdditionalByVolume(spaces, usableVolumeM3, templateVolumeM3);
+  const requestedQuantity = normalizeRequestedQuantity(input.requestedQuantity);
 
-  for (let index = 0; index < maxAdditionalByVolume; index += 1) {
+  if (requestedQuantity === "invalid") {
+    return {
+      runId: input.runId,
+      blockTemplateId: input.blockTemplate.blockTemplateId,
+      blockName: input.blockTemplate.name,
+      addedQuantity: 0,
+      spaces,
+      averageUtilizationRate: input.result.averageUtilizationRate,
+      warnings: ["추가할 수량은 1개 이상이어야 합니다."]
+    };
+  }
+
+  const calculationLimit =
+    requestedQuantity === null ? maxAdditionalByVolume : Math.min(maxAdditionalByVolume, requestedQuantity);
+
+  for (let index = 0; index < calculationLimit; index += 1) {
     const placement = findNextPlacement(spaces, input.blockTemplate, usableSize, input.policy);
 
     if (!placement) {
@@ -102,6 +119,18 @@ export function runChainSimulationV0(input: ChainSimulationInput): ChainSimulati
     averageUtilizationRate: calculateAverageUtilization(outputSpaces),
     warnings
   };
+}
+
+function normalizeRequestedQuantity(requestedQuantity: number | undefined) {
+  if (requestedQuantity === undefined) {
+    return null;
+  }
+
+  if (!Number.isSafeInteger(requestedQuantity) || requestedQuantity < 1) {
+    return "invalid" as const;
+  }
+
+  return requestedQuantity;
 }
 
 function findNextPlacement(

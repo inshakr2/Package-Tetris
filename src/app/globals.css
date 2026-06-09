@@ -1965,6 +1965,32 @@ select:focus-visible {
   gap: 10px;
 }
 
+.chain-quantity-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.chain-quantity-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chain-quantity-control input {
+  width: 100%;
+  min-height: 48px;
+}
+
+.chain-quantity-control button {
+  min-height: 48px;
+  white-space: normal;
+}
+
 .chain-status-box {
   display: grid;
   gap: 5px;
@@ -2290,6 +2316,10 @@ select:focus-visible {
 
   .chain-panel-header,
   .chain-panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-quantity-control {
     grid-template-columns: 1fr;
   }
 
