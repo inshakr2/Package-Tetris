@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  formatStackingInstructionCalculatedAt,
   createStackingInstructionText,
   createStackingInstructionSpaceLabel,
   createStackingInstructionSteps,
@@ -181,6 +182,38 @@ describe("stacking-layer-summary", () => {
         "2층: 상단 박스 1개를 100mm 높이에 올립니다. (100mm 높이 · 총 1개)"
       ].join("\n")
     );
+  });
+
+  it("현장 적재 지시는 계산 시각이 있으면 헤더 다음 줄에 표시한다", () => {
+    // Given
+    const packedSpace = createPackedSpace([createPackedBlock("block-1", "template-floor", "바닥 박스", 0)]);
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // When
+    const text = createStackingInstructionText("파레트 기본 · Space 1", instructions, {
+      calculatedAtLabel: "2026. 6. 9. 오전 08:30"
+    });
+
+    // Then
+    assert.equal(
+      text,
+      [
+        "파레트 기본 · Space 1 쌓는 순서",
+        "계산 시각: 2026. 6. 9. 오전 08:30",
+        "1층: 바닥 박스 1개를 바닥에 먼저 놓습니다. (바닥층 · 총 1개)"
+      ].join("\n")
+    );
+  });
+
+  it("작업 지시서 계산 시각 라벨은 한국어 날짜와 시분을 포함한다", () => {
+    // Given
+    const calculatedAt = new Date(2026, 5, 9, 8, 30, 0);
+
+    // When
+    const label = formatStackingInstructionCalculatedAt(calculatedAt);
+
+    // Then
+    assert.equal(label, "2026. 6. 9. 오전 08:30");
   });
 
   it("현장 적재 지시가 없으면 복사용 텍스트도 비운다", () => {

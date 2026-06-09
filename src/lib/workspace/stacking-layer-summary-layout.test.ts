@@ -112,11 +112,13 @@ describe("stacking-layer-summary-layout", () => {
     // Given / When
     const hasWarningAwareCopy =
       source.includes("createStackingInstructionSpaceLabel") &&
+      source.includes("formatStackingInstructionCalculatedAt") &&
       source.includes("stackingInstructionSpaceLabel") &&
       source.includes("resultSpace?.name") &&
       source.includes("stackingInstructionWarningMessages") &&
       source.includes("resultWarningSummary.map") &&
       source.includes("safetySpaceSplitWarning") &&
+      source.includes("calculatedAtLabel: latestResult?.createdAt") &&
       source.includes("unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0") &&
       source.includes("warnings: stackingInstructionWarningMessages");
 

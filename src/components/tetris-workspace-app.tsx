@@ -115,7 +115,8 @@ import {
   createStackingInstructionText,
   createStackingInstructionSpaceLabel,
   createStackingInstructionSteps,
-  createStackingLayerSummaries
+  createStackingLayerSummaries,
+  formatStackingInstructionCalculatedAt
 } from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
@@ -2107,11 +2108,20 @@ const ResultStage = ({
         stackingInstructionSpaceLabel,
         stackingInstructionSteps,
         {
+          calculatedAtLabel: latestResult?.createdAt
+            ? formatStackingInstructionCalculatedAt(latestResult.createdAt)
+            : undefined,
           unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
           warnings: stackingInstructionWarningMessages
         }
       ),
-    [latestResult?.unloadedBlockCount, stackingInstructionSpaceLabel, stackingInstructionSteps, stackingInstructionWarningMessages]
+    [
+      latestResult?.createdAt,
+      latestResult?.unloadedBlockCount,
+      stackingInstructionSpaceLabel,
+      stackingInstructionSteps,
+      stackingInstructionWarningMessages
+    ]
   );
 
   useEffect(() => {

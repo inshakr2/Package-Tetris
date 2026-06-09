@@ -5,6 +5,7 @@ interface StackingLayerSummaryOptions {
 }
 
 interface StackingInstructionTextOptions {
+  calculatedAtLabel?: string;
   maxWarnings?: number;
   unloadedBlockCount?: number;
   warnings?: string[];
@@ -103,6 +104,8 @@ export function createStackingInstructionText(
   }
 
   const normalizedSpaceLabel = normalizeInstructionLine(spaceLabel) || "선택한 공간";
+  const calculatedAtLabel = normalizeInstructionLine(options.calculatedAtLabel ?? "");
+  const calculatedAtLines = calculatedAtLabel ? [`계산 시각: ${calculatedAtLabel}`] : [];
   const noticeLines = createStackingInstructionNoticeLines(options);
   const instructionLines = steps.map(
     (step) =>
@@ -111,7 +114,7 @@ export function createStackingInstructionText(
       )})`
   );
 
-  return [`${normalizedSpaceLabel} 쌓는 순서`, ...noticeLines, ...instructionLines].join("\n");
+  return [`${normalizedSpaceLabel} 쌓는 순서`, ...calculatedAtLines, ...noticeLines, ...instructionLines].join("\n");
 }
 
 export function createStackingInstructionSpaceLabel(
@@ -126,6 +129,22 @@ export function createStackingInstructionSpaceLabel(
   }
 
   return normalizedSpaceName || spaceIndexLabel || "선택한 공간";
+}
+
+export function formatStackingInstructionCalculatedAt(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === "string" ? normalizeInstructionLine(value) : "";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function createHeightLabel(zMm: number): string {
