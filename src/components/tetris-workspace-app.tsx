@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Box,
   CheckCircle2,
+  Copy,
   Download,
   FileUp,
   HardDrive,
@@ -62,6 +63,7 @@ import {
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
 import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import { writeClipboardText } from "@/lib/workspace/clipboard-text";
 import {
   getDeleteConfirmationCopy,
   type DeleteConfirmationKind
@@ -90,6 +92,11 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
+import { downloadTextFile } from "@/lib/workspace/text-file-download";
+import {
+  createStackingInstructionDownloadSuccessMessage,
+  createStackingInstructionFilename
+} from "@/lib/workspace/loading-instruction-file";
 import {
   createResultFreshnessState,
   createResultInputFingerprint,
@@ -104,7 +111,13 @@ import {
 } from "@/lib/workspace/connectivity-status";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
-import { createStackingLayerSummaries } from "@/lib/workspace/stacking-layer-summary";
+import {
+  createStackingInstructionText,
+  createStackingInstructionSpaceLabel,
+  createStackingInstructionSteps,
+  createStackingLayerSummaries,
+  formatStackingInstructionCalculatedAt
+} from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
   BlockDefinition,
@@ -120,6 +133,8 @@ import {
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
+type InstructionCopyStatus = "idle" | "copied" | "error";
+type InstructionDownloadStatus = "idle" | "downloaded" | "error";
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -1999,6 +2014,9 @@ const ResultStage = ({
   const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
+  const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
+  const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
@@ -2061,12 +2079,50 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingLayerSummaries(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
+  const stackingInstructionSteps = useMemo(
+    () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
+    [selectedPackedSpace]
+  );
+  const stackingInstructionSpaceLabel = useMemo(
+    () => createStackingInstructionSpaceLabel(resultSpace?.name, selectedPackedSpaceIndex),
+    [resultSpace?.name, selectedPackedSpaceIndex]
+  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
     latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
   const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
   const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
+  const stackingInstructionWarningMessages = useMemo(
+    () => [
+      ...(safetySpaceSplitWarning ? [safetySpaceSplitWarning] : []),
+      ...resultWarningSummary.map((warning) =>
+        warning.count > 1 ? `${warning.message} · ${warning.count}건` : warning.message
+      )
+    ],
+    [resultWarningSummary, safetySpaceSplitWarning]
+  );
+  const stackingInstructionText = useMemo(
+    () =>
+      createStackingInstructionText(
+        stackingInstructionSpaceLabel,
+        stackingInstructionSteps,
+        {
+          calculatedAtLabel: latestResult?.createdAt
+            ? formatStackingInstructionCalculatedAt(latestResult.createdAt)
+            : undefined,
+          unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
+          warnings: stackingInstructionWarningMessages
+        }
+      ),
+    [
+      latestResult?.createdAt,
+      latestResult?.unloadedBlockCount,
+      stackingInstructionSpaceLabel,
+      stackingInstructionSteps,
+      stackingInstructionWarningMessages
+    ]
+  );
 
   useEffect(() => {
     setResultViewMode("three");
@@ -2080,7 +2136,16 @@ const ResultStage = ({
     setThreeDialogOpen(false);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+    setInstructionCopyStatus("idle");
+    setInstructionDownloadStatus("idle");
+    setInstructionDownloadFilename(null);
   }, [latestResult?.resultId]);
+
+  useEffect(() => {
+    setInstructionCopyStatus("idle");
+    setInstructionDownloadStatus("idle");
+    setInstructionDownloadFilename(null);
+  }, [stackingInstructionText]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
     setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
@@ -2145,6 +2210,39 @@ const ResultStage = ({
   function openTopFallbackFromExpanded() {
     closeExpandedThreeView({ restoreFocus: false });
     selectProjectionView("top");
+  }
+
+  async function copyStackingInstructions() {
+    if (!stackingInstructionText) {
+      return;
+    }
+
+    try {
+      await writeClipboardText(stackingInstructionText);
+      setInstructionCopyStatus("copied");
+    } catch {
+      setInstructionCopyStatus("error");
+    }
+  }
+
+  function downloadStackingInstructions() {
+    if (!stackingInstructionText) {
+      return;
+    }
+
+    try {
+      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex, new Date(), resultSpace?.name);
+
+      downloadTextFile({
+        text: stackingInstructionText,
+        filename
+      });
+      setInstructionDownloadFilename(filename);
+      setInstructionDownloadStatus("downloaded");
+    } catch {
+      setInstructionDownloadFilename(null);
+      setInstructionDownloadStatus("error");
+    }
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -2606,25 +2704,80 @@ const ResultStage = ({
 
       <div className="result-lower-grid">
         <section className="sub-panel stacking-layer-panel">
-          <h3>쌓는 순서</h3>
-          <p className="meta">
-            {latestResult && selectedPackedSpace
-              ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
-              : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
-          </p>
-          {stackingLayerSummaries.length > 0 ? (
-            <div className="stacking-layer-list" aria-label="층별 적재 순서">
-              {stackingLayerSummaries.map((layer) => (
-                <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
-                  <strong>{layer.layerIndex}층</strong>
-                  <span>
-                    {layer.heightLabel}
-                    <small>{layer.loadSummary}</small>
-                  </span>
-                  <small className="stacking-layer-count">총 {layer.blockCount}개</small>
-                </div>
-              ))}
+          <div className="stacking-layer-head">
+            <div>
+              <h3>쌓는 순서</h3>
+              <p className="meta">
+                {latestResult && selectedPackedSpace
+                  ? `선택한 ${stackingInstructionSpaceLabel} 기준 · 아래층부터 확인`
+                  : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
+              </p>
             </div>
+            <div className="loading-instruction-actions">
+              <button
+                className="secondary-button loading-instruction-copy-button"
+                onClick={copyStackingInstructions}
+                disabled={!stackingInstructionText}
+                title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
+              >
+                <Copy size={16} />
+                작업 순서 복사
+              </button>
+              <button
+                className="secondary-button loading-instruction-download-button"
+                onClick={downloadStackingInstructions}
+                disabled={!stackingInstructionText}
+                title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
+              >
+                <Download size={16} />
+                작업 지시서 저장
+              </button>
+            </div>
+          </div>
+          {instructionCopyStatus === "copied" ? (
+            <p className="loading-instruction-copy-status" data-tone="green" role="status">
+              작업 순서를 복사했습니다.
+            </p>
+          ) : instructionCopyStatus === "error" ? (
+            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+              복사하지 못했습니다. 브라우저 권한을 확인하세요.
+            </p>
+          ) : null}
+          {instructionDownloadStatus === "downloaded" ? (
+            <p className="loading-instruction-copy-status" data-tone="green" role="status">
+              {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
+            </p>
+          ) : instructionDownloadStatus === "error" ? (
+            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+              작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
+            </p>
+          ) : null}
+          {stackingInstructionSteps.length > 0 ? (
+            <>
+              <div className="loading-instruction-list" aria-label="현장 작업 순서">
+                {stackingInstructionSteps.map((step) => (
+                  <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
+                    <strong>{step.title}</strong>
+                    <div className="loading-instruction-copy">
+                      <p>{step.instruction}</p>
+                      <small>{step.detail}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="stacking-layer-list" aria-label="층별 적재 순서">
+                {stackingLayerSummaries.map((layer) => (
+                  <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
+                    <strong>{layer.layerIndex}층</strong>
+                    <span>
+                      {layer.heightLabel}
+                      <small>{layer.loadSummary}</small>
+                    </span>
+                    <small className="stacking-layer-count">총 {layer.blockCount}개</small>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : latestResult && selectedPackedSpace ? (
             <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
           ) : null}
