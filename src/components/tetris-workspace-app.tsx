@@ -149,6 +149,10 @@ import {
   createMobileStickyActionState,
   getMobileStickyActionAriaLabel
 } from "@/lib/workspace/mobile-sticky-action";
+import {
+  createFieldHandoffChecklist,
+  type FieldHandoffChecklistAction
+} from "@/lib/workspace/field-handoff-checklist";
 import { createWorkspaceBackupFilename } from "@/lib/workspace/workspace-backup-file";
 import {
   createConnectivityStatus,
@@ -2621,6 +2625,27 @@ const ResultStage = ({
   const resultActionDescription = latestResult
     ? "입력값을 바꾸거나 현재 조건으로 다시 계산할 수 있습니다."
     : "입력을 확인한 뒤 결과를 만들 수 있습니다.";
+  const fieldHandoffChecklist = useMemo(
+    () =>
+      createFieldHandoffChecklist({
+        hasResult: Boolean(latestResult),
+        resultFreshnessStatus: resultFreshnessState.status,
+        resultActionDisabled: resultActionCtaDisabled,
+        unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
+        warningCount: stackingInstructionWarningMessages.length,
+        instructionPrepared: instructionCopyStatus === "copied" || instructionDownloadStatus === "downloaded",
+        needsExport
+      }),
+    [
+      instructionCopyStatus,
+      instructionDownloadStatus,
+      latestResult,
+      needsExport,
+      resultActionCtaDisabled,
+      resultFreshnessState.status,
+      stackingInstructionWarningMessages.length
+    ]
+  );
 
   useEffect(() => {
     setResultViewMode("three");
@@ -2784,6 +2809,43 @@ const ResultStage = ({
         resultInspectionDialogTriggerRef.current?.focus();
       }, 0);
     }
+  }
+
+  function handleFieldHandoffAction(action: FieldHandoffChecklistAction, event: MouseEvent<HTMLButtonElement>) {
+    if (action === "create-result" || action === "recalculate") {
+      onCreateResult();
+      return;
+    }
+
+    if (action === "open-instructions") {
+      openResultInspectionDialog("stacking", event.currentTarget);
+      return;
+    }
+
+    if (action === "export-backup") {
+      onExportJson();
+      return;
+    }
+
+    const exhaustiveAction: never = action;
+    return exhaustiveAction;
+  }
+
+  function isFieldHandoffActionDisabled(action: FieldHandoffChecklistAction) {
+    if (action === "create-result" || action === "recalculate") {
+      return resultActionCtaDisabled;
+    }
+
+    if (action === "open-instructions") {
+      return !latestResult;
+    }
+
+    if (action === "export-backup") {
+      return false;
+    }
+
+    const exhaustiveAction: never = action;
+    return exhaustiveAction;
   }
 
   function openOffsetPreviewDialog(trigger: HTMLButtonElement) {
@@ -3535,6 +3597,63 @@ const ResultStage = ({
           </div>
           {resultFreshnessState.ctaDisabledReason ? (
             <p className="fine-print review-cta-hint">{resultFreshnessState.ctaDisabledReason}</p>
+          ) : null}
+        </section>
+        <section className="sub-panel field-handoff-panel" data-tone={fieldHandoffChecklist.tone}>
+          <h3>현장 전달 전 점검</h3>
+          <p className="meta">{fieldHandoffChecklist.description}</p>
+          <ul className="field-handoff-list">
+            {fieldHandoffChecklist.items.map((item) => (
+              <li key={item.id} className="field-handoff-item" data-status={item.status}>
+                {item.status === "ready" ? (
+                  <CheckCircle2 size={18} color="var(--green)" />
+                ) : item.status === "attention" ? (
+                  <AlertTriangle size={18} color="var(--amber)" />
+                ) : (
+                  <ListOrdered size={18} color="var(--muted)" />
+                )}
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {fieldHandoffChecklist.items.some((item) => item.action) ? (
+            <div className="field-handoff-actions">
+              {fieldHandoffChecklist.items
+                .filter((item) => item.action)
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    className={
+                      item.action === "export-backup"
+                        ? "primary-button field-handoff-action"
+                        : "secondary-button field-handoff-action"
+                    }
+                    onClick={(event) => {
+                      if (item.action) {
+                        handleFieldHandoffAction(item.action, event);
+                      }
+                    }}
+                    disabled={item.action ? isFieldHandoffActionDisabled(item.action) : false}
+                    title={
+                      item.action === "create-result" || item.action === "recalculate"
+                        ? resultActionCtaTitle
+                        : undefined
+                    }
+                  >
+                    {item.action === "export-backup" ? (
+                      <Download size={16} />
+                    ) : item.action === "open-instructions" ? (
+                      <ListOrdered size={16} />
+                    ) : (
+                      <RotateCcw size={16} />
+                    )}
+                    {item.actionLabel}
+                  </button>
+                ))}
+            </div>
           ) : null}
         </section>
         <section className="sub-panel">

@@ -1337,6 +1337,78 @@ select:focus-visible {
   flex: 0 0 auto;
 }
 
+.field-handoff-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.field-handoff-panel h3,
+.field-handoff-panel p {
+  margin: 0;
+}
+
+.field-handoff-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.field-handoff-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+
+.field-handoff-item[data-status="ready"] {
+  border-color: rgba(35, 119, 87, 0.24);
+  background: #f3fbf6;
+}
+
+.field-handoff-item[data-status="attention"] {
+  border-color: rgba(183, 121, 31, 0.3);
+  background: #fffaf0;
+}
+
+.field-handoff-item span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.field-handoff-item strong,
+.field-handoff-item small {
+  overflow-wrap: anywhere;
+}
+
+.field-handoff-item small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.field-handoff-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.field-handoff-action {
+  min-height: 48px;
+  white-space: normal;
+}
+
+.field-handoff-action svg {
+  flex: 0 0 auto;
+}
+
 .placement-detail-table {
   display: grid;
   gap: 8px;
@@ -2684,6 +2756,10 @@ select:focus-visible {
   }
 
   .result-action-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .field-handoff-actions {
     grid-template-columns: 1fr;
   }
 

@@ -28,12 +28,16 @@ describe("placement-detail-table-layout", () => {
       source.includes('role="columnheader"') &&
       source.includes('role="cell"') &&
       source.includes("회전 후 크기");
-    const placementButtonIndex = source.indexOf('openResultInspectionDialog("placement"');
-    const stackingButtonIndex = source.indexOf('openResultInspectionDialog("stacking"');
+    const inspectionActionsIndex = source.indexOf('className="result-inspection-actions"');
+    const placementButtonIndex = source.indexOf('openResultInspectionDialog("placement"', inspectionActionsIndex);
+    const stackingButtonIndex = source.indexOf('openResultInspectionDialog("stacking"', inspectionActionsIndex);
 
     // Then
     assert.equal(hasPlacementPanel, true);
-    assert.equal(placementButtonIndex > -1 && stackingButtonIndex > placementButtonIndex, true);
+    assert.equal(
+      inspectionActionsIndex > -1 && placementButtonIndex > inspectionActionsIndex && stackingButtonIndex > placementButtonIndex,
+      true
+    );
     assert.equal(source.includes('className="sub-panel placement-detail-panel"'), false);
   });
 
