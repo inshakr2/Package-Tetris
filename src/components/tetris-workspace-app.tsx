@@ -156,6 +156,7 @@ import {
   type PwaInstallStatus
 } from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
+import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
@@ -294,6 +295,7 @@ export function TetrisWorkspaceApp() {
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [pendingDraftUndo, setPendingDraftUndo] = useState<PendingDraftUndo | null>(null);
+  const [resetWorkDialogOpen, setResetWorkDialogOpen] = useState(false);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
@@ -650,7 +652,8 @@ export function TetrisWorkspaceApp() {
   const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
   const isWorkspaceLocked = Boolean(saveConflict);
   const spaceDialogMode: SpaceDialogMode = editingSpaceId ? "edit" : "add";
-  const hasBlockingDialog = spaceDialogOpen || Boolean(pendingDelete);
+  const canResetCurrentWork = workspace ? hasCurrentWorkToReset(workspace) : false;
+  const hasBlockingDialog = spaceDialogOpen || Boolean(pendingDelete) || resetWorkDialogOpen;
   const mobileStickyAction = useMemo(
     () =>
       createMobileStickyActionState({
@@ -1026,6 +1029,31 @@ export function TetrisWorkspaceApp() {
       });
     });
     setPendingDraftUndo(null);
+  }
+
+  function requestResetCurrentWork() {
+    if (!canResetCurrentWork || saveConflict) {
+      return;
+    }
+
+    setResetWorkDialogOpen(true);
+  }
+
+  function closeResetCurrentWorkDialog() {
+    setResetWorkDialogOpen(false);
+  }
+
+  function confirmResetCurrentWork() {
+    if (saveConflict) {
+      return;
+    }
+
+    updateWorkspace((current, now) => resetCurrentWorkspace(current, now));
+    setPendingDraftUndo(null);
+    setResultFailure(null);
+    setResultCalculationStep("idle");
+    setCreatingResult(false);
+    setResetWorkDialogOpen(false);
   }
 
   function createPackingResult() {
@@ -1516,6 +1544,14 @@ export function TetrisWorkspaceApp() {
           onConfirm={confirmPendingDelete}
         />
 
+        <ResetCurrentWorkDialog
+          open={resetWorkDialogOpen}
+          confirmDisabled={isWorkspaceLocked}
+          confirmDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 새 작업을 시작할 수 있습니다." : null}
+          onClose={closeResetCurrentWorkDialog}
+          onConfirm={confirmResetCurrentWork}
+        />
+
         <section className="panel workflow-section block-library-row" aria-labelledby="block-library-title">
           <div className="section-layout block-library-layout">
             <div className="section-column">
@@ -1550,8 +1586,18 @@ export function TetrisWorkspaceApp() {
           <div className="section-layout current-work-layout">
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
+              canResetCurrentWork={canResetCurrentWork}
+              resetDisabled={isWorkspaceLocked || !canResetCurrentWork}
+              resetDisabledReason={
+                isWorkspaceLocked
+                  ? "최신본을 불러온 뒤 새 작업을 시작할 수 있습니다."
+                  : canResetCurrentWork
+                    ? null
+                    : "비울 현재 작업이 없습니다."
+              }
               onQuantityChange={updateCurrentQuantity}
               onDeleteRequest={requestDelete}
+              onRequestResetCurrentWork={requestResetCurrentWork}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
@@ -1939,10 +1985,17 @@ function BlockCreatePanel({
 
 function CurrentWorkBlocksPanel({
   blocks,
+  canResetCurrentWork,
+  resetDisabled,
+  resetDisabledReason,
   onQuantityChange,
-  onDeleteRequest
+  onDeleteRequest,
+  onRequestResetCurrentWork
 }: {
   blocks: BlockDefinition[];
+  canResetCurrentWork: boolean;
+  resetDisabled: boolean;
+  resetDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
   onDeleteRequest: (
     kind: DeleteConfirmationKind,
@@ -1950,16 +2003,36 @@ function CurrentWorkBlocksPanel({
     name: string,
     trigger?: HTMLElement | null
   ) => void;
+  onRequestResetCurrentWork: () => void;
 }) {
   return (
     <section className="current-block-panel">
-      <div className="section-head">
-        <span className="section-index" aria-hidden="true">
-          3
-        </span>
+      <div className="current-work-head">
+        <div className="section-head">
+          <span className="section-index" aria-hidden="true">
+            3
+          </span>
+          <div>
+            <h2 id="current-work-title">{getWorkspaceSectionTitle("review")}</h2>
+                    <p className="panel-subtitle">이번에 실을 박스입니다. 수량 변경은 현재 작업에만 적용됩니다.</p>
+          </div>
+        </div>
         <div>
-          <h2 id="current-work-title">{getWorkspaceSectionTitle("review")}</h2>
-                  <p className="panel-subtitle">이번에 실을 박스입니다. 수량 변경은 현재 작업에만 적용됩니다.</p>
+          <button
+            className="secondary-button current-work-reset-action"
+            onClick={onRequestResetCurrentWork}
+            disabled={resetDisabled}
+            title={resetDisabledReason ?? undefined}
+            aria-describedby={canResetCurrentWork ? undefined : "current-work-reset-disabled-reason"}
+          >
+            <RotateCcw size={16} />
+            새 작업 시작
+          </button>
+          {!canResetCurrentWork ? (
+            <span id="current-work-reset-disabled-reason" className="sr-only">
+              비울 현재 작업이 없습니다.
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="block-list">
@@ -2006,6 +2079,89 @@ function CurrentWorkBlocksPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function ResetCurrentWorkDialog({
+  open,
+  confirmDisabled,
+  confirmDisabledReason,
+  onClose,
+  onConfirm
+}: {
+  open: boolean;
+  confirmDisabled: boolean;
+  confirmDisabledReason: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="reset-work-dialog"
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="reset-work-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id={titleId}>현재 작업을 새로 시작할까요?</h2>
+            <p id={descriptionId} className="fine-print">
+              이번 작업 박스, 계산 결과, 추가 적재 기록만 비웁니다. 저장된 공간과 박스는 그대로 둡니다.
+            </p>
+            {confirmDisabledReason ? (
+              <p className="form-error" role="alert">
+                {confirmDisabledReason}
+              </p>
+            ) : null}
+          </div>
+          <button className="icon-button panel-close-button" onClick={onClose} aria-label="새 작업 시작 닫기">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="form-actions reset-work-actions">
+          <button data-cancel-button="true" className="secondary-button" autoFocus onClick={onClose}>
+            취소
+          </button>
+          <button className="danger-button" onClick={onConfirm} disabled={confirmDisabled}>
+            <RotateCcw size={16} />
+            현재 작업 비우기
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }
 

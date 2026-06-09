@@ -41,6 +41,18 @@ button {
   min-height: 44px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .app-shell {
   min-height: 100vh;
   display: flex;
@@ -334,7 +346,7 @@ select:focus-visible {
 }
 
 .workspace-stack[data-readonly="true"]
-  > :not(.workspace-readonly-banner):not(.space-form-dialog):not(.delete-confirm-dialog) {
+  > :not(.workspace-readonly-banner):not(.space-form-dialog):not(.delete-confirm-dialog):not(.reset-work-dialog) {
   pointer-events: none;
   opacity: 0.62;
 }
@@ -447,6 +459,18 @@ select:focus-visible {
   gap: 12px;
   align-items: start;
   margin-bottom: 2px;
+}
+
+.current-work-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.current-work-reset-action {
+  min-height: 48px;
+  white-space: normal;
 }
 
 .section-index {
@@ -2117,7 +2141,8 @@ select:focus-visible {
   min-height: 48px;
 }
 
-.delete-confirm-dialog {
+.delete-confirm-dialog,
+.reset-work-dialog {
   width: min(520px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   padding: 0;
@@ -2127,23 +2152,31 @@ select:focus-visible {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
 }
 
-.delete-confirm-dialog::backdrop {
+.delete-confirm-dialog::backdrop,
+.reset-work-dialog::backdrop {
   background: rgba(15, 23, 42, 0.34);
 }
 
-.delete-confirm-sheet {
+.delete-confirm-sheet,
+.reset-work-sheet {
   display: grid;
   gap: 14px;
   padding: 14px;
   background: var(--surface);
 }
 
-.delete-confirm-actions {
+.delete-confirm-actions,
+.reset-work-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin-top: 0;
 }
 
 .delete-confirm-actions .secondary-button,
-.delete-confirm-actions .danger-button {
+.delete-confirm-actions .danger-button,
+.reset-work-actions .secondary-button,
+.reset-work-actions .danger-button {
   min-height: 48px;
 }
 
@@ -2492,6 +2525,14 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .current-work-head {
+    grid-template-columns: 1fr;
+  }
+
+  .current-work-reset-action {
+    width: 100%;
+  }
+
   .loading-instruction-actions {
     display: grid;
     grid-template-columns: 1fr;
@@ -2662,7 +2703,8 @@ select:focus-visible {
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
-  .delete-confirm-dialog {
+  .delete-confirm-dialog,
+  .reset-work-dialog {
     width: 100%;
     max-width: 100%;
     max-height: 90dvh;
@@ -2673,9 +2715,14 @@ select:focus-visible {
     border-radius: 18px 18px 0 0;
   }
 
-  .delete-confirm-sheet {
+  .delete-confirm-sheet,
+  .reset-work-sheet {
     border-radius: 18px 18px 0 0;
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .reset-work-actions {
+    grid-template-columns: 1fr;
   }
 
   .draft-undo-toast {
