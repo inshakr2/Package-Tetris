@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   createFieldPackingScenarios,
-  runFieldPackingScenarioAudit
+  runFieldPackingScenarioAudit,
+  runFieldPackingScenarioPerformanceAudit
 } from "./packing-field-scenarios";
 import { runPackingEngineV0 } from "./packing-engine";
+import type { OptimizationOutput } from "./engine-contract";
 
 describe("packing-field-scenarios", () => {
   it("현장 시연용 preset 공간별 대량 적재 결과는 안전 기준을 모두 통과한다", () => {
@@ -32,4 +34,60 @@ describe("packing-field-scenarios", () => {
       "2.5톤반 낮은 짐칸 혼합"
     ]);
   });
+
+  it("시나리오별 계산 시간이 예산을 넘으면 지연 시나리오로 기록한다", () => {
+    // Given
+    const scenarios = createFieldPackingScenarios().slice(0, 2);
+    const nowMs = createFakeClock([0, 120, 120, 470]);
+
+    // When
+    const audit = runFieldPackingScenarioPerformanceAudit(scenarios, createEmptyOutput, {
+      nowMs,
+      scenarioBudgetMs: 250
+    });
+
+    // Then
+    assert.equal(audit.scenarioCount, 2);
+    assert.deepEqual(
+      audit.scenarioResults.map((result) => [result.name, result.elapsedMs, result.isWithinBudget]),
+      [
+        ["파레트 기본 대량 혼합 박스", 120, true],
+        ["20ft GP 장척 박스 혼합", 350, false]
+      ]
+    );
+    assert.deepEqual(audit.slowScenarioNames, ["20ft GP 장척 박스 혼합"]);
+  });
+
+  it("현장형 대량 시나리오는 V1 시연 예산 안에서 계산된다", () => {
+    // Given
+    const scenarios = createFieldPackingScenarios();
+
+    // When
+    const audit = runFieldPackingScenarioPerformanceAudit(scenarios, runPackingEngineV0, {
+      scenarioBudgetMs: 5000
+    });
+
+    // Then
+    assert.equal(audit.failedScenarioNames.length, 0);
+    assert.equal(audit.slowScenarioNames.length, 0);
+    assert.ok(audit.totalElapsedMs < 5000);
+    assert.ok(audit.totalPackedBlockCount >= 40);
+  });
 });
+
+function createFakeClock(values: number[]) {
+  let index = 0;
+
+  return () => values[index++] ?? values[values.length - 1] ?? 0;
+}
+
+function createEmptyOutput(input: { runId: string }): OptimizationOutput {
+  return {
+    runId: input.runId,
+    usedSpaceCount: 0,
+    averageUtilizationRate: 0,
+    unloadedBlockCount: 0,
+    spaces: [],
+    warnings: []
+  };
+}

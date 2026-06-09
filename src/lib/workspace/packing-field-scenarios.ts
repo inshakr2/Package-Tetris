@@ -15,9 +15,31 @@ export interface FieldPackingScenarioAudit {
   failedScenarioNames: string[];
 }
 
+export interface FieldPackingScenarioPerformanceResult {
+  name: string;
+  elapsedMs: number;
+  packedBlockCount: number;
+  usedSpaceCount: number;
+  unloadedBlockCount: number;
+  isSafe: boolean;
+  isWithinBudget: boolean;
+}
+
+export interface FieldPackingScenarioPerformanceAudit extends FieldPackingScenarioAudit {
+  totalElapsedMs: number;
+  slowScenarioNames: string[];
+  scenarioResults: FieldPackingScenarioPerformanceResult[];
+}
+
+interface FieldPackingPerformanceAuditOptions {
+  nowMs?: () => number;
+  scenarioBudgetMs?: number;
+}
+
 type PackingEngineRunner = (input: OptimizationInput) => OptimizationOutput;
 
 const TIMESTAMP = "2026-06-09T00:00:00.000Z";
+const DEFAULT_SCENARIO_BUDGET_MS = 5000;
 
 export function createFieldPackingScenarios(): FieldPackingScenario[] {
   return [
@@ -58,32 +80,75 @@ export function runFieldPackingScenarioAudit(
   scenarios: FieldPackingScenario[],
   runPackingEngine: PackingEngineRunner
 ): FieldPackingScenarioAudit {
-  const failedScenarioNames: string[] = [];
-  let totalPackedBlockCount = 0;
-  let totalUsedSpaceCount = 0;
+  const audit = runFieldPackingScenarioPerformanceAudit(scenarios, runPackingEngine);
 
-  scenarios.forEach((scenario) => {
-    const output = runPackingEngine(scenario.input);
-    const usableSize = calculateUsableSize(scenario.input.space);
-    const policy = {
-      fragileStackOnFragileAllowed: scenario.input.policy.fragileStackOnFragileAllowed,
-      nonFragileOnFragileAllowed: scenario.input.policy.nonFragileOnFragileAllowed
-    };
-    const allSpacesValid = output.spaces.every((space) => validatePackedSpace(space, usableSize, policy).isValid);
+  return {
+    scenarioCount: audit.scenarioCount,
+    totalPackedBlockCount: audit.totalPackedBlockCount,
+    totalUsedSpaceCount: audit.totalUsedSpaceCount,
+    failedScenarioNames: audit.failedScenarioNames
+  };
+}
 
-    totalPackedBlockCount += output.spaces.reduce((sum, space) => sum + space.blocks.length, 0);
-    totalUsedSpaceCount += output.usedSpaceCount;
+export function runFieldPackingScenarioPerformanceAudit(
+  scenarios: FieldPackingScenario[],
+  runPackingEngine: PackingEngineRunner,
+  options: FieldPackingPerformanceAuditOptions = {}
+): FieldPackingScenarioPerformanceAudit {
+  const nowMs = options.nowMs ?? Date.now;
+  const scenarioBudgetMs = options.scenarioBudgetMs ?? DEFAULT_SCENARIO_BUDGET_MS;
+  const scenarioResults = scenarios.map((scenario) =>
+    runFieldPackingScenarioPerformance(scenario, runPackingEngine, nowMs, scenarioBudgetMs)
+  );
 
-    if (!allSpacesValid || output.unloadedBlockCount > 0) {
-      failedScenarioNames.push(scenario.name);
-    }
-  });
+  const failedScenarioNames = scenarioResults
+    .filter((result) => !result.isSafe || result.unloadedBlockCount > 0)
+    .map((result) => result.name);
+  const slowScenarioNames = scenarioResults
+    .filter((result) => !result.isWithinBudget)
+    .map((result) => result.name);
+
+  const totalPackedBlockCount = scenarioResults.reduce((sum, result) => sum + result.packedBlockCount, 0);
+  const totalUsedSpaceCount = scenarioResults.reduce((sum, result) => sum + result.usedSpaceCount, 0);
+  const totalElapsedMs = scenarioResults.reduce((sum, result) => sum + result.elapsedMs, 0);
 
   return {
     scenarioCount: scenarios.length,
     totalPackedBlockCount,
     totalUsedSpaceCount,
-    failedScenarioNames
+    totalElapsedMs,
+    failedScenarioNames,
+    slowScenarioNames,
+    scenarioResults
+  };
+}
+
+function runFieldPackingScenarioPerformance(
+  scenario: FieldPackingScenario,
+  runPackingEngine: PackingEngineRunner,
+  nowMs: () => number,
+  scenarioBudgetMs: number
+): FieldPackingScenarioPerformanceResult {
+  const startedAt = nowMs();
+  const output = runPackingEngine(scenario.input);
+  const finishedAt = nowMs();
+  const elapsedMs = Math.max(0, Math.round(finishedAt - startedAt));
+  const usableSize = calculateUsableSize(scenario.input.space);
+  const policy = {
+    fragileStackOnFragileAllowed: scenario.input.policy.fragileStackOnFragileAllowed,
+    nonFragileOnFragileAllowed: scenario.input.policy.nonFragileOnFragileAllowed
+  };
+  const isSafe = output.spaces.every((space) => validatePackedSpace(space, usableSize, policy).isValid);
+  const packedBlockCount = output.spaces.reduce((sum, space) => sum + space.blocks.length, 0);
+
+  return {
+    name: scenario.name,
+    elapsedMs,
+    packedBlockCount,
+    usedSpaceCount: output.usedSpaceCount,
+    unloadedBlockCount: output.unloadedBlockCount,
+    isSafe,
+    isWithinBudget: elapsedMs <= scenarioBudgetMs
   };
 }
 
