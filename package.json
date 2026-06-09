@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "field:audit": "tsx scripts/field-audit.ts",
     "test": "node --import tsx --test src/lib/persistence/*.test.ts src/lib/workspace/*.test.ts"
   },
   "dependencies": {
