@@ -6,6 +6,7 @@ import {
   type PlacementPolicy,
   type PositionCandidate
 } from "./packing-placement";
+import { ensureSafeOptimizationOutput } from "./packing-output-safety";
 import { BlockDefinition, PackedBlock, PackedSpace } from "./types";
 import { OptimizationInput, OptimizationOutput } from "./engine-contract";
 
@@ -53,7 +54,7 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
 
   const totalUtilizationRate = packedSpaces.reduce((sum, space) => sum + space.utilizationRate, 0);
 
-  return {
+  const output = {
     runId: input.runId,
     usedSpaceCount: packedSpaces.length,
     averageUtilizationRate:
@@ -62,6 +63,8 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
     spaces: packedSpaces,
     warnings
   };
+
+  return ensureSafeOptimizationOutput(input, output);
 }
 
 function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds): BlockDefinition[] {
