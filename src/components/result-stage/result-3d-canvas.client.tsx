@@ -416,6 +416,20 @@ export function Result3DCanvas({
         <p id={keyboardHelpId} className="three-keyboard-help">
           {RESULT_3D_KEYBOARD_HELP_TEXT}
         </p>
+        <div className="three-dimension-overlay" aria-label="3D 공간 치수">
+          <span>
+            <strong>가로</strong>
+            {formatThreeDimensionMm(bounds.widthMm)}
+          </span>
+          <span>
+            <strong>깊이</strong>
+            {formatThreeDimensionMm(bounds.depthMm)}
+          </span>
+          <span>
+            <strong>높이</strong>
+            {formatThreeDimensionMm(bounds.heightMm)}
+          </span>
+        </div>
         {renderState === "loading" ? (
           <div className="projection-empty">
             <strong>3D 뷰 준비 중</strong>
@@ -616,6 +630,10 @@ function applyCameraPreset(
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function formatThreeDimensionMm(value: number) {
+  return `${Math.round(value).toLocaleString("ko-KR")}mm`;
 }
 
 function cleanupSceneObjects(scene: THREE.Scene) {

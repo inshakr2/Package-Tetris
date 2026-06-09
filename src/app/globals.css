@@ -1561,6 +1561,37 @@ select:focus-visible {
   border: 0;
 }
 
+.three-dimension-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  max-width: min(520px, calc(100% - 20px));
+  overflow-wrap: anywhere;
+}
+
+.three-dimension-overlay span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.three-dimension-overlay strong {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
 .three-status {
   align-items: center;
 }
@@ -2435,6 +2466,11 @@ select:focus-visible {
   .result-three-dialog-body .result-three-shell {
     height: 100%;
     max-height: none;
+  }
+
+  .three-dimension-overlay {
+    grid-template-columns: 1fr;
+    max-width: min(220px, calc(100% - 20px));
   }
 
   .projection-toolbar .view-buttons,
