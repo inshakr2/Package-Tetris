@@ -144,6 +144,10 @@ import {
   type ConnectivityStatus,
   type NetworkState
 } from "@/lib/workspace/connectivity-status";
+import {
+  getPwaOfflineReadinessCopy,
+  type PwaOfflineReadinessStatus
+} from "@/lib/workspace/pwa-offline-readiness";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
@@ -166,6 +170,7 @@ import {
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
+import { PwaServiceWorkerRegistrar } from "./pwa-service-worker-registrar";
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
@@ -261,6 +266,7 @@ export function TetrisWorkspaceApp() {
   const [storageHealth, setStorageHealth] = useState<StorageHealthSnapshot | null>(null);
   const [storagePanelOpen, setStoragePanelOpen] = useState(false);
   const [networkState, setNetworkState] = useState<NetworkState>("unknown");
+  const [pwaOfflineStatus, setPwaOfflineStatus] = useState<PwaOfflineReadinessStatus>("checking");
   const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
   const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
@@ -1290,6 +1296,7 @@ export function TetrisWorkspaceApp() {
 
   return (
     <main className="app-shell" data-overlay-open={hasBlockingDialog ? "true" : undefined}>
+      <PwaServiceWorkerRegistrar onStatusChange={setPwaOfflineStatus} />
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -1356,6 +1363,7 @@ export function TetrisWorkspaceApp() {
           saveConflict={saveConflict}
           otherTabCount={otherTabCount}
           connectivityStatus={connectivityStatus}
+          pwaOfflineStatus={pwaOfflineStatus}
           persistenceRequestResult={persistenceRequestResult}
           persistenceRequesting={persistenceRequesting}
           onClose={() => setStoragePanelOpen(false)}
@@ -3533,6 +3541,7 @@ function StorageReliabilityPanel({
   saveConflict,
   otherTabCount,
   connectivityStatus,
+  pwaOfflineStatus,
   persistenceRequestResult,
   persistenceRequesting,
   onClose,
@@ -3550,6 +3559,7 @@ function StorageReliabilityPanel({
   saveConflict: WorkspaceSaveConflictNotice | null;
   otherTabCount: number;
   connectivityStatus: ConnectivityStatus;
+  pwaOfflineStatus: PwaOfflineReadinessStatus;
   persistenceRequestResult: PersistenceRequestResult | null;
   persistenceRequesting: boolean;
   onClose: () => void;
@@ -3566,6 +3576,7 @@ function StorageReliabilityPanel({
   });
   const exportState = getExportState(workspace, needsExport);
   const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
+  const pwaOfflineState = getPwaOfflineReadinessCopy(pwaOfflineStatus);
   const canRequestProtection =
     Boolean(storageHealth?.persistSupported) && storageHealth?.persistenceState !== "persisted" && !persistenceRequesting;
 
@@ -3579,8 +3590,8 @@ function StorageReliabilityPanel({
     >
       <div className="storage-panel-head">
         <div>
-                  <h2 id={`${id}-title`}>작업 저장 상태</h2>
-                  <p className="fine-print">이 기기 자동저장과 백업 파일은 서로 다른 안전장치입니다.</p>
+          <h2 id={`${id}-title`}>작업 저장 상태</h2>
+          <p className="fine-print">이 기기 자동저장과 백업 파일은 서로 다른 안전장치입니다.</p>
         </div>
         <button className="icon-button panel-close-button" onClick={onClose} aria-label="저장 보호 패널 닫기">
           <X size={16} />
@@ -3599,7 +3610,7 @@ function StorageReliabilityPanel({
         <StorageHealthRow
           icon={<Download size={18} />}
           tone={exportState.tone}
-                  label="백업 파일"
+          label="백업 파일"
           value={exportState.value}
           description={exportState.description}
         />
@@ -3610,6 +3621,14 @@ function StorageReliabilityPanel({
           value={browserState.value}
           description={browserState.description}
           detail={browserState.detail}
+        />
+        <StorageHealthRow
+          icon={<WifiOff size={18} />}
+          tone={pwaOfflineState.tone}
+          label="오프라인 준비"
+          value={pwaOfflineState.value}
+          description={pwaOfflineState.description}
+          detail={pwaOfflineState.detail}
         />
         {connectivityStatus.visible ? (
           <StorageHealthRow
@@ -3632,7 +3651,7 @@ function StorageReliabilityPanel({
         ) : null}
         <button className={saveConflict ? "secondary-button" : "primary-button"} onClick={onExportJson}>
           <Download size={16} />
-                  {saveConflict ? "현재 작업 백업 만들기" : status === "error" ? "지금 백업" : "백업 파일 만들기"}
+          {saveConflict ? "현재 작업 백업 만들기" : status === "error" ? "지금 백업" : "백업 파일 만들기"}
         </button>
         <button
           className="secondary-button"
@@ -3641,7 +3660,7 @@ function StorageReliabilityPanel({
           title={!storageHealth?.persistSupported ? "이 브라우저에서는 저장 보호 요청을 지원하지 않습니다." : undefined}
         >
           <ShieldCheck size={16} />
-                  {persistenceRequesting ? "보호 요청 중" : "작업 보호 강화"}
+          {persistenceRequesting ? "보호 요청 중" : "작업 보호 강화"}
         </button>
       </div>
     </section>
