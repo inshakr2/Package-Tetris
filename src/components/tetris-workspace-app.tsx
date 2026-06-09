@@ -6,15 +6,21 @@ import {
   CheckCircle2,
   Download,
   FileUp,
+  HardDrive,
+  Maximize2,
   PackagePlus,
   Plus,
   RotateCcw,
   Save,
+  ShieldCheck,
   Trash2,
-  Truck
+  Truck,
+  WifiOff,
+  X
 } from "lucide-react";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { IndexedDbTetrisStorage } from "@/lib/persistence/indexed-db";
+import dynamic from "next/dynamic";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "@/lib/persistence/indexed-db";
 import {
   copyWorkspaceForNewFile,
   detectImportConflict,
@@ -22,37 +28,122 @@ import {
   parseWorkspaceImport
 } from "@/lib/persistence/json-transfer";
 import {
+  readStorageHealth,
+  hasMeaningfulWorkspaceData,
+  requestStoragePersistence,
+  shouldRemindExport,
+  type PersistenceRequestResult,
+  type StorageHealthSnapshot
+} from "@/lib/persistence/storage-health";
+import {
+  createInitialWorkspaceSyncState,
+  createLocalStorageSyncSignal,
+  getActiveWorkspacePeerCount,
+  reduceWorkspaceSyncState,
+  shouldMarkWorkspaceStale,
+  WORKSPACE_SYNC_CHANNEL_NAME,
+  type WorkspaceRemoteSave,
+  type WorkspaceSyncMessage,
+  type WorkspaceSyncState
+} from "@/lib/persistence/workspace-sync-channel";
+import {
   addBlockTemplateToDraft,
   createBlockTemplate,
   removeBlockTemplate,
   removeDraftBlockItem,
+  restoreDraftBlockItem,
   resolveDraftBlocks,
   updateBlockTemplate,
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
   createOptimizationInput,
-  createPlaceholderResultSummary,
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
+import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  getDeleteConfirmationCopy,
+  type DeleteConfirmationKind
+} from "@/lib/workspace/delete-confirmation-copy";
+import { getSaveConflictBannerCopy } from "@/lib/workspace/save-conflict-banner-copy";
+import { createLocalSaveState } from "@/lib/workspace/storage-save-state";
+import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
+import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
+import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
+import {
+  createProjectedBlocks,
+  createProjectionLegendItems,
+  getProjectionViewLabel,
+  type ProjectionView
+} from "@/lib/workspace/projection-view";
+import {
+  getResultViewTitle,
+  isProjectionViewControlId,
+  RESULT_VIEW_CONTROL_ITEMS,
+  THREE_CAMERA_CONTROL_ITEMS,
+  type ResultViewControlId,
+  type ResultViewMode
+} from "@/lib/workspace/result-viewer-controls";
+import {
+  createPackingResultWarnings,
+  SPACE_SPLIT_FLOOR_SUPPORT_WARNING
+} from "@/lib/workspace/result-warnings";
+import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
+import {
+  createResultFreshnessState,
+  createResultInputFingerprint,
+  type ResultFreshnessState
+} from "@/lib/workspace/result-freshness";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
+import { createMobileStickyActionState } from "@/lib/workspace/mobile-sticky-action";
+import {
+  createConnectivityStatus,
+  type ConnectivityStatus,
+  type NetworkState
+} from "@/lib/workspace/connectivity-status";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
+import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
+import { createStackingLayerSummaries } from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import {
   BlockDefinition,
   BlockTemplate,
+  ChainHistoryItem,
+  DraftBlockItem,
   ImportConflict,
   ImportConflictOption,
+  PackedBlock,
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
+import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
-type SaveStatus = "loading" | "saving" | "saved" | "error";
+type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
 
 interface PendingImport {
   workspace: TetrisWorkspace;
   conflict: ImportConflict;
+}
+
+interface WorkspaceSaveConflictNotice {
+  storedRevision: number;
+  incomingRevision: number;
+  expectedRevision: number;
+  storedUpdatedAt: string;
+  source: "storage" | "remote";
+}
+
+interface PendingDelete {
+  kind: DeleteConfirmationKind;
+  entityId: string;
+  name: string;
+}
+
+interface PendingDraftUndo {
+  item: DraftBlockItem;
+  blockName: string;
+  index: number;
 }
 
 const DEFAULT_SPACE_FORM = {
@@ -66,7 +157,7 @@ const DEFAULT_SPACE_FORM = {
 };
 
 const DEFAULT_BLOCK_FORM = {
-  name: "신규 블록",
+  name: "신규 박스",
   widthMm: 300,
   depthMm: 220,
   heightMm: 180,
@@ -75,19 +166,211 @@ const DEFAULT_BLOCK_FORM = {
 };
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
+const STORAGE_PANEL_ID = "storage-reliability-panel";
+
+const Result3DCanvas = dynamic(
+  () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="result-three-host" data-render-state="loading">
+        <div className="projection-empty">
+          <strong>3D 뷰 준비 중</strong>
+          <span className="fine-print">3D 렌더러를 불러오고 있습니다.</span>
+        </div>
+      </div>
+    )
+  }
+);
 
 export function TetrisWorkspaceApp() {
   const storage = useMemo(() => new IndexedDbTetrisStorage(), []);
+  const tabSessionId = useMemo(() => createClientId("tab"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultStageRef = useRef<HTMLElement>(null);
+  const workspaceRef = useRef<TetrisWorkspace | null>(null);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const lastPersistedRevisionRef = useRef<number | null>(null);
+  const lastSpaceDialogTriggerRef = useRef<HTMLElement | null>(null);
+  const lastDeleteDialogTriggerRef = useRef<HTMLElement | null>(null);
   const [workspace, setWorkspace] = useState<TetrisWorkspace | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("loading");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastLocalSavedAt, setLastLocalSavedAt] = useState<string | null>(null);
+  const [lastPersistedRevision, setLastPersistedRevision] = useState<number | null>(null);
+  const [saveConflict, setSaveConflict] = useState<WorkspaceSaveConflictNotice | null>(null);
+  const [workspaceSyncState, setWorkspaceSyncState] = useState<WorkspaceSyncState>(() =>
+    createInitialWorkspaceSyncState(tabSessionId)
+  );
+  const [storageHealth, setStorageHealth] = useState<StorageHealthSnapshot | null>(null);
+  const [storagePanelOpen, setStoragePanelOpen] = useState(false);
+  const [networkState, setNetworkState] = useState<NetworkState>("unknown");
+  const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
+  const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [pendingDraftUndo, setPendingDraftUndo] = useState<PendingDraftUndo | null>(null);
   const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
+  const [spaceFormError, setSpaceFormError] = useState<string | null>(null);
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+
+  const refreshStorageHealth = useCallback(async () => {
+    if (typeof navigator === "undefined" || typeof window === "undefined") {
+      return;
+    }
+
+    setStorageHealth(await readStorageHealth(navigator.storage, window.isSecureContext));
+  }, []);
+
+  const publishWorkspaceSyncMessage = useCallback((message: WorkspaceSyncMessage) => {
+    syncChannelRef.current?.postMessage(message);
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const signal = createLocalStorageSyncSignal(message);
+      window.localStorage.setItem(signal.key, signal.value);
+    } catch {
+      // localStorage fallback is best-effort only.
+    }
+  }, []);
+
+  const handleWorkspaceSyncMessage = useCallback(
+    (message: unknown) => {
+      if (!isWorkspaceSyncMessage(message)) {
+        return;
+      }
+
+      const receivedAt = new Date().toISOString();
+      setWorkspaceSyncState((current) => reduceWorkspaceSyncState(current, message, receivedAt));
+
+      if (message.tabId === tabSessionId) {
+        return;
+      }
+
+      if (message.type === "tab-opened") {
+        publishWorkspaceSyncMessage({
+          type: "tab-present",
+          tabId: tabSessionId,
+          sentAt: receivedAt
+        });
+      }
+
+      if (message.type !== "workspace-saved") {
+        return;
+      }
+
+      const remoteSave: WorkspaceRemoteSave = {
+        tabId: message.tabId,
+        fileId: message.fileId,
+        revision: message.revision,
+        updatedAt: message.updatedAt,
+        receivedAt
+      };
+
+      if (
+        shouldMarkWorkspaceStale({
+          fileId: workspaceRef.current?.fileId,
+          lastPersistedRevision: lastPersistedRevisionRef.current,
+          remoteSave
+        })
+      ) {
+        setSaveStatus("conflict");
+        setSaveConflict({
+          storedRevision: message.revision,
+          incomingRevision: workspaceRef.current?.revision ?? message.revision,
+          expectedRevision: lastPersistedRevisionRef.current ?? 0,
+          storedUpdatedAt: message.updatedAt,
+          source: "remote"
+        });
+        setStoragePanelOpen(true);
+      }
+    },
+    [publishWorkspaceSyncMessage, tabSessionId]
+  );
+
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
+
+  useEffect(() => {
+    lastPersistedRevisionRef.current = lastPersistedRevision;
+  }, [lastPersistedRevision]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return;
+    }
+
+    const updateNetworkState = () => {
+      setNetworkState(navigator.onLine ? "online" : "offline");
+    };
+
+    updateNetworkState();
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+
+    return () => {
+      window.removeEventListener("online", updateNetworkState);
+      window.removeEventListener("offline", updateNetworkState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const markPresent = () =>
+      publishWorkspaceSyncMessage({
+        type: "tab-present",
+        tabId: tabSessionId,
+        sentAt: new Date().toISOString()
+      });
+
+    if ("BroadcastChannel" in window) {
+      const channel = new BroadcastChannel(WORKSPACE_SYNC_CHANNEL_NAME);
+      channel.onmessage = (event) => handleWorkspaceSyncMessage(event.data);
+      syncChannelRef.current = channel;
+    }
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== WORKSPACE_SYNC_CHANNEL_NAME || !event.newValue) {
+        return;
+      }
+
+      try {
+        handleWorkspaceSyncMessage(JSON.parse(event.newValue));
+      } catch {
+        // Ignore malformed fallback signals from older tabs.
+      }
+    };
+
+    window.addEventListener("storage", handleStorageEvent);
+    publishWorkspaceSyncMessage({
+      type: "tab-opened",
+      tabId: tabSessionId,
+      sentAt: new Date().toISOString()
+    });
+    const heartbeatId = window.setInterval(markPresent, 5_000);
+
+    return () => {
+      window.clearInterval(heartbeatId);
+      publishWorkspaceSyncMessage({
+        type: "tab-closed",
+        tabId: tabSessionId,
+        sentAt: new Date().toISOString()
+      });
+      window.removeEventListener("storage", handleStorageEvent);
+      syncChannelRef.current?.close();
+      syncChannelRef.current = null;
+    };
+  }, [handleWorkspaceSyncMessage, publishWorkspaceSyncMessage, tabSessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,8 +379,12 @@ export function TetrisWorkspaceApp() {
       try {
         const restored = await storage.loadWorkspace();
         if (!cancelled) {
-          setWorkspace(restored ? normalizeWorkspace(restored) : createDefaultWorkspace());
+          const nextWorkspace = restored ? normalizeWorkspace(restored) : createDefaultWorkspace();
+          setWorkspace(nextWorkspace);
           setSaveStatus(restored ? "saved" : "saving");
+          setLastLocalSavedAt(restored?.updatedAt ?? null);
+          setLastPersistedRevision(restored?.revision ?? null);
+          setSaveConflict(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -109,31 +396,92 @@ export function TetrisWorkspaceApp() {
     }
 
     loadWorkspace();
+    void refreshStorageHealth();
 
     return () => {
       cancelled = true;
     };
-  }, [storage]);
+  }, [refreshStorageHealth, storage]);
 
   useEffect(() => {
     if (!workspace) {
       return;
     }
 
+    if (saveConflict) {
+      return;
+    }
+
     setSaveStatus("saving");
     const timeoutId = window.setTimeout(async () => {
       try {
-        await storage.saveWorkspace(workspace);
+        await storage.saveWorkspace(workspace, {
+          expectedRevision: lastPersistedRevisionRef.current
+        });
+        setLastPersistedRevision(workspace.revision);
+        setLastLocalSavedAt(new Date().toISOString());
         setSaveStatus("saved");
         setSaveError(null);
+        publishWorkspaceSyncMessage({
+          type: "workspace-saved",
+          tabId: tabSessionId,
+          sentAt: new Date().toISOString(),
+          fileId: workspace.fileId,
+          revision: workspace.revision,
+          updatedAt: workspace.updatedAt
+        });
+        void refreshStorageHealth();
       } catch (error) {
+        if (error instanceof WorkspaceSaveConflictError) {
+          setSaveStatus("conflict");
+          setSaveConflict({
+            storedRevision: error.storedRevision,
+            incomingRevision: error.incomingRevision,
+            expectedRevision: error.expectedRevision,
+            storedUpdatedAt: error.storedUpdatedAt,
+            source: "storage"
+          });
+          setStoragePanelOpen(true);
+          return;
+        }
+
         setSaveStatus("error");
         setSaveError(toErrorMessage(error));
+        setStoragePanelOpen(true);
       }
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [storage, workspace]);
+  }, [publishWorkspaceSyncMessage, refreshStorageHealth, saveConflict, storage, tabSessionId, workspace]);
+
+  useEffect(() => {
+    if (!storagePanelOpen) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setStoragePanelOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [storagePanelOpen]);
+
+  useEffect(() => {
+    if (!pendingDraftUndo || !workspace) {
+      return;
+    }
+
+    const itemStillExists = workspace.draft.blockItems.some(
+      (item) => item.draftBlockItemId === pendingDraftUndo.item.draftBlockItemId
+    );
+
+    if (itemStillExists) {
+      setPendingDraftUndo(null);
+    }
+  }, [pendingDraftUndo, workspace]);
 
   const allSpaces = useMemo(() => {
     return [...PRESET_SPACES, ...(workspace?.spaces ?? [])];
@@ -149,11 +497,54 @@ export function TetrisWorkspaceApp() {
       })
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
-  const needsExport = Boolean(workspace && workspace.lastExportedAt !== workspace.updatedAt);
+  const currentResultInputFingerprint = workspace
+    ? createResultInputFingerprint({
+        selectedSpace,
+        blocks: draftBlocks,
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+      })
+    : null;
+  const resultFreshnessState = createResultFreshnessState({
+    currentFingerprint: currentResultInputFingerprint,
+    resultFingerprint: latestResult?.inputFingerprint,
+    canCreateResult: Boolean(review && !review.cta.disabled),
+    disabledReason: review?.cta.disabledReason ?? null
+  });
+  const needsExport = Boolean(workspace && shouldRemindExport(workspace));
+  const connectivityStatus = useMemo(
+    () =>
+      createConnectivityStatus({
+        networkState,
+        hasMeaningfulWorkspaceData: Boolean(workspace && hasMeaningfulWorkspaceData(workspace))
+      }),
+    [networkState, workspace]
+  );
+  const otherTabCount = getActiveWorkspacePeerCount(workspaceSyncState, new Date().toISOString());
+  const isWorkspaceLocked = Boolean(saveConflict);
+  const spaceDialogMode: SpaceDialogMode = editingSpaceId ? "edit" : "add";
+  const hasBlockingDialog = spaceDialogOpen || Boolean(pendingDelete);
+  const mobileStickyAction = useMemo(
+    () =>
+      createMobileStickyActionState({
+        isWorkspaceLocked,
+        hasResult: Boolean(latestResult),
+        isResultStale: resultFreshnessState.status === "stale",
+        canCreateResult: Boolean(review && !review.cta.disabled),
+        reviewCtaLabel: "결과 만들기",
+        reviewCtaReason: review?.cta.disabledReason ?? null,
+        saveStatus,
+        needsExport
+      }),
+    [isWorkspaceLocked, latestResult, needsExport, resultFreshnessState.status, review, saveStatus]
+  );
+  const saveConflictBannerCopy = saveConflict ? getSaveConflictBannerCopy(saveConflict) : null;
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
       if (!current) {
+        return current;
+      }
+      if (saveConflict) {
         return current;
       }
       const now = new Date().toISOString();
@@ -176,6 +567,10 @@ export function TetrisWorkspaceApp() {
   }
 
   function saveSpace() {
+    if (!workspace || saveConflict) {
+      return false;
+    }
+
     const now = new Date().toISOString();
     const nextSpace: SpaceDefinition = {
       spaceId: editingSpaceId ?? createClientId("space"),
@@ -214,11 +609,15 @@ export function TetrisWorkspaceApp() {
         }
       };
     });
-    setEditingSpaceId(null);
-    setSpaceForm(DEFAULT_SPACE_FORM);
+    return true;
   }
 
-  function editSpace(space: SpaceDefinition) {
+  function updateSpaceForm(nextForm: typeof DEFAULT_SPACE_FORM) {
+    setSpaceForm(nextForm);
+    setSpaceFormError(null);
+  }
+
+  function populateSpaceForm(space: SpaceDefinition) {
     setEditingSpaceId(space.spaceId);
     setSpaceForm({
       name: space.name,
@@ -229,6 +628,94 @@ export function TetrisWorkspaceApp() {
       offsetDepthMm: space.offset.depthMm,
       offsetHeightMm: space.offset.heightMm
     });
+  }
+
+  function openAddSpaceDialog(trigger?: HTMLElement | null) {
+    lastSpaceDialogTriggerRef.current = trigger ?? lastSpaceDialogTriggerRef.current;
+    setEditingSpaceId(null);
+    setSpaceForm(DEFAULT_SPACE_FORM);
+    setSpaceFormError(null);
+    setSpaceDialogOpen(true);
+  }
+
+  function openEditSpaceDialog(space: SpaceDefinition, trigger?: HTMLElement | null) {
+    lastSpaceDialogTriggerRef.current = trigger ?? lastSpaceDialogTriggerRef.current;
+    populateSpaceForm(space);
+    setSpaceFormError(null);
+    setSpaceDialogOpen(true);
+  }
+
+  function closeSpaceDialog() {
+    setSpaceDialogOpen(false);
+    setEditingSpaceId(null);
+    setSpaceForm(DEFAULT_SPACE_FORM);
+    setSpaceFormError(null);
+    const trigger = lastSpaceDialogTriggerRef.current;
+
+    if (trigger) {
+      window.setTimeout(() => {
+        trigger.focus();
+      }, 0);
+    }
+  }
+
+  function saveSpaceAndClose() {
+    const validation = validateSpaceForm(spaceForm);
+
+    if (!validation.valid) {
+      setSpaceFormError(validation.message);
+      return;
+    }
+
+    if (saveConflict) {
+      setSpaceFormError("최신본을 불러온 뒤 내 공간을 저장할 수 있습니다.");
+      return;
+    }
+
+    if (saveSpace()) {
+      closeSpaceDialog();
+    }
+  }
+
+  function requestDelete(kind: DeleteConfirmationKind, entityId: string, name: string, trigger?: HTMLElement | null) {
+    if (kind === "draft-block") {
+      deleteCurrentBlockItemWithUndo(entityId, name);
+      return;
+    }
+
+    lastDeleteDialogTriggerRef.current = trigger ?? lastDeleteDialogTriggerRef.current;
+    setPendingDelete({ kind, entityId, name });
+  }
+
+  function closeDeleteDialog() {
+    setPendingDelete(null);
+    const trigger = lastDeleteDialogTriggerRef.current;
+
+    if (trigger) {
+      window.setTimeout(() => {
+        trigger.focus();
+      }, 0);
+    }
+  }
+
+  function confirmPendingDelete() {
+    if (!pendingDelete) {
+      return;
+    }
+
+    if (saveConflict) {
+      return;
+    }
+
+    if (pendingDelete.kind === "space") {
+      deleteSpace(pendingDelete.entityId);
+    } else if (pendingDelete.kind === "block-template") {
+      deleteBlockTemplate(pendingDelete.entityId);
+    } else {
+      deleteCurrentBlockItem(pendingDelete.entityId);
+    }
+
+    closeDeleteDialog();
   }
 
   function deleteSpace(spaceId: string) {
@@ -251,7 +738,7 @@ export function TetrisWorkspaceApp() {
       updateWorkspace((current, now) =>
         updateBlockTemplate(current, {
           blockTemplateId: editingTemplateId,
-          name: blockForm.name.trim() || "신규 블록",
+          name: blockForm.name.trim() || "신규 박스",
           dimensions: {
             widthMm: Number(blockForm.widthMm),
             depthMm: Number(blockForm.depthMm),
@@ -270,7 +757,7 @@ export function TetrisWorkspaceApp() {
     updateWorkspace((current, now) =>
       createBlockTemplate(current, {
         blockTemplateId,
-        name: blockForm.name.trim() || "신규 블록",
+        name: blockForm.name.trim() || "신규 박스",
         dimensions: {
           widthMm: Number(blockForm.widthMm),
           depthMm: Number(blockForm.depthMm),
@@ -309,6 +796,7 @@ export function TetrisWorkspaceApp() {
   }
 
   function deleteBlockTemplate(templateId: string) {
+    setPendingDraftUndo((current) => (current?.item.blockTemplateId === templateId ? null : current));
     updateWorkspace((current, now) =>
       removeBlockTemplate(current, {
         blockTemplateId: templateId,
@@ -336,20 +824,82 @@ export function TetrisWorkspaceApp() {
     );
   }
 
-  function createPlaceholderResult() {
+  function deleteCurrentBlockItemWithUndo(draftBlockItemId: string, blockName: string) {
+    if (!workspace || saveConflict) {
+      return;
+    }
+
+    const removedIndex = workspace.draft.blockItems.findIndex((item) => item.draftBlockItemId === draftBlockItemId);
+    const removedItem = removedIndex >= 0 ? workspace.draft.blockItems[removedIndex] : null;
+
+    if (!removedItem) {
+      return;
+    }
+
+    setPendingDraftUndo({
+      item: removedItem,
+      blockName,
+      index: removedIndex
+    });
+
+    updateWorkspace((current, now) => {
+      const currentIndex = current.draft.blockItems.findIndex((item) => item.draftBlockItemId === draftBlockItemId);
+
+      if (currentIndex < 0) {
+        return current;
+      }
+
+      return removeDraftBlockItem(current, {
+        draftBlockItemId,
+        now
+      });
+    });
+  }
+
+  function closePendingDraftUndo() {
+    setPendingDraftUndo(null);
+  }
+
+  function undoDraftBlockRemoval() {
+    if (!pendingDraftUndo || saveConflict) {
+      return;
+    }
+
+    const draftUndo = pendingDraftUndo;
+
+    updateWorkspace((current, now) => {
+      return restoreDraftBlockItem(current, {
+        item: draftUndo.item,
+        index: draftUndo.index,
+        now
+      });
+    });
+    setPendingDraftUndo(null);
+  }
+
+  function createPackingResult() {
     if (!workspace || !review) {
       return;
     }
 
+    const resultId = createClientId("result");
     const optimizationInput = createOptimizationInput(review, createClientId("run"));
-    const placeholderResult = createPlaceholderResultSummary(review, {
-      resultId: createClientId("result"),
-      createdAt: new Date().toISOString()
-    });
 
-    if (!optimizationInput || !placeholderResult) {
+    if (!optimizationInput) {
       return;
     }
+
+    const inputFingerprint = createResultInputFingerprint({
+      selectedSpace: optimizationInput.space,
+      blocks: optimizationInput.blocks,
+      fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+    });
+    const optimizationOutput = runPackingEngineV0(optimizationInput);
+    const resultWarnings = createPackingResultWarnings({
+      warnings: optimizationOutput.warnings,
+      usedSpaceCount: optimizationOutput.usedSpaceCount,
+      minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
+    });
 
     updateWorkspace((current, now) => ({
       ...current,
@@ -362,8 +912,16 @@ export function TetrisWorkspaceApp() {
       },
       recentResults: [
         {
-          ...placeholderResult,
-          createdAt: now
+          resultId,
+          runId: optimizationOutput.runId,
+          createdAt: now,
+          inputFingerprint: inputFingerprint ?? undefined,
+          spaceSnapshot: optimizationInput.space,
+          usedSpaceCount: optimizationOutput.usedSpaceCount,
+          averageUtilizationRate: optimizationOutput.averageUtilizationRate,
+          unloadedBlockCount: optimizationOutput.unloadedBlockCount,
+          spaces: optimizationOutput.spaces,
+          warnings: resultWarnings
         },
         ...current.recentResults
       ].slice(0, 5)
@@ -373,6 +931,134 @@ export function TetrisWorkspaceApp() {
       resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       resultStageRef.current?.focus({ preventScroll: true });
     }, 0);
+  }
+
+  function confirmChainSimulation(preview: ChainSimulationOutput, resultId: string) {
+    if (preview.addedQuantity <= 0) {
+      return;
+    }
+
+    updateWorkspace((current, now) => {
+      const targetResult = current.recentResults.find((result) => result.resultId === resultId);
+
+      if (!targetResult) {
+        return current;
+      }
+
+      const chainHistoryItem: ChainHistoryItem = {
+        chainId: createClientId("chain"),
+        resultId,
+        blockId: preview.blockTemplateId,
+        blockTemplateId: preview.blockTemplateId,
+        blockName: preview.blockName,
+        addedQuantity: preview.addedQuantity,
+        previousSpaces: targetResult.spaces,
+        previousAverageUtilizationRate: targetResult.averageUtilizationRate,
+        createdAt: now
+      };
+
+      return {
+        ...current,
+        revision: current.revision + 1,
+        updatedAt: now,
+        draft: {
+          ...current.draft,
+          currentStep: "chain",
+          updatedAt: now
+        },
+        recentResults: current.recentResults.map((result) =>
+          result.resultId === resultId
+            ? {
+                ...result,
+                spaces: preview.spaces,
+                usedSpaceCount: preview.spaces.length,
+                averageUtilizationRate: preview.averageUtilizationRate
+              }
+            : result
+        ),
+        chainHistory: [chainHistoryItem, ...current.chainHistory]
+      };
+    });
+  }
+
+  function undoLastChainAddition(resultId: string) {
+    updateWorkspace((current, now) => {
+      const latestChainItem = current.chainHistory.find(
+        (item) => item.resultId === resultId && item.previousSpaces?.length
+      );
+
+      if (!latestChainItem?.previousSpaces) {
+        return current;
+      }
+
+      const previousSpaces = latestChainItem.previousSpaces;
+
+      return {
+        ...current,
+        revision: current.revision + 1,
+        updatedAt: now,
+        draft: {
+          ...current.draft,
+          currentStep: "chain",
+          updatedAt: now
+        },
+        recentResults: current.recentResults.map((result) =>
+          result.resultId === resultId
+            ? {
+                ...result,
+                spaces: previousSpaces,
+                usedSpaceCount: previousSpaces.length,
+                averageUtilizationRate:
+                  latestChainItem.previousAverageUtilizationRate ?? result.averageUtilizationRate
+              }
+            : result
+        ),
+        chainHistory: current.chainHistory.filter((item) => item.chainId !== latestChainItem.chainId)
+      };
+    });
+  }
+
+  async function reloadLatestWorkspace() {
+    try {
+      const restored = await storage.loadWorkspace();
+      const nextWorkspace = restored ? normalizeWorkspace(restored) : createDefaultWorkspace();
+      setWorkspace(nextWorkspace);
+      setLastPersistedRevision(restored?.revision ?? null);
+      setLastLocalSavedAt(restored?.updatedAt ?? null);
+      setSaveConflict(null);
+      setSaveError(null);
+      setSaveStatus(restored ? "saved" : "saving");
+      setStoragePanelOpen(false);
+    } catch (error) {
+      setSaveStatus("error");
+      setSaveError(toErrorMessage(error));
+      setStoragePanelOpen(true);
+    }
+  }
+
+  async function requestBrowserStorageProtection() {
+    setPersistenceRequesting(true);
+    try {
+      const result = await requestStoragePersistence(
+        typeof navigator === "undefined" ? undefined : navigator.storage,
+        typeof window !== "undefined" && window.isSecureContext
+      );
+      setPersistenceRequestResult(result);
+
+      const refreshed = await readStorageHealth(
+        typeof navigator === "undefined" ? undefined : navigator.storage,
+        typeof window !== "undefined" && window.isSecureContext
+      );
+      setStorageHealth({
+        ...refreshed,
+        persistenceState:
+          result === "denied" || result === "error" || result === "unsupported"
+            ? result
+            : refreshed.persistenceState
+      });
+    } finally {
+      setPersistenceRequesting(false);
+    }
   }
 
   function exportJson() {
@@ -447,6 +1133,24 @@ export function TetrisWorkspaceApp() {
     setPendingImport(null);
   }
 
+  function runMobileStickyAction() {
+    if (mobileStickyAction.disabled) {
+      return;
+    }
+
+    if (mobileStickyAction.action === "reload") {
+      reloadLatestWorkspace();
+      return;
+    }
+
+    if (mobileStickyAction.action === "create") {
+      createPackingResult();
+      return;
+    }
+
+    exportJson();
+  }
+
   if (!workspace) {
     return (
       <main className="app-shell">
@@ -466,27 +1170,51 @@ export function TetrisWorkspaceApp() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-overlay-open={hasBlockingDialog ? "true" : undefined}>
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
             <Truck size={18} />
           </span>
-          <div>
-            <h1>테트리스 적재 최적화</h1>
-            <p>프론트 단독 · IndexedDB 작업본 · JSON 이동본</p>
-          </div>
-        </div>
+                  <div>
+                    <h1>테트리스 적재 최적화</h1>
+                    <p>이 기기에 자동 저장 · 백업 파일로 이동 가능</p>
+                  </div>
+                </div>
         <div className="toolbar">
-          <SaveStatusPill status={saveStatus} needsExport={needsExport} error={saveError} />
+          <div className="storage-status-wrapper">
+            <SaveStatusPill
+              status={saveStatus}
+              needsExport={needsExport}
+              error={saveError}
+              saveConflict={saveConflict}
+              otherTabCount={otherTabCount}
+              expanded={storagePanelOpen}
+              controls={STORAGE_PANEL_ID}
+              onClick={() => setStoragePanelOpen((open) => !open)}
+            />
+          </div>
+          {connectivityStatus.visible ? (
+            <button
+              className="status-pill status-pill-button connectivity-status-pill"
+              data-tone={connectivityStatus.tone}
+              aria-expanded={storagePanelOpen}
+              aria-controls={STORAGE_PANEL_ID}
+              aria-live="polite"
+              onClick={() => setStoragePanelOpen(true)}
+            >
+              <WifiOff size={16} />
+              {connectivityStatus.pillLabel}
+            </button>
+          ) : null}
           <button className="secondary-button" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} />
-            가져오기
+            백업 파일 가져오기
           </button>
-          <button className="primary-button desktop-export" onClick={exportJson}>
-            <Download size={16} />
-            JSON 내보내기
-          </button>
+                  <button className="primary-button desktop-export" onClick={exportJson}>
+                    <Download size={16} />
+                    백업 파일 만들기
+                  </button>
           <input
             ref={fileInputRef}
             className="file-input"
@@ -497,7 +1225,52 @@ export function TetrisWorkspaceApp() {
         </div>
       </header>
 
-      <div className="workspace-stack">
+      {storagePanelOpen ? (
+        <StorageReliabilityPanel
+          id={STORAGE_PANEL_ID}
+          workspace={workspace}
+          status={saveStatus}
+          needsExport={needsExport}
+          error={saveError}
+          lastLocalSavedAt={lastLocalSavedAt}
+          storageHealth={storageHealth}
+          saveConflict={saveConflict}
+          otherTabCount={otherTabCount}
+          connectivityStatus={connectivityStatus}
+          persistenceRequestResult={persistenceRequestResult}
+          persistenceRequesting={persistenceRequesting}
+          onClose={() => setStoragePanelOpen(false)}
+          onExportJson={exportJson}
+          onReloadLatestWorkspace={reloadLatestWorkspace}
+          onRequestStorageProtection={requestBrowserStorageProtection}
+        />
+      ) : null}
+
+      <div className="workspace-stack" data-readonly={isWorkspaceLocked}>
+        {isWorkspaceLocked ? (
+          <div className="workspace-readonly-banner" role="alert">
+            <div className="workspace-readonly-copy">
+              <strong>{saveConflictBannerCopy?.title ?? "최신 작업본이 있어 이 화면은 잠시 멈췄습니다."}</strong>
+              <span>
+                {saveConflictBannerCopy?.description ??
+                  "최신본을 불러오거나 현재 화면을 백업 파일로 남긴 뒤 다시 이어가세요."}
+              </span>
+              {saveConflictBannerCopy?.detail ? (
+                <small className="workspace-readonly-detail">{saveConflictBannerCopy.detail}</small>
+              ) : null}
+            </div>
+            <div className="workspace-readonly-actions">
+              <button className="primary-button" onClick={reloadLatestWorkspace}>
+                <RotateCcw size={16} />
+                {saveConflictBannerCopy?.primaryLabel ?? "최신본 불러오기"}
+              </button>
+              <button className="secondary-button" onClick={exportJson}>
+                <Download size={16} />
+                {saveConflictBannerCopy?.secondaryLabel ?? "현재 화면 백업"}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="workflow-progress">
           <Stepper activeStep={workspace.draft.currentStep} />
         </div>
@@ -508,19 +1281,32 @@ export function TetrisWorkspaceApp() {
             customSpaces={workspace.spaces}
             selectedSpaceId={workspace.draft.selectedSpaceId}
             selectedSpace={selectedSpace}
-            form={spaceForm}
-            editingSpaceId={editingSpaceId}
             onSelect={selectSpace}
-            onFormChange={setSpaceForm}
-            onSave={saveSpace}
-            onEdit={editSpace}
-            onDelete={deleteSpace}
-            onCancelEdit={() => {
-              setEditingSpaceId(null);
-              setSpaceForm(DEFAULT_SPACE_FORM);
-            }}
+            onOpenAdd={openAddSpaceDialog}
+            onOpenEdit={openEditSpaceDialog}
+            onDeleteRequest={requestDelete}
           />
         </section>
+
+        <SpaceFormDialog
+          open={spaceDialogOpen}
+          mode={spaceDialogMode}
+          value={spaceForm}
+          error={spaceFormError}
+          saveDisabled={isWorkspaceLocked}
+          saveDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 내 공간을 저장할 수 있습니다." : null}
+          onChange={updateSpaceForm}
+          onClose={closeSpaceDialog}
+          onSave={saveSpaceAndClose}
+        />
+
+        <DeleteConfirmDialog
+          pendingDelete={pendingDelete}
+          confirmDisabled={isWorkspaceLocked}
+          confirmDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 삭제할 수 있습니다." : null}
+          onClose={closeDeleteDialog}
+          onConfirm={confirmPendingDelete}
+        />
 
         <section className="panel workflow-section block-library-row" aria-labelledby="block-library-title">
           <div className="section-layout block-library-layout">
@@ -541,7 +1327,7 @@ export function TetrisWorkspaceApp() {
                 templates={workspace.blockTemplates}
                 onAddToDraft={addTemplateToDraft}
                 onEdit={editBlockTemplate}
-                onDelete={deleteBlockTemplate}
+                onDeleteRequest={requestDelete}
               />
             </div>
           </div>
@@ -552,13 +1338,20 @@ export function TetrisWorkspaceApp() {
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
               onQuantityChange={updateCurrentQuantity}
-              onDelete={deleteCurrentBlockItem}
+              onDeleteRequest={requestDelete}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
               review={review}
               needsExport={needsExport}
-              onCreateResult={createPlaceholderResult}
+              storageHealth={storageHealth}
+              saveConflict={saveConflict}
+              otherTabCount={otherTabCount}
+              persistenceRequesting={persistenceRequesting}
+              onExportJson={exportJson}
+              onReloadLatestWorkspace={reloadLatestWorkspace}
+              onRequestStorageProtection={requestBrowserStorageProtection}
+              onCreateResult={createPackingResult}
             />
           </div>
         </section>
@@ -566,19 +1359,65 @@ export function TetrisWorkspaceApp() {
         <ResultStage
           ref={resultStageRef}
           latestResult={latestResult}
+          resultFreshnessState={resultFreshnessState}
+          needsExport={needsExport}
           selectedSpace={selectedSpace}
+          workspacePolicy={workspace.policy}
           review={review}
           draftBlocks={draftBlocks}
+          chainHistory={workspace.chainHistory}
           pendingImport={pendingImport}
           onResolveImport={resolveImport}
+          onExportJson={exportJson}
+          onCreateResult={createPackingResult}
+          onConfirmChainSimulation={confirmChainSimulation}
+          onUndoLastChainAddition={undoLastChainAddition}
         />
       </div>
 
+      {pendingDraftUndo ? (
+        <DraftUndoToast
+          blockName={pendingDraftUndo.blockName}
+          undoDisabled={Boolean(saveConflict)}
+          undoDisabledReason={
+            saveConflict ? "최신본을 불러온 뒤에만 되돌릴 수 있습니다." : null
+          }
+          onUndo={undoDraftBlockRemoval}
+          onClose={closePendingDraftUndo}
+        />
+      ) : null}
+
       <div className="sticky-mobile-actions">
-        <SaveStatusPill status={saveStatus} needsExport={needsExport} error={saveError} compact />
-        <button className="primary-button" onClick={exportJson}>
-          <Download size={16} />
-          JSON
+        <div className="sticky-mobile-summary" data-tone={mobileStickyAction.tone}>
+          <SaveStatusPill
+            status={saveStatus}
+            needsExport={needsExport}
+            error={saveError}
+            compact
+            saveConflict={saveConflict}
+            otherTabCount={otherTabCount}
+            expanded={storagePanelOpen}
+            controls={STORAGE_PANEL_ID}
+            onClick={() => setStoragePanelOpen((open) => !open)}
+          />
+          <div className="sticky-mobile-copy">
+            <strong>{mobileStickyAction.statusLabel}</strong>
+            <span>{mobileStickyAction.helperLabel}</span>
+          </div>
+        </div>
+        <button
+          className="primary-button sticky-mobile-primary"
+          onClick={runMobileStickyAction}
+          disabled={mobileStickyAction.disabled}
+        >
+          {mobileStickyAction.action === "reload" ? (
+            <RotateCcw size={16} />
+          ) : mobileStickyAction.action === "create" ? (
+            <Box size={16} />
+          ) : (
+            <Download size={16} />
+          )}
+          <span>{mobileStickyAction.buttonLabel}</span>
         </button>
       </div>
     </main>
@@ -590,27 +1429,24 @@ function SpaceLibraryPanel({
   customSpaces,
   selectedSpaceId,
   selectedSpace,
-  form,
-  editingSpaceId,
   onSelect,
-  onFormChange,
-  onSave,
-  onEdit,
-  onDelete,
-  onCancelEdit
+  onOpenAdd,
+  onOpenEdit,
+  onDeleteRequest
 }: {
   spaces: SpaceDefinition[];
   customSpaces: SpaceDefinition[];
   selectedSpaceId: string | null;
   selectedSpace: SpaceDefinition | undefined;
-  form: typeof DEFAULT_SPACE_FORM;
-  editingSpaceId: string | null;
   onSelect: (spaceId: string) => void;
-  onFormChange: (value: typeof DEFAULT_SPACE_FORM) => void;
-  onSave: () => void;
-  onEdit: (space: SpaceDefinition) => void;
-  onDelete: (spaceId: string) => void;
-  onCancelEdit: () => void;
+  onOpenAdd: (trigger?: HTMLElement | null) => void;
+  onOpenEdit: (space: SpaceDefinition, trigger?: HTMLElement | null) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="workflow-row-content">
@@ -620,14 +1456,14 @@ function SpaceLibraryPanel({
         </span>
         <div>
           <h2 id="space-library-title">{getWorkspaceSectionTitle("space")}</h2>
-          <p className="panel-subtitle">preset 또는 커스텀 공간을 선택합니다. 트럭 preset은 2.5톤반입니다.</p>
+                  <p className="panel-subtitle">짐을 올릴 공간을 고릅니다. 트럭 기본값은 2.5톤반입니다.</p>
         </div>
       </div>
 
       <div className="section-layout space-library-layout">
         <div className="section-column">
           <h3>공간 선택</h3>
-          <div className="list library-card-grid" aria-label="공간 preset 및 커스텀 공간">
+          <div className="list library-card-grid" aria-label="기본 공간 및 내 공간">
             {spaces.map((space) => (
               <button
                 key={space.spaceId}
@@ -637,12 +1473,12 @@ function SpaceLibraryPanel({
               >
                 <span className="card-heading">
                   <strong>{space.name}</strong>
-                  {space.isPreset ? <span className="badge">preset</span> : <span className="badge">custom</span>}
+                          {space.isPreset ? <span className="badge">기본</span> : <span className="badge">내 공간</span>}
                 </span>
                 <span className="meta">{formatDimensions(space.dimensions)}</span>
                 <span className="badge-row">
                   <span className="badge" data-tone="green">
-                    usable {formatDimensions(calculateUsableSize(space))}
+                            적재 가능 {formatDimensions(calculateUsableSize(space))}
                   </span>
                 </span>
               </button>
@@ -654,19 +1490,18 @@ function SpaceLibraryPanel({
           <SelectedSpaceSummary selectedSpace={selectedSpace} />
 
           <div className="section-divider" />
-          <h3>{editingSpaceId ? "공간 수정" : "커스텀 공간 추가"}</h3>
-          <SpaceForm value={form} onChange={onFormChange} />
-          <div className="form-actions">
-            <button className="primary-button" onClick={onSave}>
+          <div className="space-library-actions">
+            <div>
+              <h3>내 공간</h3>
+              <p className="panel-subtitle">기본값이 맞지 않을 때 직접 공간 크기와 안전 여유를 저장합니다.</p>
+            </div>
+            <button
+              className="primary-button"
+              onClick={(event) => onOpenAdd(event.currentTarget)}
+            >
               <Plus size={16} />
-              {editingSpaceId ? "공간 수정" : "공간 추가"}
+              내 공간 추가
             </button>
-            {editingSpaceId ? (
-              <button className="secondary-button" onClick={onCancelEdit}>
-                <RotateCcw size={16} />
-                취소
-              </button>
-            ) : null}
           </div>
 
           {customSpaces.length > 0 ? (
@@ -679,17 +1514,25 @@ function SpaceLibraryPanel({
                     <small>{formatDimensions(space.dimensions)}</small>
                   </span>
                   <span className="row-actions">
-                    <button className="secondary-button" onClick={() => onEdit(space)}>
+                    <button
+                      className="secondary-button"
+                      onClick={(event) => onOpenEdit(space, event.currentTarget)}
+                    >
                       수정
                     </button>
-                    <button className="danger-button" onClick={() => onDelete(space.spaceId)}>
+                    <button
+                      className="danger-button"
+                      onClick={(event) => onDeleteRequest("space", space.spaceId, space.name, event.currentTarget)}
+                    >
                       <Trash2 size={16} />
                     </button>
                   </span>
                 </div>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <p className="meta">직접 저장한 공간이 아직 없습니다.</p>
+          )}
         </div>
       </div>
     </section>
@@ -707,13 +1550,13 @@ function SelectedSpaceSummary({ selectedSpace }: { selectedSpace: SpaceDefinitio
       <strong>{selectedSpace?.name ?? "공간 미선택"}</strong>
       <p className="meta">
         {selectedSpace
-          ? `${formatDimensions(selectedSpace.dimensions)} · ${selectedSpace.isPreset ? "preset" : "custom"}`
-          : "공간을 선택하면 usable 크기와 offset을 확인할 수 있습니다."}
+          ? `${formatDimensions(selectedSpace.dimensions)} · ${selectedSpace.isPreset ? "기본 공간" : "내 공간"}`
+                  : "공간을 선택하면 실제 적재 가능 크기와 여유치를 확인할 수 있습니다."}
       </p>
       <div className="summary-grid compact-summary">
-        <SummaryTile label="usable" value={usableSize ? formatDimensions(usableSize) : "-"} />
-        <SummaryTile
-          label="offset"
+                <SummaryTile label="적재 가능 크기" value={usableSize ? formatDimensions(usableSize) : "-"} />
+                <SummaryTile
+                  label="안전 여유"
           value={
             selectedSpace
               ? `${selectedSpace.offset.widthMm} / ${selectedSpace.offset.depthMm} / ${selectedSpace.offset.heightMm}mm`
@@ -729,36 +1572,46 @@ function BlockLibraryPanel({
   templates,
   onAddToDraft,
   onEdit,
-  onDelete
+  onDeleteRequest
 }: {
   templates: BlockTemplate[];
   onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
   onEdit: (template: BlockTemplate) => void;
-  onDelete: (templateId: string) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="rail-section block-template-library">
-      <h3>저장된 블록</h3>
-      <p className="panel-subtitle">저장된 커스텀 블록을 현재 작업에 재사용합니다.</p>
+      <h3>저장된 박스</h3>
+              <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
       <div className="list library-card-grid">
-        {templates.length === 0 ? (
-          <p className="fine-print">저장된 블록이 없습니다. 왼쪽 입력 영역에서 첫 블록을 저장하세요.</p>
+                {templates.length === 0 ? (
+                  <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
         ) : (
           templates.map((template) => (
             <article key={template.blockTemplateId} className="library-card">
               <div className="card-heading">
                 <strong>{template.name}</strong>
-                {template.fragile ? <span className="badge" data-tone="amber">fragile</span> : <span className="badge">normal</span>}
+                        {template.fragile ? <span className="badge" data-tone="amber">깨짐주의</span> : <span className="badge">일반</span>}
               </div>
               <p className="meta">{formatDimensions(template.dimensions)} · v{template.entityVersion}</p>
               <div className="form-actions">
                 <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
-                  현재 작업에 추가
+                          이번 작업에 추가
                 </button>
                 <button className="secondary-button" onClick={() => onEdit(template)}>
                   수정
                 </button>
-                <button className="danger-button" onClick={() => onDelete(template.blockTemplateId)}>
+                <button
+                  className="danger-button"
+                  onClick={(event) =>
+                    onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
+                  }
+                >
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -791,15 +1644,12 @@ function BlockCreatePanel({
         </span>
         <div>
           <h2 id="block-library-title">{getWorkspaceSectionTitle("blocks")}</h2>
-          <p className="panel-subtitle">
-            블록은 라이브러리에 저장한 뒤 현재 작업에 여러 번 재사용합니다. 수량은 현재 작업 항목별로 따로
-            관리합니다.
-          </p>
+                  <p className="panel-subtitle">박스 크기와 수량을 입력합니다. 저장한 박스는 다음 작업에도 다시 쓸 수 있습니다.</p>
         </div>
       </div>
       <div className="form-grid block-template-form">
         <label>
-          블록명
+          박스명
           <input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} />
         </label>
         <label>
@@ -848,17 +1698,17 @@ function BlockCreatePanel({
             checked={form.fragile}
             onChange={(event) => onChange({ ...form, fragile: event.target.checked })}
           />
-          fragile
+                  깨짐주의
         </label>
       </div>
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
-          {editingTemplateId ? "템플릿 수정" : "저장 후 작업에 추가"}
+                  {editingTemplateId ? "박스 수정" : "저장 후 이번 작업에 추가"}
         </button>
         {!editingTemplateId ? (
           <button className="secondary-button" onClick={() => onSave(false)}>
-            라이브러리에만 저장
+                    저장만 하기
           </button>
         ) : (
           <button className="secondary-button" onClick={onCancel}>
@@ -874,11 +1724,16 @@ function BlockCreatePanel({
 function CurrentWorkBlocksPanel({
   blocks,
   onQuantityChange,
-  onDelete
+  onDeleteRequest
 }: {
   blocks: BlockDefinition[];
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
-  onDelete: (draftBlockItemId: string) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
 }) {
   return (
     <section className="current-block-panel">
@@ -888,12 +1743,12 @@ function CurrentWorkBlocksPanel({
         </span>
         <div>
           <h2 id="current-work-title">{getWorkspaceSectionTitle("review")}</h2>
-          <p className="panel-subtitle">라이브러리에서 가져온 블록입니다. 수량 변경은 이 작업에만 적용됩니다.</p>
+                  <p className="panel-subtitle">이번에 실을 박스입니다. 수량 변경은 현재 작업에만 적용됩니다.</p>
         </div>
       </div>
       <div className="block-list">
         {blocks.length === 0 ? (
-          <p className="fine-print">라이브러리에서 블록을 추가하거나 새 블록을 저장 후 작업에 추가하세요.</p>
+                  <p className="fine-print">박스를 추가하거나 새 박스를 저장 후 이번 작업에 추가하세요.</p>
         ) : (
           blocks.map((block) => (
             <article key={block.draftBlockItemId} className="block-card">
@@ -903,7 +1758,7 @@ function CurrentWorkBlocksPanel({
                   <p className="meta">{formatDimensions(block.dimensions)}</p>
                 </div>
                 <span className="badge" data-tone={block.fragile ? "amber" : undefined}>
-                  {block.fragile ? "fragile" : "normal"}
+                          {block.fragile ? "깨짐주의" : "일반"}
                 </span>
               </div>
               <div className="block-detail-grid">
@@ -921,9 +1776,14 @@ function CurrentWorkBlocksPanel({
                   <span>총 부피</span>
                   <strong>{formatM3(calculateBlockVolumeM3(block))}</strong>
                 </div>
-                <button className="danger-button" onClick={() => onDelete(block.draftBlockItemId)}>
+                <button
+                  className="danger-button"
+                  onClick={(event) =>
+                    onDeleteRequest("draft-block", block.draftBlockItemId, block.name, event.currentTarget)
+                  }
+                >
                   <Trash2 size={16} />
-                  현재 작업에서 제거
+                          이번 작업에서 제거
                 </button>
               </div>
             </article>
@@ -934,15 +1794,61 @@ function CurrentWorkBlocksPanel({
   );
 }
 
+function DraftUndoToast({
+  blockName,
+  undoDisabled,
+  undoDisabledReason,
+  onUndo,
+  onClose
+}: {
+  blockName: string;
+  undoDisabled: boolean;
+  undoDisabledReason: string | null;
+  onUndo: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="draft-undo-toast" data-tone={undoDisabled ? "amber" : "green"}>
+      <div className="draft-undo-toast-copy" role="status" aria-live="polite">
+        <strong>이번 작업에서 제거했습니다.</strong>
+        <span>{undoDisabledReason ?? blockName}</span>
+      </div>
+      <div className="draft-undo-toast-actions">
+        <button className="secondary-button" onClick={onUndo} disabled={undoDisabled}>
+          <RotateCcw size={16} />
+          되돌리기
+        </button>
+        <button className="icon-button panel-close-button" onClick={onClose} aria-label="되돌리기 안내 닫기">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReviewCompactCard({
   selectedSpace,
   review,
   needsExport,
+  storageHealth,
+  saveConflict,
+  otherTabCount,
+  persistenceRequesting,
+  onExportJson,
+  onReloadLatestWorkspace,
+  onRequestStorageProtection,
   onCreateResult
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
   needsExport: boolean;
+  storageHealth: StorageHealthSnapshot | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
+  persistenceRequesting: boolean;
+  onExportJson: () => void;
+  onReloadLatestWorkspace: () => void;
+  onRequestStorageProtection: () => void;
   onCreateResult: () => void;
 }) {
   const statusTone = review?.status === "error" ? "red" : review?.status === "warning" ? "amber" : "green";
@@ -955,7 +1861,7 @@ function ReviewCompactCard({
           {
             code: "review-ready",
             level: "valid" as const,
-            text: "입력 조건이 충족되었습니다. 결과 요약을 생성할 수 있습니다."
+                    text: "입력 조건이 충족되었습니다. 결과를 만들 수 있습니다."
           }
         ];
 
@@ -967,17 +1873,33 @@ function ReviewCompactCard({
           {statusLabel}
         </span>
         <p className="fine-print">
-          fragile끼리 적층 허용, fragile 위 non-fragile 적층 금지, 90도 직교 회전 기준으로 입력을 점검합니다.
+                  깨짐주의끼리 쌓기 허용, 깨짐주의 위 일반 박스 쌓기 금지, 90도 회전 기준으로 입력을 확인합니다. 부피 기준 최소 공간 수는 참고 최소값이며, 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다.
         </p>
       </div>
       <div className="summary-grid compact-summary">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
-        <SummaryTile label="총 블록" value={`${review?.totals.totalBlockCount ?? 0}개`} />
-        <SummaryTile label="블록 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
-        <SummaryTile label="공간 usable 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
-        <SummaryTile label="예상 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
+        <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
+        <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
+                <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
+        <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
       <ul className="checklist compact-checklist">
+        {saveConflict ? (
+          <li className="review-message" data-tone="red">
+            <AlertTriangle size={18} color="var(--red)" />
+            <span className="review-message-content">
+              다른 탭에서 최신 작업본이 저장되었습니다. 이 탭에서는 결과 생성과 입력 변경을 할 수 없습니다.
+              <button className="inline-action" onClick={onReloadLatestWorkspace}>
+                최신본 불러오기
+              </button>
+            </span>
+          </li>
+        ) : otherTabCount > 0 ? (
+          <li className="review-message" data-tone="amber">
+            <AlertTriangle size={18} color="var(--amber)" />
+            다른 탭도 열려 있습니다. 편집은 이 탭에서만 계속하는 것이 안전합니다.
+          </li>
+        ) : null}
         {reviewMessages.map((message) => (
           <li key={message.code} className="review-message" data-tone={message.level === "valid" ? "green" : message.level === "warning" ? "amber" : "red"}>
             {message.level === "error" ? (
@@ -993,7 +1915,27 @@ function ReviewCompactCard({
         {needsExport ? (
           <li className="review-message" data-tone="amber">
             <AlertTriangle size={18} color="var(--amber)" />
-            다른 기기에서 이어가려면 JSON 내보내기가 필요합니다.
+            <span className="review-message-content">
+                      다른 기기에서 이어가거나 복구하려면 백업 파일을 최신으로 유지하세요.
+                      <button className="inline-action" onClick={onExportJson}>
+                        백업 만들기
+                      </button>
+            </span>
+          </li>
+        ) : null}
+        {storageHealth?.persistSupported && storageHealth.persistenceState !== "persisted" ? (
+          <li className="review-message" data-tone="amber">
+            <ShieldCheck size={18} color="var(--amber)" />
+            <span className="review-message-content">
+                      브라우저 정리로 작업본이 지워질 가능성을 줄이려면 작업 보호 강화를 권장합니다.
+              <button
+                className="inline-action"
+                onClick={onRequestStorageProtection}
+                disabled={persistenceRequesting}
+              >
+                {persistenceRequesting ? "요청 중" : "보호 강화"}
+              </button>
+            </span>
           </li>
         ) : null}
       </ul>
@@ -1002,12 +1944,12 @@ function ReviewCompactCard({
         <button
           className="primary-button"
           onClick={onCreateResult}
-          disabled={review?.cta.disabled ?? true}
-          title={review?.cta.disabledReason ?? undefined}
-        >
-          <Box size={16} />
-          결과 요약 생성
-        </button>
+          disabled={Boolean(saveConflict) || (review?.cta.disabled ?? true)}
+        title={saveConflict ? "최신 작업본을 불러온 뒤 실행할 수 있습니다." : (review?.cta.disabledReason ?? undefined)}
+      >
+        <Box size={16} />
+        결과 만들기
+      </button>
       </div>
     </section>
   );
@@ -1015,21 +1957,274 @@ function ReviewCompactCard({
 
 const ResultStage = ({
   latestResult,
+  resultFreshnessState,
+  needsExport,
   selectedSpace,
+  workspacePolicy,
   review,
   draftBlocks,
+  chainHistory,
   pendingImport,
   onResolveImport,
+  onExportJson,
+  onCreateResult,
+  onConfirmChainSimulation,
+  onUndoLastChainAddition,
   ref
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
+  resultFreshnessState: ResultFreshnessState;
+  needsExport: boolean;
   selectedSpace: SpaceDefinition | undefined;
+  workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
   draftBlocks: BlockDefinition[];
+  chainHistory: ChainHistoryItem[];
   pendingImport: PendingImport | null;
   onResolveImport: (option: ImportConflictOption) => void;
+  onExportJson: () => void;
+  onCreateResult: () => void;
+  onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
+  onUndoLastChainAddition: (resultId: string) => void;
   ref: React.Ref<HTMLElement>;
 }) => {
+  const [projectionView, setProjectionView] = useState<ProjectionView>("top");
+  const [resultViewMode, setResultViewMode] = useState<ResultViewMode>("three");
+  const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
+  const [threeResetToken, setThreeResetToken] = useState(0);
+  const [threeDialogOpen, setThreeDialogOpen] = useState(false);
+  const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
+  const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
+  const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
+  const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
+  const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
+  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const packedSpaces = latestResult?.spaces ?? [];
+  const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
+  const selectedPackedSpace =
+    displayedSpaces.find((space) => space.spaceInstanceId === selectedSpaceInstanceId) ?? displayedSpaces[0] ?? null;
+  const selectedPackedSpaceIndex = selectedPackedSpace
+    ? Math.max(
+        0,
+        displayedSpaces.findIndex((space) => space.spaceInstanceId === selectedPackedSpace.spaceInstanceId)
+      )
+    : -1;
+  const resultSpace = latestResult?.spaceSnapshot ?? selectedSpace;
+  const usableSize = resultSpace ? calculateUsableSize(resultSpace) : null;
+  const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
+  const selectedChainTemplate =
+    chainBlockOptions.find((template) => template.blockTemplateId === selectedChainTemplateId) ?? null;
+  const latestResultChainHistory = latestResult
+    ? chainHistory.filter((item) => item.resultId === latestResult.resultId)
+    : [];
+  const latestChainItem = latestResultChainHistory[0] ?? null;
+  const chainPreviewBlockIds = useMemo(() => {
+    if (!chainPreview) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      chainPreview.spaces.flatMap((space) =>
+        space.blocks.filter((block) => block.blockId.startsWith(chainPreview.runId)).map((block) => block.blockId)
+      )
+    );
+  }, [chainPreview]);
+  const projectedBlocks = useMemo(() => {
+    if (!selectedPackedSpace || !usableSize) {
+      return [];
+    }
+
+    return createProjectedBlocks(selectedPackedSpace.blocks, projectionView, usableSize);
+  }, [projectionView, selectedPackedSpace, usableSize]);
+  const legendItems = useMemo(() => createProjectionLegendItems(projectedBlocks), [projectedBlocks]);
+  const selectedLegendItem =
+    legendItems.find((item) => item.blockTemplateId === selectedBlockTemplateId) ?? null;
+  const visibleBlockCount = selectedBlockTemplateId
+    ? projectedBlocks.filter((block) => block.blockTemplateId === selectedBlockTemplateId).length
+    : projectedBlocks.length;
+  const displayedSpaceSummaries = useMemo(
+    () =>
+      new Map(
+        displayedSpaces.map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)
+      ),
+    [displayedSpaces]
+  );
+  const latestResultSpaceSummaries = useMemo(
+    () =>
+      new Map(
+        (latestResult?.spaces ?? []).map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)
+      ),
+    [latestResult?.spaces]
+  );
+  const stackingLayerSummaries = useMemo(
+    () => (selectedPackedSpace ? createStackingLayerSummaries(selectedPackedSpace) : []),
+    [selectedPackedSpace]
+  );
+  const safetySpaceSplitWarning =
+    latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
+  const resultWarnings =
+    latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
+  const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
+  const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
+
+  useEffect(() => {
+    setResultViewMode("three");
+    setThreeCameraPreset("isometric");
+    setThreeResetToken((value) => value + 1);
+    setProjectionView("top");
+    setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
+    setSelectedBlockTemplateId(null);
+    setSelectedChainTemplateId(null);
+    setChainPreview(null);
+    setThreeDialogOpen(false);
+    setChainStatus("idle");
+    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+  }, [latestResult?.resultId]);
+
+  function toggleSelectedBlockTemplate(blockTemplateId: string) {
+    setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
+  }
+
+  function clearSelectedBlockTemplate() {
+    setSelectedBlockTemplateId(null);
+  }
+
+  function selectProjectionView(view: ProjectionView) {
+    setResultViewMode(view);
+    setProjectionView(view);
+  }
+
+  function selectResultViewControl(controlId: ResultViewControlId) {
+    if (controlId === "reset") {
+      resetResultViewer();
+      return;
+    }
+
+    if (controlId === "three") {
+      setResultViewMode("three");
+      return;
+    }
+
+    if (isProjectionViewControlId(controlId)) {
+      selectProjectionView(controlId);
+      return;
+    }
+
+    const exhaustiveControlId: never = controlId;
+    return exhaustiveControlId;
+  }
+
+  function resetResultViewer() {
+    if (resultViewMode === "three") {
+      setThreeCameraPreset("isometric");
+      setThreeResetToken((value) => value + 1);
+    } else {
+      setProjectionView("top");
+      setResultViewMode("top");
+    }
+
+    setSelectedBlockTemplateId(null);
+  }
+
+  function openExpandedThreeView(trigger: HTMLButtonElement) {
+    threeDialogTriggerRef.current = trigger;
+    setThreeDialogOpen(true);
+  }
+
+  function closeExpandedThreeView({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
+    setThreeDialogOpen(false);
+
+    if (restoreFocus) {
+      window.setTimeout(() => {
+        threeDialogTriggerRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  function openTopFallbackFromExpanded() {
+    closeExpandedThreeView({ restoreFocus: false });
+    selectProjectionView("top");
+  }
+
+  function selectChainTemplate(blockTemplateId: string) {
+    setSelectedChainTemplateId(blockTemplateId);
+    setChainPreview(null);
+    setChainStatus("idle");
+    setSelectedBlockTemplateId(null);
+    setChainStatusMessage(
+      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산을 실행하세요."
+    );
+  }
+
+  function calculateChainPreview() {
+    if (!latestResult || !selectedChainTemplate) {
+      setChainStatus("idle");
+      setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
+      return;
+    }
+
+    setChainStatus("calculating");
+    setChainStatusMessage("남은 공간 기준으로 계산하고 있습니다.");
+
+    window.setTimeout(() => {
+      try {
+        const preview = runChainSimulationV0({
+          result: latestResult,
+          blockTemplate: selectedChainTemplate,
+          runId: createClientId("chain-run"),
+          policy: {
+            fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
+            nonFragileOnFragileAllowed: false
+          }
+        });
+
+        if (preview.warnings.length > 0) {
+          setChainPreview(null);
+          setSelectedBlockTemplateId(null);
+          setChainStatus("error");
+          setChainStatusMessage(preview.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          return;
+        }
+
+        setChainPreview(preview);
+        setSelectedBlockTemplateId(preview.blockTemplateId);
+
+        if (preview.addedQuantity > 0) {
+          setChainStatus("preview");
+          setChainStatusMessage(`${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`);
+          return;
+        }
+
+        setChainStatus("empty");
+        setChainStatusMessage(`${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`);
+      } catch {
+        setChainPreview(null);
+        setChainStatus("error");
+        setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 박스를 선택하세요.");
+      }
+    }, 0);
+  }
+
+  function confirmChainPreview() {
+    if (!latestResult || !chainPreview || chainPreview.addedQuantity <= 0) {
+      return;
+    }
+
+    onConfirmChainSimulation(chainPreview, latestResult.resultId);
+    setChainPreview(null);
+    setChainStatus("idle");
+    setChainStatusMessage("추가 결과를 반영했습니다.");
+  }
+
+  function clearChainSelection() {
+    setSelectedChainTemplateId(null);
+    setChainPreview(null);
+    setSelectedBlockTemplateId(null);
+    setChainStatus("idle");
+    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+  }
+
   return (
     <section className="panel result-stage" ref={ref} tabIndex={-1} data-has-result={Boolean(latestResult)}>
       <div className="result-stage-header">
@@ -1039,8 +2234,18 @@ const ResultStage = ({
           </span>
           <h2>{getWorkspaceSectionTitle("result")}</h2>
           <p className="panel-subtitle">
-            실제 3D 엔진 연결 전까지는 입력 데이터 기반 요약과 큰 preview 영역을 제공합니다.
+            계산 결과를 3D로 먼저 확인하고, 위/앞/옆 보기로 위치를 다시 점검합니다.
           </p>
+          <div className="result-meta-strip" aria-label="결과 계산 정보">
+            <span className="result-meta-item">
+              계산 시각{" "}
+              {latestResult ? (
+                <time dateTime={latestResult.createdAt}>{formatDateTime(latestResult.createdAt)}</time>
+              ) : (
+                <span className="result-meta-value">결과를 만들면 계산 시각이 표시됩니다.</span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1051,60 +2256,707 @@ const ResultStage = ({
           value={latestResult ? `${Math.round(latestResult.averageUtilizationRate * 100)}%` : "-"}
         />
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
-        <SummaryTile label="대상 공간" value={selectedSpace?.name ?? "미선택"} />
+        <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
 
-      {latestResult ? (
-        <div className="result-preview result-preview-large" tabIndex={0} aria-label="결과 3D placeholder">
-          <strong>3D 결과 스테이지</strong>
-          <span className="fine-print">
-            결과 영역은 데스크톱에서 가장 큰 패널입니다. 후속 단계에서 Web Worker 최적화 엔진과 3D 렌더링을
-            연결합니다.
-          </span>
-          <div className="preview-stack" aria-hidden="true">
-            {draftBlocks.slice(0, 12).map((block, index) => (
-              <span key={`${block.draftBlockItemId}-${index}`} style={{ "--i": index } as React.CSSProperties} />
-            ))}
+      {latestResult && resultFreshnessState.visible ? (
+        <div
+          className="result-freshness-banner"
+          data-tone={resultFreshnessState.tone}
+          role="status"
+          aria-label="입력이 바뀌었습니다"
+        >
+          <div>
+            <span className="badge" data-tone="amber">
+              재계산 필요
+            </span>
+            <strong>{resultFreshnessState.title}</strong>
+            <p className="fine-print">{resultFreshnessState.description}</p>
+            {resultFreshnessState.ctaDisabledReason ? (
+              <p className="fine-print">{resultFreshnessState.ctaDisabledReason}</p>
+            ) : null}
           </div>
-          <div className="view-buttons">
-            <button className="secondary-button">상면</button>
-            <button className="secondary-button">정면</button>
-            <button className="secondary-button">측면</button>
-            <button className="secondary-button">
-              <RotateCcw size={16} />
-              리셋
-            </button>
+          <button
+            className="secondary-button"
+            onClick={onCreateResult}
+            disabled={resultFreshnessState.ctaDisabled}
+            aria-label="결과 다시 만들기"
+            title={resultFreshnessState.ctaDisabledReason ?? undefined}
+          >
+            <Box size={16} />
+            {resultFreshnessState.ctaLabel}
+          </button>
+        </div>
+      ) : null}
+
+      {unloadedWarningSummary.length > 0 ? (
+        <div className="result-unloaded-callout" role="status" aria-label="미적재 안내">
+          <div>
+            <span className="badge" data-tone="amber">
+              미적재 확인
+            </span>
+            <p className="fine-print">
+              안전하게 올릴 자리가 없는 박스가 {latestResult?.unloadedBlockCount ?? 0}개 있습니다.
+              박스 수량을 줄이거나 더 큰 공간을 선택하세요.
+            </p>
+          </div>
+          <ul className="unloaded-warning-list">
+            {unloadedWarningSummary.slice(0, 2).map((item) => (
+              <li key={item.message}>
+                {item.message}
+                {item.count > 1 ? ` · ${item.count}건` : ""}
+              </li>
+            ))}
+            {unloadedWarningSummary.length > 2 ? <li>외 {unloadedWarningSummary.length - 2}건</li> : null}
+          </ul>
+        </div>
+      ) : null}
+
+      {latestResult && needsExport ? (
+        <div className="result-backup-callout" aria-label="결과 백업 안내">
+          <div>
+            <span className="badge" data-tone="amber">
+              백업 권장
+            </span>
+            <p className="fine-print">
+              결과를 다른 기기로 옮기거나 복구하려면 백업 파일을 만들어 두세요.
+            </p>
+          </div>
+          <button className="primary-button result-backup-action" onClick={onExportJson}>
+            <Download size={16} />
+            백업 파일 만들기
+          </button>
+        </div>
+      ) : null}
+
+      {safetySpaceSplitWarning ? (
+        <div className="review-status-banner" data-tone="amber" role="status">
+          <span className="badge" data-tone="amber">
+            현장 안내
+          </span>
+          <p className="fine-print">{safetySpaceSplitWarning}</p>
+        </div>
+      ) : null}
+
+      {latestResult ? (
+        <div className="result-preview result-preview-large" tabIndex={0} aria-label="3D 및 2D 배치 검토 작업대">
+          <div className="result-workspace-grid">
+            <aside className="result-space-panel" aria-label="공간 인스턴스 선택">
+              <div className="result-panel-head">
+                <strong>공간</strong>
+                        <span className="fine-print">{displayedSpaces.length}개 공간</span>
+              </div>
+              <div className="space-instance-list">
+                {displayedSpaces.map((space, index) => (
+                  <button
+                    key={space.spaceInstanceId}
+                    className="space-instance-button"
+                    aria-pressed={space.spaceInstanceId === selectedPackedSpace?.spaceInstanceId}
+                    onClick={() => {
+                      setSelectedSpaceInstanceId(space.spaceInstanceId);
+                      setSelectedBlockTemplateId(null);
+                    }}
+                  >
+                    <strong>Space {index + 1}</strong>
+                    <span>
+                      {space.blocks.length}개 · {Math.round(space.utilizationRate * 100)}%
+                    </span>
+                    <small className="space-load-summary">
+                      {displayedSpaceSummaries.get(space.spaceInstanceId) ?? "적재 박스 없음"}
+                    </small>
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            <section className="projection-stage" aria-label="배치 뷰어">
+              <div className="projection-toolbar">
+                <div>
+                  <strong>{getResultViewTitle(resultViewMode)}</strong>
+                  <span className="fine-print">
+                    {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
+                  </span>
+                </div>
+                <div className="view-buttons" aria-label="결과 보기 방식 선택">
+                  {RESULT_VIEW_CONTROL_ITEMS.map((item) =>
+                    item.id === "reset" ? (
+                      <button
+                        key={item.id}
+                        className="secondary-button"
+                        aria-label={item.ariaLabel}
+                        onClick={() => selectResultViewControl(item.id)}
+                      >
+                        <RotateCcw size={16} />
+                        {item.label}
+                      </button>
+                    ) : (
+                      <button
+                        key={item.id}
+                        className="secondary-button"
+                        aria-label={item.ariaLabel}
+                        aria-pressed={resultViewMode === item.id}
+                        onClick={() => selectResultViewControl(item.id)}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
+                <>
+                  <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
+                    {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
+                      <button
+                        key={item.preset}
+                        className="secondary-button"
+                        aria-label={item.ariaLabel}
+                        aria-pressed={threeCameraPreset === item.preset}
+                        onClick={() => setThreeCameraPreset(item.preset)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                    <button
+                      className="secondary-button result-three-expand-button"
+                      aria-haspopup="dialog"
+                      aria-expanded={threeDialogOpen}
+                      aria-controls="expanded-three-view-dialog"
+                      onClick={(event) => openExpandedThreeView(event.currentTarget)}
+                    >
+                      <Maximize2 size={16} />
+                      크게 보기
+                    </button>
+                  </div>
+                  <Result3DCanvas
+                    blocks={selectedPackedSpace.blocks}
+                    bounds={usableSize}
+                    selectedBlockTemplateId={selectedBlockTemplateId}
+                    chainPreviewBlockIds={chainPreviewBlockIds}
+                    cameraPreset={threeCameraPreset}
+                    resetToken={threeResetToken}
+                    spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
+                    utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
+                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
+                    onClearSelection={clearSelectedBlockTemplate}
+                    fallbackAction={{
+                      label: "위 보기로 확인",
+                      ariaLabel: "3D 대신 위 보기로 결과 확인",
+                      onClick: () => selectProjectionView("top")
+                    }}
+                  />
+                  <ExpandedThreeViewDialog
+                    open={threeDialogOpen}
+                    blocks={selectedPackedSpace.blocks}
+                    bounds={usableSize}
+                    selectedBlockTemplateId={selectedBlockTemplateId}
+                    chainPreviewBlockIds={chainPreviewBlockIds}
+                    cameraPreset={threeCameraPreset}
+                    resetToken={threeResetToken}
+                    spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
+                    utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
+                    spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · ${formatDimensions(usableSize)}`}
+                    onSelectCameraPreset={setThreeCameraPreset}
+                    onResetViewer={resetResultViewer}
+                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
+                    onClearSelection={clearSelectedBlockTemplate}
+                    onOpenFallbackView={openTopFallbackFromExpanded}
+                    onClose={closeExpandedThreeView}
+                  />
+                </>
+              ) : (
+                <>
+                  <div className="projection-board" data-view={projectionView}>
+                    {projectedBlocks.length > 0 ? (
+                      projectedBlocks.map((block) => {
+                        const isSelected =
+                          selectedBlockTemplateId === null || selectedBlockTemplateId === block.blockTemplateId;
+                        const previewState = chainPreview
+                          ? chainPreviewBlockIds.has(block.blockId)
+                            ? "new"
+                            : "base"
+                          : undefined;
+                        const blockStyle = {
+                          "--block-color": block.color,
+                          left: `${block.leftPercent}%`,
+                          top: `${block.topPercent}%`,
+                          width: `${Math.max(block.widthPercent, 1.4)}%`,
+                          height: `${Math.max(block.heightPercent, 1.4)}%`,
+                          zIndex: Math.max(1, Math.round(block.depthOrder))
+                        } as React.CSSProperties;
+
+                        return (
+                          <span
+                            key={block.blockId}
+                            className="projected-block"
+                            data-muted={!isSelected}
+                            data-fragile={block.fragile}
+                            data-chain-preview={previewState}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${block.name} ${getProjectionViewLabel(projectionView)} 투영`}
+                            title={`${block.name} · ${block.fragile ? "깨짐주의" : "일반"}`}
+                            style={blockStyle}
+                            onClick={() => toggleSelectedBlockTemplate(block.blockTemplateId)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                toggleSelectedBlockTemplate(block.blockTemplateId);
+                              }
+                            }}
+                          >
+                            <span>{block.name}</span>
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <div className="projection-empty">
+                        <strong>표시할 배치 좌표가 없습니다.</strong>
+                                <span className="fine-print">결과를 다시 만들면 배치 위치를 확인할 수 있습니다.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="projection-status">
+                    <span className="badge" data-tone="green">
+                      {selectedBlockTemplateId ? "강조" : "표시"} {visibleBlockCount}개
+                    </span>
+                    <span className="fine-print">
+                      {selectedLegendItem ? `${selectedLegendItem.name} 유형만 강조 중` : "전체 박스 표시"}
+                    </span>
+                    {selectedLegendItem ? (
+                      <button className="secondary-button selection-clear-action" onClick={clearSelectedBlockTemplate}>
+                        <X size={16} />
+                        전체 보기
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </section>
+
+            <aside className="result-legend-panel" aria-label="박스 유형 범례">
+              <div className="result-panel-head">
+                <strong>박스 범례</strong>
+                <span className="fine-print">{legendItems.length}개 유형</span>
+              </div>
+              <div className="projection-legend-list">
+                {legendItems.map((item) => (
+                  <button
+                    key={item.blockTemplateId}
+                    className="projection-legend-item"
+                    aria-pressed={item.blockTemplateId === selectedBlockTemplateId}
+                    onClick={() => toggleSelectedBlockTemplate(item.blockTemplateId)}
+                  >
+                    <span className="legend-swatch" style={{ "--block-color": item.color } as React.CSSProperties} />
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>
+                              {item.quantity}개 · {item.fragile ? "깨짐주의" : "일반"}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
       ) : (
-        <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
-          <strong>결과 요약 대기</strong>
-          <span className="fine-print">공간과 블록을 확인한 뒤 3번 영역에서 결과 요약을 생성하세요.</span>
-        </div>
+                <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
+                  <strong>결과 대기 중</strong>
+                  <span className="fine-print">
+                    {review && !review.cta.disabled
+                      ? "입력이 준비되었습니다. 결과를 만들면 3D 적재 보기를 확인할 수 있습니다."
+                      : (review?.cta.disabledReason ?? "공간과 박스를 확인한 뒤 3번 영역에서 결과를 만드세요.")}
+                  </span>
+                  {review && !review.cta.disabled ? (
+                    <button className="primary-button result-empty-action" onClick={onCreateResult}>
+                      <Box size={16} />
+                      결과 만들기
+                    </button>
+                  ) : null}
+                </div>
       )}
 
+      <ChainSimulationPanel
+        latestResult={latestResult}
+        blockOptions={chainBlockOptions}
+        selectedTemplateId={selectedChainTemplateId}
+        chainStatus={chainStatus}
+        statusMessage={chainStatusMessage}
+        preview={chainPreview}
+        chainHistory={latestResultChainHistory}
+        latestChainItem={latestChainItem}
+        onSelectTemplate={selectChainTemplate}
+        onCalculate={calculateChainPreview}
+        onConfirm={confirmChainPreview}
+        onCreateResult={onCreateResult}
+        onClearSelection={clearChainSelection}
+        onUndo={() => {
+          if (latestResult) {
+            onUndoLastChainAddition(latestResult.resultId);
+            setChainPreview(null);
+            setSelectedBlockTemplateId(null);
+            setChainStatus("idle");
+            setChainStatusMessage("직전 추가를 취소했습니다.");
+          }
+        }}
+      />
+
       <div className="result-lower-grid">
+        <section className="sub-panel stacking-layer-panel">
+          <h3>쌓는 순서</h3>
+          <p className="meta">
+            {latestResult && selectedPackedSpace
+              ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
+              : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
+          </p>
+          {stackingLayerSummaries.length > 0 ? (
+            <div className="stacking-layer-list" aria-label="층별 적재 순서">
+              {stackingLayerSummaries.map((layer) => (
+                <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
+                  <strong>{layer.layerIndex}층</strong>
+                  <span>
+                    {layer.heightLabel}
+                    <small>{layer.loadSummary}</small>
+                  </span>
+                  <small className="stacking-layer-count">총 {layer.blockCount}개</small>
+                </div>
+              ))}
+            </div>
+          ) : latestResult && selectedPackedSpace ? (
+            <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
+          ) : null}
+        </section>
         <section className="sub-panel">
           <h3>입력 요약</h3>
           <p className="meta">
-            현재 작업 블록 {review?.totals.totalBlockCount ?? 0}개 · 총 부피{" "}
+            현재 작업 박스 {review?.totals.totalBlockCount ?? 0}개 · 총 부피{" "}
             {formatM3(review?.totals.totalBlockVolumeM3 ?? 0)}
           </p>
         </section>
         <section className="sub-panel">
-          <h3>추가 블록 시뮬레이션</h3>
-          <p className="meta">체이닝 계산은 후속 엔진 연결 범위입니다.</p>
-          <div className="badge-row">
-            <span className="badge">기존 배치 잠금</span>
-            <span className="badge">최대 적재 계산</span>
-          </div>
+                  <h3>공간별 적재 결과</h3>
+          {latestResult?.spaces?.length ? (
+            <div className="compact-list">
+              {latestResult.spaces.map((space, index) => (
+                <div key={space.spaceInstanceId} className="compact-row">
+                  <span>
+                    <strong>Space {index + 1}</strong>
+                    <small>
+                      배치 {space.blocks.length}개 · 적재율 {Math.round(space.utilizationRate * 100)}%
+                    </small>
+                    <small className="space-load-summary">
+                      {latestResultSpaceSummaries.get(space.spaceInstanceId) ?? "적재 박스 없음"}
+                    </small>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+                    <p className="meta">결과를 만들면 공간별 박스 배치가 저장됩니다.</p>
+          )}
+          {resultWarningSummary.length ? (
+            <ul className="checklist compact-checklist">
+              {resultWarningSummary.map((warning) => (
+                <li key={warning.message} className="review-message" data-tone="amber">
+                  <AlertTriangle size={18} color="var(--amber)" />
+                  {warning.message}
+                  {warning.count > 1 ? ` · ${warning.count}건` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       </div>
 
-      {pendingImport ? <ImportConflictPanel pendingImport={pendingImport} onResolve={onResolveImport} /> : null}
+      {pendingImport ? (
+        <ImportConflictPanel pendingImport={pendingImport} onResolve={onResolveImport} onExportJson={onExportJson} />
+      ) : null}
     </section>
   );
 };
+
+function ExpandedThreeViewDialog({
+  open,
+  blocks,
+  bounds,
+  selectedBlockTemplateId,
+  chainPreviewBlockIds,
+  cameraPreset,
+  resetToken,
+  spaceLabel,
+  utilizationLabel,
+  spaceDescription,
+  onSelectCameraPreset,
+  onResetViewer,
+  onSelectBlockTemplate,
+  onClearSelection,
+  onOpenFallbackView,
+  onClose
+}: {
+  open: boolean;
+  blocks: PackedBlock[];
+  bounds: NonNullable<ReturnType<typeof calculateUsableSize>>;
+  selectedBlockTemplateId: string | null;
+  chainPreviewBlockIds: Set<string>;
+  cameraPreset: ThreeCameraPreset;
+  resetToken: number;
+  spaceLabel: string;
+  utilizationLabel: string;
+  spaceDescription: string;
+  onSelectCameraPreset: (preset: ThreeCameraPreset) => void;
+  onResetViewer: () => void;
+  onSelectBlockTemplate: (blockTemplateId: string) => void;
+  onClearSelection: () => void;
+  onOpenFallbackView: () => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "expanded-three-view-dialog-title";
+  const descriptionId = "expanded-three-view-dialog-description";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-expanded-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="expanded-three-view-dialog"
+      ref={dialogRef}
+      className="result-three-dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="result-three-dialog-sheet">
+        <div className="space-form-dialog-head result-three-dialog-head">
+          <div>
+            <h2 id={titleId}>3D 크게 보기</h2>
+            <p id={descriptionId} className="fine-print">
+              {spaceLabel} · {spaceDescription} · {utilizationLabel}
+            </p>
+          </div>
+          <button
+            className="icon-button panel-close-button"
+            data-expanded-close="true"
+            onClick={onClose}
+            aria-label="3D 크게 보기 닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="view-buttons three-camera-buttons expanded-three-camera-buttons" aria-label="확대 3D 카메라 시점 선택">
+          {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
+            <button
+              key={item.preset}
+              className="secondary-button"
+              aria-label={`확대 ${item.ariaLabel}`}
+              aria-pressed={cameraPreset === item.preset}
+              onClick={() => onSelectCameraPreset(item.preset)}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button className="secondary-button" onClick={onResetViewer} aria-label="확대 3D 처음 보기로 되돌리기">
+            <RotateCcw size={16} />
+            처음
+          </button>
+        </div>
+
+        <div className="result-three-dialog-body">
+          {open ? (
+            <Result3DCanvas
+              blocks={blocks}
+              bounds={bounds}
+              selectedBlockTemplateId={selectedBlockTemplateId}
+              chainPreviewBlockIds={chainPreviewBlockIds}
+              cameraPreset={cameraPreset}
+              resetToken={resetToken}
+              spaceLabel={spaceLabel}
+              utilizationLabel={utilizationLabel}
+              onSelectBlockTemplate={onSelectBlockTemplate}
+              onClearSelection={onClearSelection}
+              fallbackAction={{
+                label: "위 보기로 확인",
+                ariaLabel: "확대 3D 대신 위 보기로 결과 확인",
+                onClick: () => {
+                  onOpenFallbackView();
+                }
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function ChainSimulationPanel({
+  latestResult,
+  blockOptions,
+  selectedTemplateId,
+  chainStatus,
+  statusMessage,
+  preview,
+  chainHistory,
+  latestChainItem,
+  onSelectTemplate,
+  onCalculate,
+  onConfirm,
+  onCreateResult,
+  onClearSelection,
+  onUndo
+}: {
+  latestResult: TetrisWorkspace["recentResults"][number] | null;
+  blockOptions: BlockTemplate[];
+  selectedTemplateId: string | null;
+  chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
+  statusMessage: string;
+  preview: ChainSimulationOutput | null;
+  chainHistory: ChainHistoryItem[];
+  latestChainItem: ChainHistoryItem | null;
+  onSelectTemplate: (blockTemplateId: string) => void;
+  onCalculate: () => void;
+  onConfirm: () => void;
+  onCreateResult: () => void;
+  onClearSelection: () => void;
+  onUndo: () => void;
+}) {
+  const hasResult = Boolean(latestResult);
+  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating" && chainStatus !== "error";
+  const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
+
+  return (
+    <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
+      <div className="chain-panel-header">
+        <div>
+          <span className="badge" data-tone={hasResult ? "green" : undefined}>
+            기준 결과 잠금
+          </span>
+          <h3 id="chain-simulation-title">추가 박스 시뮬레이션</h3>
+          <p className="panel-subtitle">
+            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 박스를 얼마나 더 넣을 수 있는지 확인합니다.
+          </p>
+        </div>
+        <div className="chain-history-row" aria-label="체이닝 이력">
+          <span className="badge">기준 결과</span>
+          {chainHistory
+            .slice()
+            .reverse()
+            .map((item) => (
+              <span key={item.chainId} className="badge" data-tone="green">
+                + {item.blockName ?? item.blockId} {item.addedQuantity}개
+              </span>
+            ))}
+        </div>
+      </div>
+
+      {!hasResult ? (
+        <p className="meta">결과를 먼저 생성하면 추가 적재를 시험할 수 있습니다.</p>
+      ) : (
+        <div className="chain-panel-grid">
+          <div>
+            <strong className="chain-field-title">추가할 박스</strong>
+            <div className="chain-option-list" role="radiogroup" aria-label="추가할 박스 유형">
+              {blockOptions.length === 0 ? (
+                <p className="fine-print">현재 작업에 추가된 박스 유형이 없습니다.</p>
+              ) : (
+                blockOptions.map((template) => (
+                  <button
+                    key={template.blockTemplateId}
+                    className="chain-option-button"
+                    role="radio"
+                    aria-checked={selectedTemplateId === template.blockTemplateId}
+                    onClick={() => onSelectTemplate(template.blockTemplateId)}
+                  >
+                    <strong>{template.name}</strong>
+                    <span>
+                            {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="chain-result-panel">
+            <div className="chain-status-box" data-tone={chainStatus} role="status">
+              <strong>
+                {chainStatus === "preview"
+                  ? "추가 가능"
+                  : chainStatus === "empty"
+                    ? "추가 가능 0"
+                    : chainStatus === "error"
+                      ? "기준 결과 확인 필요"
+                      : chainStatus === "calculating"
+                        ? "계산 중"
+                        : "대기"}
+              </strong>
+              <span>{statusMessage}</span>
+            </div>
+
+            <div className="form-actions chain-actions">
+              <button className="primary-button" onClick={onCalculate} disabled={!canCalculate}>
+                {chainStatus === "calculating" ? "추가 가능 수량 계산 중..." : "최대 적재 계산"}
+              </button>
+              <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
+                이 결과 반영
+              </button>
+              {chainStatus === "error" ? (
+                <button className="secondary-button" onClick={onCreateResult}>
+                  결과 다시 생성
+                </button>
+              ) : null}
+              <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>
+                직전 추가 취소
+              </button>
+              {chainStatus === "empty" ? (
+                <button className="secondary-button" onClick={onClearSelection}>
+                  다른 박스 선택
+                </button>
+              ) : null}
+            </div>
+            {!selectedTemplateId ? (
+              <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 function Stepper({ activeStep }: { activeStep: string }) {
   return (
@@ -1122,36 +2974,545 @@ function SaveStatusPill({
   status,
   needsExport,
   error,
-  compact = false
+  saveConflict,
+  otherTabCount,
+  compact = false,
+  expanded,
+  controls,
+  onClick
 }: {
   status: SaveStatus;
   needsExport: boolean;
   error: string | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
   compact?: boolean;
+  expanded: boolean;
+  controls: string;
+  onClick: () => void;
 }) {
+  if (status === "conflict" || saveConflict) {
+    return (
+      <button
+        className="status-pill status-pill-button"
+        data-tone="red"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+      >
+                <AlertTriangle size={16} />
+                {compact ? "최신본 필요" : "다른 탭 저장됨 · 최신본 필요"}
+      </button>
+    );
+  }
+
   if (status === "error") {
     return (
-      <span className="status-pill" data-tone="red" role="status" title={error ?? undefined}>
-        <AlertTriangle size={16} />
-        {compact ? "저장 실패" : "저장 실패 · JSON 내보내기 필요"}
-      </span>
+      <button
+        className="status-pill status-pill-button"
+        data-tone="red"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+        title={error ?? undefined}
+      >
+                <AlertTriangle size={16} />
+                {compact ? "저장 실패" : "저장 실패 · 백업 만들기"}
+      </button>
     );
   }
 
   if (status === "saving" || status === "loading") {
     return (
-      <span className="status-pill" data-tone="amber" role="status">
+      <button
+        className="status-pill status-pill-button"
+        data-tone="amber"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-live="polite"
+        onClick={onClick}
+      >
         <Save size={16} />
-        {status === "loading" ? "불러오는 중" : "저장 중"}
-      </span>
+        {status === "loading" ? "작업본 불러오는 중" : "이 기기에 저장 중"}
+      </button>
     );
   }
 
   return (
-    <span className="status-pill" data-tone={needsExport ? "amber" : "green"} role="status">
+    <button
+      className="status-pill status-pill-button"
+      data-tone={needsExport ? "amber" : "green"}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      aria-live="polite"
+      onClick={onClick}
+    >
       <CheckCircle2 size={16} />
-      {needsExport ? "자동저장됨 · 내보내기 필요" : "자동저장됨"}
-    </span>
+      {compact
+        ? otherTabCount > 0
+          ? "편집 중"
+                  : needsExport
+                    ? "백업 필요"
+                    : "저장됨"
+        : otherTabCount > 0
+          ? "이 기기에 저장됨 · 다른 탭 열림"
+          : needsExport
+                    ? "이 기기에 저장됨 · 백업 필요"
+                    : "이 기기에 저장됨"}
+    </button>
+  );
+}
+
+function StorageReliabilityPanel({
+  id,
+  workspace,
+  status,
+  needsExport,
+  error,
+  lastLocalSavedAt,
+  storageHealth,
+  saveConflict,
+  otherTabCount,
+  connectivityStatus,
+  persistenceRequestResult,
+  persistenceRequesting,
+  onClose,
+  onExportJson,
+  onReloadLatestWorkspace,
+  onRequestStorageProtection
+}: {
+  id: string;
+  workspace: TetrisWorkspace;
+  status: SaveStatus;
+  needsExport: boolean;
+  error: string | null;
+  lastLocalSavedAt: string | null;
+  storageHealth: StorageHealthSnapshot | null;
+  saveConflict: WorkspaceSaveConflictNotice | null;
+  otherTabCount: number;
+  connectivityStatus: ConnectivityStatus;
+  persistenceRequestResult: PersistenceRequestResult | null;
+  persistenceRequesting: boolean;
+  onClose: () => void;
+  onExportJson: () => void;
+  onReloadLatestWorkspace: () => void;
+  onRequestStorageProtection: () => void;
+}) {
+  const localState = createLocalSaveState({
+    status,
+    error,
+    lastLocalSavedLabel: lastLocalSavedAt ? formatDateTime(lastLocalSavedAt) : null,
+    saveConflict,
+    otherTabCount
+  });
+  const exportState = getExportState(workspace, needsExport);
+  const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
+  const canRequestProtection =
+    Boolean(storageHealth?.persistSupported) && storageHealth?.persistenceState !== "persisted" && !persistenceRequesting;
+
+  return (
+    <section
+      id={id}
+      className="storage-reliability-panel"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={`${id}-title`}
+    >
+      <div className="storage-panel-head">
+        <div>
+                  <h2 id={`${id}-title`}>작업 저장 상태</h2>
+                  <p className="fine-print">이 기기 자동저장과 백업 파일은 서로 다른 안전장치입니다.</p>
+        </div>
+        <button className="icon-button panel-close-button" onClick={onClose} aria-label="저장 보호 패널 닫기">
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="storage-health-list">
+        <StorageHealthRow
+          icon={<Save size={18} />}
+          tone={localState.tone}
+          label="이 기기 저장"
+          value={localState.value}
+          description={localState.description}
+          detail={localState.detail}
+        />
+        <StorageHealthRow
+          icon={<Download size={18} />}
+          tone={exportState.tone}
+                  label="백업 파일"
+          value={exportState.value}
+          description={exportState.description}
+        />
+        <StorageHealthRow
+          icon={<HardDrive size={18} />}
+          tone={browserState.tone}
+          label="브라우저 보호"
+          value={browserState.value}
+          description={browserState.description}
+          detail={browserState.detail}
+        />
+        {connectivityStatus.visible ? (
+          <StorageHealthRow
+            icon={<WifiOff size={18} />}
+            tone={connectivityStatus.tone}
+            label="네트워크 상태"
+            value={connectivityStatus.title}
+            description={connectivityStatus.description}
+            detail="네트워크 상태는 브라우저가 감지한 힌트입니다. 작업 차단 기준으로 사용하지 않습니다."
+          />
+        ) : null}
+      </div>
+
+      <div className="storage-health-actions">
+        {saveConflict ? (
+          <button className="primary-button" onClick={onReloadLatestWorkspace}>
+            <RotateCcw size={16} />
+            최신 작업본 불러오기
+          </button>
+        ) : null}
+        <button className={saveConflict ? "secondary-button" : "primary-button"} onClick={onExportJson}>
+          <Download size={16} />
+                  {saveConflict ? "현재 작업 백업 만들기" : status === "error" ? "지금 백업" : "백업 파일 만들기"}
+        </button>
+        <button
+          className="secondary-button"
+          onClick={onRequestStorageProtection}
+          disabled={!canRequestProtection}
+          title={!storageHealth?.persistSupported ? "이 브라우저에서는 저장 보호 요청을 지원하지 않습니다." : undefined}
+        >
+          <ShieldCheck size={16} />
+                  {persistenceRequesting ? "보호 요청 중" : "작업 보호 강화"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function StorageHealthRow({
+  icon,
+  tone,
+  label,
+  value,
+  description,
+  detail
+}: {
+  icon: React.ReactNode;
+  tone: "green" | "amber" | "red" | "neutral";
+  label: string;
+  value: string;
+  description: string;
+  detail?: string | null;
+}) {
+  return (
+    <div className="storage-health-row" data-tone={tone}>
+      <span className="storage-health-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div>
+        <div className="storage-health-row-head">
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+        <p className="fine-print">{description}</p>
+        {detail ? <p className="fine-print storage-health-detail">{detail}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function getExportState(workspace: TetrisWorkspace, needsExport: boolean) {
+  if (needsExport) {
+    return {
+      tone: "amber" as const,
+      value: "업데이트 필요",
+              description: workspace.lastExportedAt
+                ? `마지막 백업 이후 변경됨. 마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
+                : "아직 다른 기기로 옮길 백업 파일이 없습니다. 파일 형식은 JSON입니다."
+    };
+  }
+
+  if (!workspace.lastExportedAt) {
+    return {
+      tone: "neutral" as const,
+      value: "대기",
+              description: "작업 데이터가 생기면 백업 파일 필요 여부를 표시합니다."
+    };
+  }
+
+  return {
+    tone: "green" as const,
+    value: "최신",
+    description: `마지막 백업: ${formatDateTime(workspace.lastExportedAt)}`
+  };
+}
+
+function getBrowserProtectionState(
+  storageHealth: StorageHealthSnapshot | null,
+  persistenceRequestResult: PersistenceRequestResult | null
+) {
+  if (!storageHealth) {
+    return {
+      tone: "neutral" as const,
+      value: "확인 중",
+      description: "이 브라우저에서 작업 보호를 강화할 수 있는지 확인합니다.",
+      detail: null
+    };
+  }
+
+  const detail = getStorageUsageDetail(storageHealth);
+
+  if (storageHealth.persistenceState === "persisted") {
+    return {
+      tone: "green" as const,
+      value: "보호됨",
+      description: "브라우저 저장 공간 정리로 삭제될 가능성을 낮췄습니다.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "denied" || persistenceRequestResult === "denied") {
+    return {
+      tone: "amber" as const,
+      value: "보호되지 않음",
+              description: "요청이 허용되지 않았습니다. 백업 파일을 함께 보관하세요.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "error" || persistenceRequestResult === "error") {
+    return {
+      tone: "red" as const,
+      value: "확인 실패",
+      description: storageHealth.errorMessage ?? "브라우저 저장 보호 상태를 확인하지 못했습니다.",
+      detail
+    };
+  }
+
+  if (storageHealth.persistenceState === "unsupported") {
+    return {
+      tone: "neutral" as const,
+      value: "지원되지 않음",
+              description: "이 환경에서는 브라우저 보호 요청을 사용할 수 없습니다. 백업 파일을 보관하세요.",
+      detail
+    };
+  }
+
+  return {
+    tone: "amber" as const,
+    value: "보호 강화 가능",
+              description: "브라우저 정책에 따라 이 기기 작업이 정리될 수 있습니다.",
+    detail
+  };
+}
+
+function getStorageUsageDetail(storageHealth: StorageHealthSnapshot) {
+  if (storageHealth.usageLabel && storageHealth.quotaLabel) {
+    const ratio = storageHealth.usageRatioLabel ? ` (${storageHealth.usageRatioLabel})` : "";
+    return `브라우저 추정 사용량 ${storageHealth.usageLabel} / ${storageHealth.quotaLabel}${ratio}`;
+  }
+
+  if (storageHealth.usageLabel) {
+    return `브라우저 추정 사용량 ${storageHealth.usageLabel}`;
+  }
+
+  if (!storageHealth.estimateSupported) {
+    return "이 브라우저는 저장 용량 추정값을 제공하지 않습니다.";
+  }
+
+  return "브라우저가 제공한 대략치를 표시합니다.";
+}
+
+function SpaceFormDialog({
+  open,
+  mode,
+  value,
+  error,
+  saveDisabled,
+  saveDisabledReason,
+  onChange,
+  onClose,
+  onSave
+}: {
+  open: boolean;
+  mode: SpaceDialogMode;
+  value: typeof DEFAULT_SPACE_FORM;
+  error: string | null;
+  saveDisabled: boolean;
+  saveDisabledReason: string | null;
+  onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const copy = getSpaceDialogCopy(mode);
+  const titleId = "space-form-dialog-title";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("input")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="space-form-dialog"
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="space-form-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id={titleId}>{copy.title}</h2>
+            <p className="fine-print">{copy.helperLabel}</p>
+          </div>
+          <button className="icon-button panel-close-button" onClick={onClose} aria-label="공간 입력 닫기">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-form-dialog-body">
+          <SpaceForm value={value} onChange={onChange} />
+          {error || saveDisabledReason ? (
+            <p className="form-error" role="alert">
+              {error ?? saveDisabledReason}
+            </p>
+          ) : null}
+        </div>
+        <div className="form-actions space-form-dialog-actions">
+          <button className="secondary-button" onClick={onClose}>
+            취소
+          </button>
+          <button className="primary-button" onClick={onSave} disabled={saveDisabled}>
+            <Plus size={16} />
+            {copy.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function DeleteConfirmDialog({
+  pendingDelete,
+  confirmDisabled,
+  confirmDisabledReason,
+  onClose,
+  onConfirm
+}: {
+  pendingDelete: PendingDelete | null;
+  confirmDisabled: boolean;
+  confirmDisabledReason: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "delete-confirm-dialog-title";
+  const descriptionId = "delete-confirm-dialog-description";
+  const copy = pendingDelete ? getDeleteConfirmationCopy(pendingDelete.kind, pendingDelete.name) : null;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (pendingDelete) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-cancel-button='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [pendingDelete]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="delete-confirm-dialog"
+      role="alertdialog"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="delete-confirm-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id={titleId}>{copy?.title ?? "삭제 확인"}</h2>
+            <p id={descriptionId} className="fine-print">
+              {copy?.description ?? "삭제 전에 한 번 더 확인해 주세요."}
+            </p>
+            {confirmDisabledReason ? (
+              <p className="form-error" role="alert">
+                {confirmDisabledReason}
+              </p>
+            ) : null}
+          </div>
+          <button className="icon-button panel-close-button" onClick={onClose} aria-label="삭제 확인 닫기">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="form-actions delete-confirm-actions">
+          <button
+            data-cancel-button="true"
+            className="secondary-button"
+            autoFocus
+            onClick={onClose}
+          >
+            취소
+          </button>
+          <button className="danger-button" onClick={onConfirm} disabled={confirmDisabled}>
+            <Trash2 size={16} />
+            {copy?.confirmLabel ?? "삭제"}
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
@@ -1199,7 +3560,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 가로
+        안전 여유 가로(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -1209,7 +3570,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 세로
+        안전 여유 세로(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -1219,7 +3580,7 @@ function SpaceForm({
         />
       </label>
       <label>
-        offset 높이
+        안전 여유 높이(mm)
         <input
           inputMode="numeric"
           type="number"
@@ -1243,19 +3604,26 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
 
 function ImportConflictPanel({
   pendingImport,
-  onResolve
+  onResolve,
+  onExportJson
 }: {
   pendingImport: PendingImport;
   onResolve: (option: ImportConflictOption) => void;
+  onExportJson: () => void;
 }) {
   return (
     <div className="import-panel" role="alert">
-      <strong>JSON 가져오기 확인</strong>
+      <strong>백업 파일 가져오기 확인</strong>
       <p className="fine-print">
         충돌 유형: {pendingImport.conflict.kind}. 현재 작업을 보존하거나, 가져온 파일로 대체하거나, 복사본으로 열 수
         있습니다.
       </p>
+      <p className="fine-print">현재 작업을 아직 내보내지 않았다면 먼저 백업한 뒤 대체를 선택하세요.</p>
       <div className="form-actions">
+        <button className="secondary-button" onClick={onExportJson}>
+          <Download size={16} />
+          현재 작업 먼저 백업
+        </button>
         {pendingImport.conflict.options.includes("keep-current") ? (
           <button className="secondary-button" onClick={() => onResolve("keep-current")}>
             현재 작업 유지
@@ -1283,6 +3651,28 @@ function calculateBlockVolumeM3(block: BlockDefinition) {
   return dimensionsVolumeM3(block.dimensions) * block.quantity;
 }
 
+function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
+  const templateMap = new Map<string, BlockTemplate>();
+
+  blocks.forEach((block) => {
+    if (templateMap.has(block.blockTemplateId)) {
+      return;
+    }
+
+    templateMap.set(block.blockTemplateId, {
+      blockTemplateId: block.blockTemplateId,
+      entityVersion: block.entityVersion,
+      name: block.name,
+      dimensions: block.dimensions,
+      fragile: block.fragile,
+      createdAt: block.createdAt,
+      updatedAt: block.updatedAt
+    });
+  });
+
+  return Array.from(templateMap.values());
+}
+
 function dimensionsVolumeM3(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
   return (dimensions.widthMm * dimensions.depthMm * dimensions.heightMm) / 1_000_000_000;
 }
@@ -1293,6 +3683,21 @@ function formatDimensions(dimensions: { widthMm: number; depthMm: number; height
 
 function formatM3(value: number) {
   return `${value.toFixed(3)}m³`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function createClientId(prefix: string) {
@@ -1342,6 +3747,38 @@ function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace {
         }) ?? []
     }
   };
+}
+
+function isWorkspaceSyncMessage(value: unknown): value is WorkspaceSyncMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<WorkspaceSyncMessage>;
+
+  if (
+    candidate.type !== "tab-opened" &&
+    candidate.type !== "tab-present" &&
+    candidate.type !== "tab-closed" &&
+    candidate.type !== "workspace-saved"
+  ) {
+    return false;
+  }
+
+  if (typeof candidate.tabId !== "string" || typeof candidate.sentAt !== "string") {
+    return false;
+  }
+
+  if (candidate.type !== "workspace-saved") {
+    return true;
+  }
+
+  const savedCandidate = candidate as Partial<Extract<WorkspaceSyncMessage, { type: "workspace-saved" }>>;
+  return (
+    typeof savedCandidate.fileId === "string" &&
+    typeof savedCandidate.revision === "number" &&
+    typeof savedCandidate.updatedAt === "string"
+  );
 }
 
 function toErrorMessage(error: unknown) {

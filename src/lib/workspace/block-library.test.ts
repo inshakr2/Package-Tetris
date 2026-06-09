@@ -5,6 +5,7 @@ import {
   addBlockTemplateToDraft,
   createBlockTemplate,
   removeDraftBlockItem,
+  restoreDraftBlockItem,
   updateDraftBlockItemQuantity
 } from "./block-library";
 
@@ -118,5 +119,200 @@ describe("block-library", () => {
     // Then
     assert.equal(nextWorkspace.blockTemplates.length, 1);
     assert.equal(nextWorkspace.draft.blockItems.length, 0);
+  });
+
+  it("제거된 현재 작업 박스를 원래 순서와 수량으로 복구한다", () => {
+    // Given
+    const workspace = addBlockTemplateToDraft(
+      addBlockTemplateToDraft(
+        createBlockTemplate(
+          createDefaultWorkspace({
+            deviceId: "device-a",
+            fileId: "file-a",
+            now: "2026-06-08T00:00:00.000Z"
+          }),
+          {
+            blockTemplateId: "template-a",
+            name: "A-박스",
+            dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+            fragile: false,
+            quantity: 5,
+            addToDraft: false,
+            now: "2026-06-08T01:00:00.000Z"
+          }
+        ),
+        {
+          draftBlockItemId: "item-a",
+          blockTemplateId: "template-a",
+          quantity: 3,
+          now: "2026-06-08T02:00:00.000Z"
+        }
+      ),
+      {
+        draftBlockItemId: "item-b",
+        blockTemplateId: "template-a",
+        quantity: 7,
+        now: "2026-06-08T03:00:00.000Z"
+      }
+    );
+    const removedItem = workspace.draft.blockItems[0];
+
+    if (!removedItem) {
+      throw new Error("expected removed draft item");
+    }
+
+    const removedWorkspace = removeDraftBlockItem(workspace, {
+      draftBlockItemId: removedItem.draftBlockItemId,
+      now: "2026-06-08T04:00:00.000Z"
+    });
+
+    // When
+    const restoredWorkspace = restoreDraftBlockItem(removedWorkspace, {
+      item: removedItem,
+      index: 0,
+      now: "2026-06-08T05:00:00.000Z"
+    });
+
+    // Then
+    assert.deepEqual(
+      restoredWorkspace.draft.blockItems.map((item) => [item.draftBlockItemId, item.quantity]),
+      [
+        ["item-a", 3],
+        ["item-b", 7]
+      ]
+    );
+    assert.equal(restoredWorkspace.revision, removedWorkspace.revision + 1);
+    assert.equal(restoredWorkspace.updatedAt, "2026-06-08T05:00:00.000Z");
+    assert.equal(restoredWorkspace.draft.updatedAt, "2026-06-08T05:00:00.000Z");
+    assert.equal(restoredWorkspace.draft.currentStep, "blocks");
+  });
+
+  it("같은 draftBlockItemId가 이미 있으면 현재 작업 박스를 중복 복구하지 않는다", () => {
+    // Given
+    const workspace = addBlockTemplateToDraft(
+      createBlockTemplate(
+        createDefaultWorkspace({
+          deviceId: "device-a",
+          fileId: "file-a",
+          now: "2026-06-08T00:00:00.000Z"
+        }),
+        {
+          blockTemplateId: "template-a",
+          name: "A-박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          quantity: 5,
+          addToDraft: false,
+          now: "2026-06-08T01:00:00.000Z"
+        }
+      ),
+      {
+        draftBlockItemId: "item-a",
+        blockTemplateId: "template-a",
+        quantity: 3,
+        now: "2026-06-08T02:00:00.000Z"
+      }
+    );
+    const existingItem = workspace.draft.blockItems[0];
+
+    if (!existingItem) {
+      throw new Error("expected existing draft item");
+    }
+
+    // When
+    const restoredWorkspace = restoreDraftBlockItem(workspace, {
+      item: existingItem,
+      index: 0,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(restoredWorkspace, workspace);
+  });
+
+  it("연결된 저장된 박스가 없으면 현재 작업 박스를 복구하지 않는다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+
+    // When
+    const restoredWorkspace = restoreDraftBlockItem(workspace, {
+      item: {
+        draftBlockItemId: "item-a",
+        blockTemplateId: "missing-template",
+        quantity: 3,
+        createdAt: "2026-06-08T02:00:00.000Z",
+        updatedAt: "2026-06-08T02:00:00.000Z"
+      },
+      index: 0,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(restoredWorkspace, workspace);
+  });
+
+  it("복구 index가 범위를 벗어나면 안전한 위치로 보정한다", () => {
+    // Given
+    const workspace = addBlockTemplateToDraft(
+      createBlockTemplate(
+        createDefaultWorkspace({
+          deviceId: "device-a",
+          fileId: "file-a",
+          now: "2026-06-08T00:00:00.000Z"
+        }),
+        {
+          blockTemplateId: "template-a",
+          name: "A-박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          quantity: 5,
+          addToDraft: false,
+          now: "2026-06-08T01:00:00.000Z"
+        }
+      ),
+      {
+        draftBlockItemId: "item-a",
+        blockTemplateId: "template-a",
+        quantity: 3,
+        now: "2026-06-08T02:00:00.000Z"
+      }
+    );
+    const baseItem = workspace.draft.blockItems[0];
+
+    if (!baseItem) {
+      throw new Error("expected draft item");
+    }
+
+    // When
+    const negativeIndexWorkspace = restoreDraftBlockItem(workspace, {
+      item: {
+        ...baseItem,
+        draftBlockItemId: "item-before"
+      },
+      index: -5,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+    const overflowIndexWorkspace = restoreDraftBlockItem(workspace, {
+      item: {
+        ...baseItem,
+        draftBlockItemId: "item-after"
+      },
+      index: 99,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+
+    // Then
+    assert.deepEqual(
+      negativeIndexWorkspace.draft.blockItems.map((item) => item.draftBlockItemId),
+      ["item-before", "item-a"]
+    );
+    assert.deepEqual(
+      overflowIndexWorkspace.draft.blockItems.map((item) => item.draftBlockItemId),
+      ["item-a", "item-after"]
+    );
   });
 });

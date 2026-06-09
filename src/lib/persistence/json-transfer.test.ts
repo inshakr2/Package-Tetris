@@ -21,13 +21,26 @@ describe("json-transfer", () => {
       createdAt: workspace.updatedAt,
       usedSpaceCount: 1,
       averageUtilizationRate: 0.82,
-      unloadedBlockCount: 0
+      unloadedBlockCount: 0,
+      spaceSnapshot: {
+        spaceId: "space-result",
+        entityVersion: 1,
+        name: "결과 기준 공간",
+        type: "custom",
+        dimensions: { widthMm: 1000, depthMm: 900, heightMm: 1200 },
+        offset: { widthMm: 20, depthMm: 20, heightMm: 50 },
+        createdAt: workspace.updatedAt,
+        updatedAt: workspace.updatedAt
+      }
     });
     workspace.chainHistory.push({
       chainId: "chain-a",
       resultId: "result-a",
       blockId: "block-a",
+      blockTemplateId: "template-a",
+      blockName: "추가 박스",
       addedQuantity: 3,
+      previousAverageUtilizationRate: 0.82,
       createdAt: workspace.updatedAt
     });
 
@@ -41,7 +54,10 @@ describe("json-transfer", () => {
     assert.equal(parsed.policy.fragile_stack_on_fragile_allowed, true);
     assert.ok(parsed.draft);
     assert.equal(parsed.recent_results.length, 1);
+    assert.equal(parsed.recent_results[0].spaceSnapshot.name, "결과 기준 공간");
     assert.equal(parsed.chain_history.length, 1);
+    assert.equal(parsed.chain_history[0].blockName, "추가 박스");
+    assert.equal(parsed.chain_history[0].previousAverageUtilizationRate, 0.82);
     assert.ok(Array.isArray(parsed.custom_blocks));
   });
 

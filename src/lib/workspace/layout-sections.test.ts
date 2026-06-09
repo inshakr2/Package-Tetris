@@ -12,9 +12,9 @@ describe("workspace layout sections", () => {
 
     // Then
     assert.deepEqual(sectionIds, expectedSectionIds);
-    assert.equal(getWorkspaceSectionTitle("space"), "1. 공간 라이브러리");
-    assert.equal(getWorkspaceSectionTitle("blocks"), "2. 블록 라이브러리");
-    assert.equal(getWorkspaceSectionTitle("review"), "3. 현재 적재 및 실행 전 검토");
-    assert.equal(getWorkspaceSectionTitle("result"), "4. 결과 요약");
+    assert.equal(getWorkspaceSectionTitle("space"), "1. 적재 공간 선택");
+    assert.equal(getWorkspaceSectionTitle("blocks"), "2. 박스 등록");
+    assert.equal(getWorkspaceSectionTitle("review"), "3. 실행 전 확인");
+    assert.equal(getWorkspaceSectionTitle("result"), "4. 결과 확인");
   });
 });

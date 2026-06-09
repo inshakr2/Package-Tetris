@@ -9,22 +9,22 @@ export const WORKSPACE_SECTION_ORDER: ReadonlyArray<{
 }> = [
   {
     sectionId: "space",
-    title: "1. 공간 라이브러리",
+    title: "1. 적재 공간 선택",
     stepLabel: "1 공간"
   },
   {
     sectionId: "blocks",
-    title: "2. 블록 라이브러리",
-    stepLabel: "2 블록"
+    title: "2. 박스 등록",
+    stepLabel: "2 박스"
   },
   {
     sectionId: "review",
-    title: "3. 현재 적재 및 실행 전 검토",
-    stepLabel: "3 적재"
+    title: "3. 실행 전 확인",
+    stepLabel: "3 확인"
   },
   {
     sectionId: "result",
-    title: "4. 결과 요약",
+    title: "4. 결과 확인",
     stepLabel: "4 결과"
   }
 ];

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import "fake-indexeddb/auto";
 import { createDefaultWorkspace } from "../workspace/workspace-factory";
-import { IndexedDbTetrisStorage } from "./indexed-db";
+import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "./indexed-db";
 
 describe("IndexedDbTetrisStorage", () => {
   beforeEach(async () => {
@@ -58,6 +58,75 @@ describe("IndexedDbTetrisStorage", () => {
     assert.equal(restored?.blockTemplates[0]?.fragile, true);
     assert.equal(restored?.draft.selectedSpaceId, "space-custom-1");
     assert.equal(restored?.draft.blockItems[0]?.quantity, 12);
+  });
+
+  it("저장소 revision이 expectedRevision보다 최신이면 stale 탭 저장을 거부한다", async () => {
+    // Given
+    const storage = new IndexedDbTetrisStorage("my-tetris-test");
+    const firstTabWorkspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    await storage.saveWorkspace(firstTabWorkspace);
+
+    const secondTabWorkspace = {
+      ...firstTabWorkspace,
+      revision: 2,
+      updatedAt: "2026-06-08T00:10:00.000Z"
+    };
+    await storage.saveWorkspace(secondTabWorkspace, { expectedRevision: 1 });
+
+    const staleFirstTabWorkspace = {
+      ...firstTabWorkspace,
+      revision: 2,
+      updatedAt: "2026-06-08T00:20:00.000Z"
+    };
+
+    // When / Then
+    await assert.rejects(
+      () => storage.saveWorkspace(staleFirstTabWorkspace, { expectedRevision: 1 }),
+      (error) => {
+        assert.ok(error instanceof WorkspaceSaveConflictError);
+        assert.equal(error.storedRevision, 2);
+        assert.equal(error.incomingRevision, 2);
+        assert.equal(error.expectedRevision, 1);
+        assert.equal(error.storedUpdatedAt, "2026-06-08T00:10:00.000Z");
+        return true;
+      }
+    );
+
+    const restored = await storage.loadWorkspace();
+    assert.equal(restored?.updatedAt, "2026-06-08T00:10:00.000Z");
+  });
+
+  it("다른 fileId 작업본은 expectedRevision과 무관하게 active 작업본으로 저장한다", async () => {
+    // Given
+    const storage = new IndexedDbTetrisStorage("my-tetris-test");
+    const currentWorkspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    await storage.saveWorkspace({
+      ...currentWorkspace,
+      revision: 5,
+      updatedAt: "2026-06-08T00:10:00.000Z"
+    });
+
+    const importedCopy = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-copy",
+      now: "2026-06-08T00:20:00.000Z"
+    });
+
+    // When
+    await storage.saveWorkspace(importedCopy, { expectedRevision: 1 });
+
+    // Then
+    const restored = await storage.loadWorkspace();
+    assert.equal(restored?.fileId, "file-copy");
+    assert.equal(restored?.revision, 1);
   });
 });
 

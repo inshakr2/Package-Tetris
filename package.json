@@ -9,18 +9,20 @@
     "test": "node --import tsx --test src/lib/persistence/*.test.ts src/lib/workspace/*.test.ts"
   },
   "dependencies": {
-    "lucide-react": "latest",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "lucide-react": "1.17.0",
+    "next": "16.2.7",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "three": "0.184.0"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "fake-indexeddb": "latest",
-    "tsx": "^4.22.4",
-    "typescript": "latest"
+    "@types/node": "25.9.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.184.1",
+    "fake-indexeddb": "6.2.5",
+    "tsx": "4.22.4",
+    "typescript": "6.0.3"
   },
   "overrides": {
     "postcss": "8.5.10",
