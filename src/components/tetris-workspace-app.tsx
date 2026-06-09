@@ -92,6 +92,7 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
+import { downloadTextFile } from "@/lib/workspace/text-file-download";
 import {
   createResultFreshnessState,
   createResultInputFingerprint,
@@ -127,6 +128,7 @@ import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
 type InstructionCopyStatus = "idle" | "copied" | "error";
+type InstructionDownloadStatus = "idle" | "downloaded" | "error";
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -2007,6 +2009,7 @@ const ResultStage = ({
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
+  const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const displayedSpaces = chainPreview?.spaces ?? packedSpaces;
@@ -2114,10 +2117,12 @@ const ResultStage = ({
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
     setInstructionCopyStatus("idle");
+    setInstructionDownloadStatus("idle");
   }, [latestResult?.resultId]);
 
   useEffect(() => {
     setInstructionCopyStatus("idle");
+    setInstructionDownloadStatus("idle");
   }, [stackingInstructionText]);
 
   function toggleSelectedBlockTemplate(blockTemplateId: string) {
@@ -2195,6 +2200,22 @@ const ResultStage = ({
       setInstructionCopyStatus("copied");
     } catch {
       setInstructionCopyStatus("error");
+    }
+  }
+
+  function downloadStackingInstructions() {
+    if (!stackingInstructionText) {
+      return;
+    }
+
+    try {
+      downloadTextFile({
+        text: stackingInstructionText,
+        filename: createStackingInstructionFilename(selectedPackedSpaceIndex)
+      });
+      setInstructionDownloadStatus("downloaded");
+    } catch {
+      setInstructionDownloadStatus("error");
     }
   }
 
@@ -2666,15 +2687,26 @@ const ResultStage = ({
                   : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
               </p>
             </div>
-            <button
-              className="secondary-button loading-instruction-copy-button"
-              onClick={copyStackingInstructions}
-              disabled={!stackingInstructionText}
-              title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
-            >
-              <Copy size={16} />
-              작업 순서 복사
-            </button>
+            <div className="loading-instruction-actions">
+              <button
+                className="secondary-button loading-instruction-copy-button"
+                onClick={copyStackingInstructions}
+                disabled={!stackingInstructionText}
+                title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
+              >
+                <Copy size={16} />
+                작업 순서 복사
+              </button>
+              <button
+                className="secondary-button loading-instruction-download-button"
+                onClick={downloadStackingInstructions}
+                disabled={!stackingInstructionText}
+                title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
+              >
+                <Download size={16} />
+                작업 지시서 저장
+              </button>
+            </div>
           </div>
           {instructionCopyStatus === "copied" ? (
             <p className="loading-instruction-copy-status" data-tone="green" role="status">
@@ -2683,6 +2715,15 @@ const ResultStage = ({
           ) : instructionCopyStatus === "error" ? (
             <p className="loading-instruction-copy-status" data-tone="amber" role="status">
               복사하지 못했습니다. 브라우저 권한을 확인하세요.
+            </p>
+          ) : null}
+          {instructionDownloadStatus === "downloaded" ? (
+            <p className="loading-instruction-copy-status" data-tone="green" role="status">
+              작업 지시서 파일을 만들었습니다.
+            </p>
+          ) : instructionDownloadStatus === "error" ? (
+            <p className="loading-instruction-copy-status" data-tone="amber" role="status">
+              작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
             </p>
           ) : null}
           {stackingInstructionSteps.length > 0 ? (
@@ -3784,6 +3825,13 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
+}
+
+function createStackingInstructionFilename(selectedPackedSpaceIndex: number): string {
+  const spaceLabel = selectedPackedSpaceIndex >= 0 ? `space-${selectedPackedSpaceIndex + 1}` : "space";
+  const dateLabel = new Date().toISOString().slice(0, 10);
+
+  return `my-tetris-${spaceLabel}-loading-${dateLabel}.txt`;
 }
 
 function createClientId(prefix: string) {

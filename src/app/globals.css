@@ -1181,12 +1181,21 @@ select:focus-visible {
   margin-bottom: 4px;
 }
 
-.loading-instruction-copy-button {
+.loading-instruction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.loading-instruction-copy-button,
+.loading-instruction-download-button {
   min-height: 48px;
   white-space: normal;
 }
 
-.loading-instruction-copy-button svg {
+.loading-instruction-copy-button svg,
+.loading-instruction-download-button svg {
   flex: 0 0 auto;
 }
 
@@ -2094,7 +2103,13 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .loading-instruction-copy-button {
+  .loading-instruction-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .loading-instruction-copy-button,
+  .loading-instruction-download-button {
     width: 100%;
   }
 
@@ -2163,25 +2178,25 @@ select:focus-visible {
 
   .projection-toolbar .view-buttons,
   .three-camera-buttons {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
     max-width: 100%;
     gap: 8px;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scroll-snap-type: x proximity;
     padding-bottom: 2px;
   }
 
   .projection-toolbar .view-buttons .secondary-button,
   .three-camera-buttons .secondary-button {
-    flex: 0 0 auto;
+    width: 100%;
     min-width: 48px;
     min-height: 48px;
     justify-content: center;
     padding-inline: 12px;
-    scroll-snap-align: start;
+  }
+
+  .three-camera-buttons .result-three-expand-button {
+    grid-column: 1 / -1;
   }
 
   .result-panel-head,

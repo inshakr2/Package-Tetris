@@ -96,10 +96,10 @@ describe("stacking-layer-summary-layout", () => {
       /\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[\s\S]*?}/.test(
         styles
       ) &&
-      /\.loading-instruction-copy-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
+      /\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
       ) &&
-      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.stacking-layer-head\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
         .test(styles);
 
     // Then
@@ -117,5 +117,28 @@ describe("stacking-layer-summary-layout", () => {
 
     // Then
     assert.equal(hasWarningAwareCopy, true);
+  });
+
+  it("현장 적재 지시는 클립보드가 막힌 현장을 위해 텍스트 파일 저장 버튼을 제공한다", () => {
+    // Given / When
+    const hasDownloadAction =
+      source.includes("downloadStackingInstructions") &&
+      source.includes("downloadTextFile") &&
+      source.includes("작업 지시서 저장") &&
+      source.includes("loading-instruction-download-button") &&
+      source.includes("instructionDownloadStatus") &&
+      source.includes("작업 지시서 파일을 만들었습니다.");
+    const hasDownloadActionStyle =
+      /\.loading-instruction-actions\s*{[\s\S]*?display:\s*flex;[\s\S]*?gap:\s*8px;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.loading-instruction-actions\s*{[\s\S]*?display:\s*grid;[\s\S]*?}[\s\S]*?\.loading-instruction-copy-button,\s*\.loading-instruction-download-button\s*{[\s\S]*?width:\s*100%;[\s\S]*?}/
+        .test(styles);
+
+    // Then
+    assert.equal(hasDownloadAction && hasDownloadActionStyle, true);
   });
 });
