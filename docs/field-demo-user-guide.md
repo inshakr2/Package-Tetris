@@ -1,4 +1,4 @@
-# My Package Tetris 현장 시연 가이드
+# Package Tetris 현장 시연 가이드
 
 ## 1. 현재 시연 가능 여부
 
@@ -99,7 +99,7 @@ Homebrew 설치가 어렵거나 회사 보안 정책상 차단되면 Node.js 공
 ### 방법 A. ZIP 파일로 받기
 
 1. GitHub 저장소에 접속한다.
-   - https://github.com/inshakr2/My-Package-Tetris
+   - https://github.com/inshakr2/Package-Tetris
 2. 브랜치가 `main`인지 확인한다.
 3. `Code` 버튼을 누른다.
 4. `Download ZIP`을 누른다.
@@ -111,8 +111,8 @@ Homebrew 설치가 어렵거나 회사 보안 정책상 차단되면 Node.js 공
 Git을 사용할 수 있는 담당자는 아래 명령어를 실행한다.
 
 ```bash
-git clone -b main https://github.com/inshakr2/My-Package-Tetris.git
-cd My-Package-Tetris
+git clone -b main https://github.com/inshakr2/Package-Tetris.git
+cd Package-Tetris
 ```
 
 Windows에서 Git이 없다면 https://git-scm.com/downloads/win 에서 설치한다. 현장 작업자가 직접 Git을 다룰 필요는 없다.
