@@ -10,6 +10,7 @@ import {
   HardDrive,
   Maximize2,
   PackagePlus,
+  PencilLine,
   Plus,
   RotateCcw,
   Save,
@@ -224,6 +225,7 @@ export function TetrisWorkspaceApp() {
   const tabSessionId = useMemo(() => createClientId("tab"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultStageRef = useRef<HTMLElement>(null);
+  const currentWorkSectionRef = useRef<HTMLElement>(null);
   const workspaceRef = useRef<TetrisWorkspace | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
   const lastPersistedRevisionRef = useRef<number | null>(null);
@@ -989,6 +991,11 @@ export function TetrisWorkspaceApp() {
     }, 0);
   }
 
+  function focusCurrentWorkInputs() {
+    currentWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    currentWorkSectionRef.current?.focus({ preventScroll: true });
+  }
+
   function confirmChainSimulation(preview: ChainSimulationOutput, resultId: string) {
     if (preview.addedQuantity <= 0) {
       return;
@@ -1390,7 +1397,12 @@ export function TetrisWorkspaceApp() {
           </div>
         </section>
 
-        <section className="panel workflow-section current-work-row" aria-labelledby="current-work-title">
+        <section
+          ref={currentWorkSectionRef}
+          className="panel workflow-section current-work-row"
+          aria-labelledby="current-work-title"
+          tabIndex={-1}
+        >
           <div className="section-layout current-work-layout">
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
@@ -1427,6 +1439,7 @@ export function TetrisWorkspaceApp() {
           pendingImport={pendingImport}
           onResolveImport={resolveImport}
           onExportJson={exportJson}
+          onEditInputs={focusCurrentWorkInputs}
           onCreateResult={createPackingResult}
           resultCreating={creatingResult}
           onConfirmChainSimulation={confirmChainSimulation}
@@ -2029,6 +2042,7 @@ const ResultStage = ({
   pendingImport,
   onResolveImport,
   onExportJson,
+  onEditInputs,
   onCreateResult,
   resultCreating,
   onConfirmChainSimulation,
@@ -2046,6 +2060,7 @@ const ResultStage = ({
   pendingImport: PendingImport | null;
   onResolveImport: (option: ImportConflictOption) => void;
   onExportJson: () => void;
+  onEditInputs: () => void;
   onCreateResult: () => void;
   resultCreating: boolean;
   onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
@@ -2176,6 +2191,14 @@ const ResultStage = ({
       stackingInstructionWarningMessages
     ]
   );
+  const resultActionCtaDisabled = resultCreating || resultFreshnessState.ctaDisabled;
+  const resultActionCtaTitle = resultCreating
+    ? "결과를 계산하고 있습니다."
+    : (resultFreshnessState.ctaDisabledReason ?? undefined);
+  const resultActionCtaLabel = latestResult ? "다시 계산" : "결과 만들기";
+  const resultActionDescription = latestResult
+    ? "입력값을 바꾸거나 현재 조건으로 다시 계산할 수 있습니다."
+    : "입력을 확인한 뒤 결과를 만들 수 있습니다.";
 
   useEffect(() => {
     setResultViewMode("three");
@@ -2763,6 +2786,29 @@ const ResultStage = ({
       />
 
       <div className="result-lower-grid">
+        <section className="sub-panel result-action-panel">
+          <h3>결과 작업</h3>
+          <p className="meta">{resultActionDescription}</p>
+          <div className="result-action-buttons">
+            <button className="secondary-button result-edit-input-action" onClick={onEditInputs}>
+              <PencilLine size={16} />
+              입력 수정
+            </button>
+            <button
+              className="primary-button result-recalculate-action"
+              onClick={onCreateResult}
+              disabled={resultActionCtaDisabled}
+              title={resultActionCtaTitle}
+              aria-label={latestResult ? "현재 입력으로 다시 계산" : "결과 만들기"}
+            >
+              <RotateCcw size={16} />
+              {resultCreating ? "계산 중..." : resultActionCtaLabel}
+            </button>
+          </div>
+          {resultFreshnessState.ctaDisabledReason ? (
+            <p className="fine-print review-cta-hint">{resultFreshnessState.ctaDisabledReason}</p>
+          ) : null}
+        </section>
         <section className="sub-panel stacking-layer-panel">
           <div className="stacking-layer-head">
             <div>

@@ -1064,11 +1064,42 @@ select:focus-visible {
   gap: 12px;
 }
 
+.current-work-row {
+  scroll-margin-top: 112px;
+}
+
 .sub-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   background: #fbfcfb;
+}
+
+.result-action-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.result-action-panel h3,
+.result-action-panel p {
+  margin: 0;
+}
+
+.result-action-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.result-edit-input-action,
+.result-recalculate-action {
+  min-height: 48px;
+  white-space: normal;
+}
+
+.result-edit-input-action svg,
+.result-recalculate-action svg {
+  flex: 0 0 auto;
 }
 
 .view-buttons {
@@ -2109,6 +2140,10 @@ select:focus-visible {
 
   .result-backup-action {
     width: 100%;
+  }
+
+  .result-action-buttons {
+    grid-template-columns: 1fr;
   }
 
   .library-card-grid {
