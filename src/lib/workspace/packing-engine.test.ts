@@ -319,6 +319,60 @@ describe("packing-engine v0", () => {
     );
     assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
   });
+
+  it("회전 선택지가 적은 박스를 먼저 배치해 불필요한 공간 분리를 줄인다", () => {
+    // Given
+    const input = createInput({
+      blocks: [
+        {
+          ...createInput().blocks[0],
+          blockId: "block-wide-tall",
+          blockTemplateId: "template-wide-tall",
+          name: "넓고 높은 박스",
+          dimensions: { widthMm: 750, depthMm: 800, heightMm: 1000 },
+          quantity: 2
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-constrained",
+          blockTemplateId: "template-constrained",
+          name: "회전 제한 박스",
+          dimensions: { widthMm: 600, depthMm: 800, heightMm: 600 },
+          quantity: 2
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-side-fill",
+          blockTemplateId: "template-side-fill",
+          name: "측면 채움 박스",
+          dimensions: { widthMm: 400, depthMm: 800, heightMm: 700 },
+          quantity: 2
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-narrow-fill",
+          blockTemplateId: "template-narrow-fill",
+          name: "좁은 채움 박스",
+          dimensions: { widthMm: 650, depthMm: 900, heightMm: 200 },
+          quantity: 1
+        }
+      ]
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+
+    // Then
+    assert.equal(output.usedSpaceCount, 4);
+    assert.equal(output.unloadedBlockCount, 0);
+    output.spaces.forEach((space) => {
+      assertStablePackedBlocks(space.blocks, calculateUsableSize(input.space));
+    });
+    assert.ok(
+      (output.spaces[0]?.blocks.length ?? 0) >= 3,
+      "선택지가 적은 박스를 먼저 두면 첫 공간에 보조 박스까지 함께 들어가야 합니다."
+    );
+  });
 });
 
 function assertStablePackedBlocks(

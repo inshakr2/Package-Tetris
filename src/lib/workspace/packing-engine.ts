@@ -18,6 +18,7 @@ interface MutablePackedSpace {
 
 interface SortableBlockUnit {
   block: BlockDefinition;
+  rotationCandidateCount: number;
   maxBaseAreaMm2: number;
   volumeM3: number;
 }
@@ -78,6 +79,7 @@ function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds
     )
     .map((block) => ({
       block,
+      rotationCandidateCount: getRotationCandidateCount(block, usableSize),
       maxBaseAreaMm2: getMaxStableBaseArea(block, usableSize),
       volumeM3: dimensionsVolumeM3(block.dimensions)
     }))
@@ -88,6 +90,12 @@ function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds
 function compareBlockUnits(left: SortableBlockUnit, right: SortableBlockUnit) {
   if (left.block.fragile !== right.block.fragile) {
     return left.block.fragile ? 1 : -1;
+  }
+
+  const rotationCandidateDiff = left.rotationCandidateCount - right.rotationCandidateCount;
+
+  if (rotationCandidateDiff !== 0) {
+    return rotationCandidateDiff;
   }
 
   const baseAreaDiff = right.maxBaseAreaMm2 - left.maxBaseAreaMm2;
@@ -103,6 +111,10 @@ function compareBlockUnits(left: SortableBlockUnit, right: SortableBlockUnit) {
   }
 
   return left.block.blockId.localeCompare(right.block.blockId);
+}
+
+function getRotationCandidateCount(block: BlockDefinition, usableSize: PlacementBounds) {
+  return createRotationCandidates(block.dimensions, usableSize).length;
 }
 
 function getMaxStableBaseArea(block: BlockDefinition, usableSize: PlacementBounds) {
