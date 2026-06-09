@@ -9,8 +9,13 @@ describe("result-calculation-feedback-layout", () => {
     // Given / When
     const hasCalculationState =
       source.includes("const [creatingResult, setCreatingResult] = useState(false)") &&
+      source.includes("const [resultCalculationStep, setResultCalculationStep] = useState<ResultCalculationProgressStep>(\"idle\")") &&
       source.includes("setCreatingResult(true)") &&
       source.includes("setCreatingResult(false)") &&
+      source.includes("setResultCalculationStep(\"reviewing\")") &&
+      source.includes("setResultCalculationStep(\"packing\")") &&
+      source.includes("setResultCalculationStep(\"rendering\")") &&
+      source.includes("setResultCalculationStep(\"idle\")") &&
       source.includes("window.setTimeout(() => {");
 
     // Then
@@ -21,17 +26,33 @@ describe("result-calculation-feedback-layout", () => {
     // Given / When
     const hasReviewCardFeedback =
       source.includes("creatingResult: boolean;") &&
+      source.includes("resultCalculationProgress: ResultCalculationProgressCopy;") &&
       source.includes('aria-live="polite"') &&
-      source.includes("creatingResult ? \"결과 계산 중...\" : \"결과 만들기\"");
+      source.includes("creatingResult ? resultCalculationProgress.buttonLabel : \"결과 만들기\"");
     const hasResultStageFeedback =
       source.includes("resultCreating: boolean;") &&
+      source.includes("resultCalculationProgress: ResultCalculationProgressCopy;") &&
       source.includes("resultCreating || resultFreshnessState.ctaDisabled") &&
-      source.includes("resultCreating ? \"계산 중...\" : resultFreshnessState.ctaLabel");
+      source.includes("resultCreating ? resultCalculationProgress.buttonLabel : resultFreshnessState.ctaLabel");
     const hasEmptyStateFeedback =
-      source.includes("resultCreating ? \"결과 계산 중...\" : \"결과 만들기\"");
+      source.includes("resultCreating ? resultCalculationProgress.buttonLabel : \"결과 만들기\"");
 
     // Then
     assert.equal(hasReviewCardFeedback && hasResultStageFeedback && hasEmptyStateFeedback, true);
+  });
+
+  it("계산 단계 안내는 status live region으로 표시된다", () => {
+    // Given / When
+    const hasProgressStatus =
+      source.includes("getResultCalculationProgressCopy(resultCalculationStep)") &&
+      source.includes('className="result-calculation-progress"') &&
+      source.includes('role="status"') &&
+      source.includes('aria-live="polite"') &&
+      source.includes("resultCalculationProgress.statusLabel") &&
+      source.includes("resultCalculationProgress.description");
+
+    // Then
+    assert.equal(hasProgressStatus, true);
   });
 
   it("결과 계산 대기 중 저장 충돌이 들어오면 최신 충돌 상태로 결과 기록을 막는다", () => {

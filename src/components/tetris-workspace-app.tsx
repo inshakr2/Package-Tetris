@@ -113,6 +113,11 @@ import {
   formatVolumeM3
 } from "@/lib/workspace/result-remaining-volume";
 import {
+  getResultCalculationProgressCopy,
+  type ResultCalculationProgressCopy,
+  type ResultCalculationProgressStep
+} from "@/lib/workspace/result-calculation-progress";
+import {
   createPackingResultWarnings,
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
@@ -213,6 +218,9 @@ const DEFAULT_BLOCK_FORM = {
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const STORAGE_PANEL_ID = "storage-reliability-panel";
+const RESULT_PROGRESS_REVIEW_DELAY_MS = 80;
+const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
+const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
 
 const Result3DCanvas = dynamic(
   () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
@@ -265,6 +273,7 @@ export function TetrisWorkspaceApp() {
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [creatingResult, setCreatingResult] = useState(false);
+  const [resultCalculationStep, setResultCalculationStep] = useState<ResultCalculationProgressStep>("idle");
   const [resultFailure, setResultFailure] = useState<ResultCalculationFailure | null>(null);
 
   const setWorkspaceSaveConflict = useCallback((nextConflict: WorkspaceSaveConflictNotice | null) => {
@@ -565,6 +574,7 @@ export function TetrisWorkspaceApp() {
     canCreateResult: Boolean(review && !review.cta.disabled),
     disabledReason: review?.cta.disabledReason ?? null
   });
+  const resultCalculationProgress = getResultCalculationProgressCopy(resultCalculationStep);
   const needsExport = Boolean(workspace && shouldRemindExport(workspace));
   const connectivityStatus = useMemo(
     () =>
@@ -939,78 +949,101 @@ export function TetrisWorkspaceApp() {
     }
 
     const optimizationInput = createOptimizationInput(review, createClientId("run"));
-
-    if (!optimizationInput) {
-      setResultFailure(createResultCalculationFailure(new Error("input constraint violation")));
+    const focusResultStage = () => {
       window.setTimeout(() => {
         resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         resultStageRef.current?.focus({ preventScroll: true });
       }, 0);
+    };
+    const finishResultCreation = () => {
+      setCreatingResult(false);
+      setResultCalculationStep("idle");
+    };
+
+    if (!optimizationInput) {
+      setResultFailure(createResultCalculationFailure(new Error("input constraint violation")));
+      setResultCalculationStep("idle");
+      focusResultStage();
       return;
     }
 
     setResultFailure(null);
+    setResultCalculationStep("reviewing");
     setCreatingResult(true);
 
     window.setTimeout(() => {
-      try {
-        if (saveConflictRef.current) {
-          return;
-        }
-
-        const resultId = createClientId("result");
-        const inputFingerprint = createResultInputFingerprint({
-          selectedSpace: optimizationInput.space,
-          blocks: optimizationInput.blocks,
-          fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
-        });
-        const optimizationOutput = runPackingEngineV0(optimizationInput);
-        const resultWarnings = createPackingResultWarnings({
-          warnings: optimizationOutput.warnings,
-          usedSpaceCount: optimizationOutput.usedSpaceCount,
-          minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
-        });
-
-        updateWorkspace((current, now) => ({
-          ...current,
-          revision: current.revision + 1,
-          updatedAt: now,
-          draft: {
-            ...current.draft,
-            currentStep: "result",
-            updatedAt: now
-          },
-          recentResults: [
-            {
-              resultId,
-              runId: optimizationOutput.runId,
-              createdAt: now,
-              inputFingerprint: inputFingerprint ?? undefined,
-              spaceSnapshot: optimizationInput.space,
-              usedSpaceCount: optimizationOutput.usedSpaceCount,
-              averageUtilizationRate: optimizationOutput.averageUtilizationRate,
-              unloadedBlockCount: optimizationOutput.unloadedBlockCount,
-              spaces: optimizationOutput.spaces,
-              warnings: resultWarnings
-            },
-            ...current.recentResults
-          ].slice(0, 5)
-        }));
-
-        window.setTimeout(() => {
-          resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          resultStageRef.current?.focus({ preventScroll: true });
-        }, 0);
-      } catch (error) {
-        setResultFailure(createResultCalculationFailure(error));
-        window.setTimeout(() => {
-          resultStageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          resultStageRef.current?.focus({ preventScroll: true });
-        }, 0);
-      } finally {
-        setCreatingResult(false);
+      if (saveConflictRef.current) {
+        finishResultCreation();
+        return;
       }
-    }, 0);
+
+      setResultCalculationStep("packing");
+
+      window.setTimeout(() => {
+        try {
+          if (saveConflictRef.current) {
+            finishResultCreation();
+            return;
+          }
+
+          const resultId = createClientId("result");
+          const inputFingerprint = createResultInputFingerprint({
+            selectedSpace: optimizationInput.space,
+            blocks: optimizationInput.blocks,
+            fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+          });
+          const optimizationOutput = runPackingEngineV0(optimizationInput);
+          const resultWarnings = createPackingResultWarnings({
+            warnings: optimizationOutput.warnings,
+            usedSpaceCount: optimizationOutput.usedSpaceCount,
+            minimumSpaceCountLowerBound: review.totals.minimumSpaceCountLowerBound
+          });
+
+          setResultCalculationStep("rendering");
+          window.setTimeout(() => {
+            try {
+              if (saveConflictRef.current) {
+                return;
+              }
+
+              updateWorkspace((current, now) => ({
+                ...current,
+                revision: current.revision + 1,
+                updatedAt: now,
+                draft: {
+                  ...current.draft,
+                  currentStep: "result",
+                  updatedAt: now
+                },
+                recentResults: [
+                  {
+                    resultId,
+                    runId: optimizationOutput.runId,
+                    createdAt: now,
+                    inputFingerprint: inputFingerprint ?? undefined,
+                    spaceSnapshot: optimizationInput.space,
+                    usedSpaceCount: optimizationOutput.usedSpaceCount,
+                    averageUtilizationRate: optimizationOutput.averageUtilizationRate,
+                    unloadedBlockCount: optimizationOutput.unloadedBlockCount,
+                    spaces: optimizationOutput.spaces,
+                    warnings: resultWarnings
+                  },
+                  ...current.recentResults
+                ].slice(0, 5)
+              }));
+
+              focusResultStage();
+            } finally {
+              finishResultCreation();
+            }
+          }, RESULT_PROGRESS_RENDER_DELAY_MS);
+        } catch (error) {
+          setResultFailure(createResultCalculationFailure(error));
+          focusResultStage();
+          finishResultCreation();
+        }
+      }, RESULT_PROGRESS_FRAME_DELAY_MS);
+    }, RESULT_PROGRESS_REVIEW_DELAY_MS);
   }
 
   function focusCurrentWorkInputs() {
@@ -1444,6 +1477,7 @@ export function TetrisWorkspaceApp() {
               onRequestStorageProtection={requestBrowserStorageProtection}
               onCreateResult={createPackingResult}
               creatingResult={creatingResult}
+              resultCalculationProgress={resultCalculationProgress}
             />
           </div>
         </section>
@@ -1465,6 +1499,7 @@ export function TetrisWorkspaceApp() {
           onEditInputs={focusCurrentWorkInputs}
           onCreateResult={createPackingResult}
           resultCreating={creatingResult}
+          resultCalculationProgress={resultCalculationProgress}
           onConfirmChainSimulation={confirmChainSimulation}
           onUndoLastChainAddition={undoLastChainAddition}
         />
@@ -1928,7 +1963,8 @@ function ReviewCompactCard({
   onReloadLatestWorkspace,
   onRequestStorageProtection,
   onCreateResult,
-  creatingResult
+  creatingResult,
+  resultCalculationProgress
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
@@ -1942,6 +1978,7 @@ function ReviewCompactCard({
   onRequestStorageProtection: () => void;
   onCreateResult: () => void;
   creatingResult: boolean;
+  resultCalculationProgress: ResultCalculationProgressCopy;
 }) {
   const statusTone = review?.status === "error" ? "red" : review?.status === "warning" ? "amber" : "green";
   const statusLabel =
@@ -2038,6 +2075,12 @@ function ReviewCompactCard({
         ) : null}
       </ul>
       {review?.cta.disabledReason ? <p className="fine-print review-cta-hint">{review.cta.disabledReason}</p> : null}
+      {creatingResult ? (
+        <div className="result-calculation-progress" role="status" aria-live="polite">
+          <strong>{resultCalculationProgress.statusLabel}</strong>
+          <span>{resultCalculationProgress.description}</span>
+        </div>
+      ) : null}
       <div className="form-actions" aria-live="polite">
         <button
           className="primary-button"
@@ -2046,7 +2089,7 @@ function ReviewCompactCard({
           title={resultButtonTitle}
         >
           <Box size={16} />
-          {creatingResult ? "결과 계산 중..." : "결과 만들기"}
+          {creatingResult ? resultCalculationProgress.buttonLabel : "결과 만들기"}
         </button>
       </div>
     </section>
@@ -2069,6 +2112,7 @@ const ResultStage = ({
   onEditInputs,
   onCreateResult,
   resultCreating,
+  resultCalculationProgress,
   onConfirmChainSimulation,
   onUndoLastChainAddition,
   ref
@@ -2088,6 +2132,7 @@ const ResultStage = ({
   onEditInputs: () => void;
   onCreateResult: () => void;
   resultCreating: boolean;
+  resultCalculationProgress: ResultCalculationProgressCopy;
   onConfirmChainSimulation: (preview: ChainSimulationOutput, resultId: string) => void;
   onUndoLastChainAddition: (resultId: string) => void;
   ref: React.Ref<HTMLElement>;
@@ -2480,6 +2525,13 @@ const ResultStage = ({
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
 
+      {resultCreating ? (
+        <div className="result-calculation-progress" role="status" aria-live="polite">
+          <strong>{resultCalculationProgress.statusLabel}</strong>
+          <span>{resultCalculationProgress.description}</span>
+        </div>
+      ) : null}
+
       {resultFailure ? (
         <div className="result-failure-banner" role="alert" aria-label="계산 실패 안내">
           <div>
@@ -2502,7 +2554,7 @@ const ResultStage = ({
               title={resultActionCtaTitle}
             >
               <RotateCcw size={16} />
-              다시 계산
+              {resultCreating ? resultCalculationProgress.buttonLabel : "다시 계산"}
             </button>
           </div>
         </div>
@@ -2533,7 +2585,7 @@ const ResultStage = ({
             title={resultCreating ? "결과를 계산하고 있습니다." : (resultFreshnessState.ctaDisabledReason ?? undefined)}
           >
             <Box size={16} />
-            {resultCreating ? "계산 중..." : resultFreshnessState.ctaLabel}
+            {resultCreating ? resultCalculationProgress.buttonLabel : resultFreshnessState.ctaLabel}
           </button>
         </div>
       ) : null}
@@ -2848,7 +2900,7 @@ const ResultStage = ({
                       aria-live="polite"
                     >
                       <Box size={16} />
-                      {resultCreating ? "결과 계산 중..." : "결과 만들기"}
+                      {resultCreating ? resultCalculationProgress.buttonLabel : "결과 만들기"}
                     </button>
                   ) : null}
                 </div>
@@ -2864,6 +2916,7 @@ const ResultStage = ({
         chainHistory={latestResultChainHistory}
         latestChainItem={latestChainItem}
         resultCreating={resultCreating}
+        resultCalculationProgress={resultCalculationProgress}
         onSelectTemplate={selectChainTemplate}
         onCalculate={calculateChainPreview}
         onConfirm={confirmChainPreview}
@@ -2898,7 +2951,7 @@ const ResultStage = ({
               aria-label={latestResult ? "현재 입력으로 다시 계산" : "결과 만들기"}
             >
               <RotateCcw size={16} />
-              {resultCreating ? "계산 중..." : resultActionCtaLabel}
+              {resultCreating ? resultCalculationProgress.buttonLabel : resultActionCtaLabel}
             </button>
           </div>
           {resultFreshnessState.ctaDisabledReason ? (
@@ -3233,6 +3286,7 @@ function ChainSimulationPanel({
   chainHistory,
   latestChainItem,
   resultCreating,
+  resultCalculationProgress,
   onSelectTemplate,
   onCalculate,
   onConfirm,
@@ -3249,6 +3303,7 @@ function ChainSimulationPanel({
   chainHistory: ChainHistoryItem[];
   latestChainItem: ChainHistoryItem | null;
   resultCreating: boolean;
+  resultCalculationProgress: ResultCalculationProgressCopy;
   onSelectTemplate: (blockTemplateId: string) => void;
   onCalculate: () => void;
   onConfirm: () => void;
@@ -3338,7 +3393,7 @@ function ChainSimulationPanel({
               </button>
               {chainStatus === "error" ? (
                 <button className="secondary-button" onClick={onCreateResult} disabled={resultCreating}>
-                  {resultCreating ? "결과 계산 중..." : "결과 다시 생성"}
+                  {resultCreating ? resultCalculationProgress.buttonLabel : "결과 다시 생성"}
                 </button>
               ) : null}
               <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>

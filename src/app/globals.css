@@ -969,6 +969,26 @@ select:focus-visible {
   background: #fffdf6;
 }
 
+.result-calculation-progress {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  border-radius: 8px;
+  background: #f4f8ff;
+  overflow-wrap: anywhere;
+}
+
+.result-calculation-progress strong {
+  color: var(--blue);
+}
+
+.result-calculation-progress span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .result-failure-banner {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
