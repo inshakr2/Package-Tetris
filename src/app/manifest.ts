@@ -4,9 +4,9 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "테트리스 적재 최적화",
-    short_name: "적재 최적화",
-    description: "커스텀 공간과 블록을 로컬에 저장하고 JSON으로 이동하는 적재 최적화 작업대",
+    name: "Package Tetris",
+    short_name: "Package Tetris",
+    description: "현장 작업자를 위한 적재 최적화 작업대",
     start_url: "/",
     scope: "/",
     display: "standalone",

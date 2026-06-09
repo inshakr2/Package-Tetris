@@ -1177,7 +1177,7 @@ export function TetrisWorkspaceApp() {
               <Truck size={18} />
             </span>
             <div>
-              <h1>테트리스 적재 최적화</h1>
+              <h1>Package Tetris</h1>
               <p>작업본을 불러오는 중입니다.</p>
             </div>
           </div>
@@ -1194,7 +1194,7 @@ export function TetrisWorkspaceApp() {
             <Truck size={18} />
           </span>
                   <div>
-                    <h1>테트리스 적재 최적화</h1>
+                    <h1>Package Tetris</h1>
                     <p>이 기기에 자동 저장 · 백업 파일로 이동 가능</p>
                   </div>
                 </div>
