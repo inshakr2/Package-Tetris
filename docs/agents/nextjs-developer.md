@@ -2,7 +2,9 @@
 
 ## Role Scope
 
-Next.js 개발 역할은 App Router static export, 프론트 단독 구조, IndexedDB 기반 작업본, JSON 백업 파일, Three.js client-only 3D 뷰어를 안정적으로 유지하면서 작은 증분으로 구현한다.
+Next.js 개발 역할은 Package Tetris V1의 App Router static export, 프론트 단독 구조, IndexedDB 기반 작업본, JSON 백업 파일, Three.js client-only 3D 뷰어를 안정적으로 유지하면서 작은 증분으로 구현한다.
+
+구현 판단은 현장 작업자가 IT 도메인 지식 없이도 입력, 결과 확인, 백업 파일 만들기를 끝까지 수행할 수 있는지에 맞춘다.
 
 ## Implementation Principles
 
