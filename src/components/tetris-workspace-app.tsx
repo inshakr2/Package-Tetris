@@ -104,6 +104,10 @@ import {
   type ResultViewMode
 } from "@/lib/workspace/result-viewer-controls";
 import {
+  calculateResultRemainingVolumeM3,
+  formatVolumeM3
+} from "@/lib/workspace/result-remaining-volume";
+import {
   createPackingResultWarnings,
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
@@ -2075,6 +2079,10 @@ const ResultStage = ({
     : -1;
   const resultSpace = latestResult?.spaceSnapshot ?? selectedSpace;
   const usableSize = resultSpace ? calculateUsableSize(resultSpace) : null;
+  const remainingVolumeLabel =
+    latestResult && usableSize
+      ? formatVolumeM3(calculateResultRemainingVolumeM3(latestResult.spaces ?? [], usableSize))
+      : "-";
   const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
   const selectedChainTemplate =
     chainBlockOptions.find((template) => template.blockTemplateId === selectedChainTemplateId) ?? null;
@@ -2398,6 +2406,7 @@ const ResultStage = ({
           label="평균 적재율"
           value={latestResult ? `${Math.round(latestResult.averageUtilizationRate * 100)}%` : "-"}
         />
+        <SummaryTile label="남은 부피" value={remainingVolumeLabel} />
         <SummaryTile label="미적재" value={latestResult ? `${latestResult.unloadedBlockCount}개` : "-"} />
         <SummaryTile label="대상 공간" value={resultSpace?.name ?? "미선택"} />
       </div>
