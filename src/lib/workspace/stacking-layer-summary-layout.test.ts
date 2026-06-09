@@ -105,4 +105,17 @@ describe("stacking-layer-summary-layout", () => {
     // Then
     assert.equal(hasCopyAction && hasCopyActionStyle, true);
   });
+
+  it("복사용 현장 적재 지시는 결과의 미적재와 경고 요약을 함께 전달한다", () => {
+    // Given / When
+    const hasWarningAwareCopy =
+      source.includes("stackingInstructionWarningMessages") &&
+      source.includes("resultWarningSummary.map") &&
+      source.includes("safetySpaceSplitWarning") &&
+      source.includes("unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0") &&
+      source.includes("warnings: stackingInstructionWarningMessages");
+
+    // Then
+    assert.equal(hasWarningAwareCopy, true);
+  });
 });

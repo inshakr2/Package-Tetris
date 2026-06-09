@@ -2073,20 +2073,33 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
-  const stackingInstructionText = useMemo(
-    () =>
-      createStackingInstructionText(
-        selectedPackedSpaceIndex >= 0 ? `Space ${selectedPackedSpaceIndex + 1}` : "선택한 공간",
-        stackingInstructionSteps
-      ),
-    [selectedPackedSpaceIndex, stackingInstructionSteps]
-  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
     latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
   const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
   const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
+  const stackingInstructionWarningMessages = useMemo(
+    () => [
+      ...(safetySpaceSplitWarning ? [safetySpaceSplitWarning] : []),
+      ...resultWarningSummary.map((warning) =>
+        warning.count > 1 ? `${warning.message} · ${warning.count}건` : warning.message
+      )
+    ],
+    [resultWarningSummary, safetySpaceSplitWarning]
+  );
+  const stackingInstructionText = useMemo(
+    () =>
+      createStackingInstructionText(
+        selectedPackedSpaceIndex >= 0 ? `Space ${selectedPackedSpaceIndex + 1}` : "선택한 공간",
+        stackingInstructionSteps,
+        {
+          unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
+          warnings: stackingInstructionWarningMessages
+        }
+      ),
+    [latestResult?.unloadedBlockCount, selectedPackedSpaceIndex, stackingInstructionSteps, stackingInstructionWarningMessages]
+  );
 
   useEffect(() => {
     setResultViewMode("three");

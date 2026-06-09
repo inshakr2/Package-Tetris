@@ -59,6 +59,46 @@ describe("clipboard-text", () => {
     assert.equal(removed, true);
   });
 
+  it("Clipboard API 쓰기가 실패하면 textarea 폴백으로 다시 복사한다", async () => {
+    // Given
+    const commands: string[] = [];
+    const appendedValues: string[] = [];
+
+    // When
+    await writeClipboardText("확인 필요: 경고 확인", {
+      navigator: {
+        clipboard: {
+          writeText: async () => {
+            throw new Error("clipboard-write blocked");
+          }
+        }
+      },
+      document: {
+        body: {
+          appendChild: (node) => {
+            appendedValues.push(node.value);
+          }
+        },
+        createElement: () => ({
+          value: "",
+          style: {},
+          setAttribute: () => undefined,
+          focus: () => undefined,
+          select: () => undefined,
+          remove: () => undefined
+        }),
+        execCommand: (command) => {
+          commands.push(command);
+          return true;
+        }
+      }
+    });
+
+    // Then
+    assert.deepEqual(appendedValues, ["확인 필요: 경고 확인"]);
+    assert.deepEqual(commands, ["copy"]);
+  });
+
   it("복사 폴백이 실패해도 임시 textarea를 제거한다", async () => {
     // Given
     let removed = false;

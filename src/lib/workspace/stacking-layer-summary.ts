@@ -4,6 +4,12 @@ interface StackingLayerSummaryOptions {
   maxTypes?: number;
 }
 
+interface StackingInstructionTextOptions {
+  maxWarnings?: number;
+  unloadedBlockCount?: number;
+  warnings?: string[];
+}
+
 export interface StackingLayerSummary {
   layerIndex: number;
   zMm: number;
@@ -87,12 +93,17 @@ export function createStackingInstructionSteps(
   }));
 }
 
-export function createStackingInstructionText(spaceLabel: string, steps: StackingInstructionStep[]): string {
+export function createStackingInstructionText(
+  spaceLabel: string,
+  steps: StackingInstructionStep[],
+  options: StackingInstructionTextOptions = {}
+): string {
   if (steps.length === 0) {
     return "";
   }
 
   const normalizedSpaceLabel = normalizeInstructionLine(spaceLabel) || "선택한 공간";
+  const noticeLines = createStackingInstructionNoticeLines(options);
   const instructionLines = steps.map(
     (step) =>
       `${normalizeInstructionLine(step.title)}: ${normalizeInstructionLine(step.instruction)} (${normalizeInstructionLine(
@@ -100,7 +111,7 @@ export function createStackingInstructionText(spaceLabel: string, steps: Stackin
       )})`
   );
 
-  return [`${normalizedSpaceLabel} 쌓는 순서`, ...instructionLines].join("\n");
+  return [`${normalizedSpaceLabel} 쌓는 순서`, ...noticeLines, ...instructionLines].join("\n");
 }
 
 function createHeightLabel(zMm: number): string {
@@ -141,6 +152,50 @@ function getObjectParticle(text: string): "을" | "를" {
 
 function normalizeInstructionLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function createStackingInstructionNoticeLines(options: StackingInstructionTextOptions): string[] {
+  const noticeLines: string[] = [];
+  const unloadedBlockCount = options.unloadedBlockCount ?? 0;
+
+  if (unloadedBlockCount > 0) {
+    noticeLines.push(
+      `확인 필요: 미적재 박스 ${unloadedBlockCount}개가 있습니다. 결과 화면의 미적재 안내를 확인하세요.`
+    );
+  }
+
+  const maxWarnings = options.maxWarnings ?? 2;
+  const uniqueWarnings = createUniqueWarningMessages(options.warnings ?? []);
+  const visibleWarnings = uniqueWarnings.slice(0, maxWarnings);
+  const hiddenWarningCount = uniqueWarnings.length - visibleWarnings.length;
+
+  visibleWarnings.forEach((warning) => {
+    noticeLines.push(`확인 필요: ${warning}`);
+  });
+
+  if (hiddenWarningCount > 0) {
+    noticeLines.push(`확인 필요: 외 ${hiddenWarningCount}건의 경고가 더 있습니다. 결과 화면을 확인하세요.`);
+  }
+
+  return noticeLines;
+}
+
+function createUniqueWarningMessages(warnings: string[]): string[] {
+  const uniqueWarnings: string[] = [];
+  const seenWarnings = new Set<string>();
+
+  warnings.forEach((warning) => {
+    const normalizedWarning = normalizeInstructionLine(warning);
+
+    if (!normalizedWarning || seenWarnings.has(normalizedWarning)) {
+      return;
+    }
+
+    uniqueWarnings.push(normalizedWarning);
+    seenWarnings.add(normalizedWarning);
+  });
+
+  return uniqueWarnings;
 }
 
 function createLayerLoadSummary(blocks: PackedSpace["blocks"], maxTypes: number): string {

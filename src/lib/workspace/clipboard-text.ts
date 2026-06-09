@@ -32,8 +32,14 @@ export async function writeClipboardText(
   environment: ClipboardTextEnvironment = getBrowserClipboardEnvironment()
 ): Promise<void> {
   if (environment.navigator?.clipboard?.writeText) {
-    await environment.navigator.clipboard.writeText(text);
-    return;
+    try {
+      await environment.navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      if (!environment.document?.execCommand) {
+        throw new Error("클립보드 복사에 실패했습니다.");
+      }
+    }
   }
 
   copyTextWithTextareaFallback(text, environment.document);

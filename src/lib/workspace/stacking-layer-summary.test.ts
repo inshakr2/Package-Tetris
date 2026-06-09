@@ -192,6 +192,53 @@ describe("stacking-layer-summary", () => {
     // Then
     assert.equal(text, "");
   });
+
+  it("복사용 현장 적재 지시에 미적재와 경고 확인 문장을 포함한다", () => {
+    // Given
+    const packedSpace = createPackedSpace([createPackedBlock("block-1", "template-floor", "바닥 박스", 0)]);
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // When
+    const text = createStackingInstructionText("Space 1", instructions, {
+      unloadedBlockCount: 2,
+      warnings: ["부피로는 남아 보여도 안전하게 받칠 바닥이 부족해 공간이 나뉘었습니다."]
+    });
+
+    // Then
+    assert.equal(
+      text,
+      [
+        "Space 1 쌓는 순서",
+        "확인 필요: 미적재 박스 2개가 있습니다. 결과 화면의 미적재 안내를 확인하세요.",
+        "확인 필요: 부피로는 남아 보여도 안전하게 받칠 바닥이 부족해 공간이 나뉘었습니다.",
+        "1층: 바닥 박스 1개를 바닥에 먼저 놓습니다. (바닥층 · 총 1개)"
+      ].join("\n")
+    );
+  });
+
+  it("복사용 현장 적재 지시는 중복 경고를 줄이고 추가 경고 건수를 압축한다", () => {
+    // Given
+    const packedSpace = createPackedSpace([createPackedBlock("block-1", "template-floor", "바닥 박스", 0)]);
+    const instructions = createStackingInstructionSteps(packedSpace);
+
+    // When
+    const text = createStackingInstructionText("Space 1", instructions, {
+      maxWarnings: 2,
+      warnings: ["A 경고", "B 경고", "A 경고", "C 경고"]
+    });
+
+    // Then
+    assert.equal(
+      text,
+      [
+        "Space 1 쌓는 순서",
+        "확인 필요: A 경고",
+        "확인 필요: B 경고",
+        "확인 필요: 외 1건의 경고가 더 있습니다. 결과 화면을 확인하세요.",
+        "1층: 바닥 박스 1개를 바닥에 먼저 놓습니다. (바닥층 · 총 1개)"
+      ].join("\n")
+    );
+  });
 });
 
 function createPackedBlock(blockId: string, blockTemplateId: string, name: string, zMm: number) {
