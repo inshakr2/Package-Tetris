@@ -241,6 +241,8 @@ const DEFAULT_BLOCK_FORM = {
 
 type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const STORAGE_PANEL_ID = "storage-reliability-panel";
+const MOBILE_STICKY_STATUS_ID = "mobile-sticky-status";
+const MOBILE_STICKY_HELPER_ID = "mobile-sticky-helper";
 const RESULT_PROGRESS_REVIEW_DELAY_MS = 80;
 const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
 const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
@@ -1604,7 +1606,7 @@ export function TetrisWorkspaceApp() {
         />
       ) : null}
 
-      <div className="sticky-mobile-actions">
+      <div className="sticky-mobile-actions" role="region" aria-label="모바일 주요 작업">
         <div className="sticky-mobile-summary" data-tone={mobileStickyAction.tone}>
           <SaveStatusPill
             status={saveStatus}
@@ -1617,15 +1619,16 @@ export function TetrisWorkspaceApp() {
             controls={STORAGE_PANEL_ID}
             onClick={() => setStoragePanelOpen((open) => !open)}
           />
-          <div className="sticky-mobile-copy">
-            <strong>{mobileStickyAction.statusLabel}</strong>
-            <span>{mobileStickyAction.helperLabel}</span>
+          <div className="sticky-mobile-copy" role="status" aria-live="polite" aria-atomic="true">
+            <strong id={MOBILE_STICKY_STATUS_ID}>{mobileStickyAction.statusLabel}</strong>
+            <span id={MOBILE_STICKY_HELPER_ID}>{mobileStickyAction.helperLabel}</span>
           </div>
         </div>
         <button
           className="primary-button sticky-mobile-primary"
           onClick={runMobileStickyAction}
           disabled={mobileStickyAction.disabled}
+          aria-describedby={`${MOBILE_STICKY_STATUS_ID} ${MOBILE_STICKY_HELPER_ID}`}
         >
           {mobileStickyAction.action === "reload" ? (
             <RotateCcw size={16} />
