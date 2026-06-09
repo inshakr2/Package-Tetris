@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Smartphone,
   Trash2,
   Truck,
   WifiOff,
@@ -148,6 +149,11 @@ import {
   getPwaOfflineReadinessCopy,
   type PwaOfflineReadinessStatus
 } from "@/lib/workspace/pwa-offline-readiness";
+import {
+  getPwaInstallActionLabel,
+  getPwaInstallGuidanceCopy,
+  type PwaInstallStatus
+} from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
@@ -177,6 +183,15 @@ import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
 type InstructionCopyStatus = "idle" | "copied" | "error";
 type InstructionDownloadStatus = "idle" | "downloaded" | "error";
+
+interface PwaBeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
 
 interface PendingImport {
   workspace: TetrisWorkspace;
@@ -251,6 +266,7 @@ export function TetrisWorkspaceApp() {
   const currentWorkSectionRef = useRef<HTMLElement>(null);
   const workspaceRef = useRef<TetrisWorkspace | null>(null);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const deferredInstallPromptRef = useRef<PwaBeforeInstallPromptEvent | null>(null);
   const lastPersistedRevisionRef = useRef<number | null>(null);
   const saveConflictRef = useRef<WorkspaceSaveConflictNotice | null>(null);
   const lastSpaceDialogTriggerRef = useRef<HTMLElement | null>(null);
@@ -268,6 +284,7 @@ export function TetrisWorkspaceApp() {
   const [storagePanelOpen, setStoragePanelOpen] = useState(false);
   const [networkState, setNetworkState] = useState<NetworkState>("unknown");
   const [pwaOfflineStatus, setPwaOfflineStatus] = useState<PwaOfflineReadinessStatus>("checking");
+  const [pwaInstallStatus, setPwaInstallStatus] = useState<PwaInstallStatus>("checking");
   const [persistenceRequestResult, setPersistenceRequestResult] = useState<PersistenceRequestResult | null>(null);
   const [persistenceRequesting, setPersistenceRequesting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
@@ -389,6 +406,41 @@ export function TetrisWorkspaceApp() {
     return () => {
       window.removeEventListener("online", updateNetworkState);
       window.removeEventListener("offline", updateNetworkState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return;
+    }
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as NavigatorWithStandalone).standalone === true;
+
+    if (isStandalone) {
+      setPwaInstallStatus("installed");
+    } else {
+      setPwaInstallStatus("manual");
+    }
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      deferredInstallPromptRef.current = event as PwaBeforeInstallPromptEvent;
+      setPwaInstallStatus("available");
+    };
+
+    const handleAppInstalled = () => {
+      deferredInstallPromptRef.current = null;
+      setPwaInstallStatus("installed");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
@@ -611,6 +663,28 @@ export function TetrisWorkspaceApp() {
     [creatingResult, isWorkspaceLocked, latestResult, needsExport, resultFreshnessState.status, review, saveStatus]
   );
   const saveConflictBannerCopy = saveConflict ? getSaveConflictBannerCopy(saveConflict) : null;
+
+  const installPwaOrShowGuidance = useCallback(async () => {
+    const installPrompt = deferredInstallPromptRef.current;
+
+    if (!installPrompt) {
+      setPwaInstallStatus((current) => (current === "installed" ? current : "manual"));
+      setStoragePanelOpen(true);
+      return;
+    }
+
+    try {
+      setPwaInstallStatus("prompting");
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      deferredInstallPromptRef.current = null;
+      setPwaInstallStatus(choice.outcome === "accepted" ? "accepted" : "dismissed");
+    } catch {
+      deferredInstallPromptRef.current = null;
+      setPwaInstallStatus("manual");
+      setStoragePanelOpen(true);
+    }
+  }, []);
 
   function updateWorkspace(updater: (current: TetrisWorkspace, now: string) => TetrisWorkspace) {
     setWorkspace((current) => {
@@ -1365,12 +1439,14 @@ export function TetrisWorkspaceApp() {
           otherTabCount={otherTabCount}
           connectivityStatus={connectivityStatus}
           pwaOfflineStatus={pwaOfflineStatus}
+          pwaInstallStatus={pwaInstallStatus}
           persistenceRequestResult={persistenceRequestResult}
           persistenceRequesting={persistenceRequesting}
           onClose={() => setStoragePanelOpen(false)}
           onExportJson={exportJson}
           onReloadLatestWorkspace={reloadLatestWorkspace}
           onRequestStorageProtection={requestBrowserStorageProtection}
+          onInstallPwa={installPwaOrShowGuidance}
         />
       ) : null}
 
@@ -3543,12 +3619,14 @@ function StorageReliabilityPanel({
   otherTabCount,
   connectivityStatus,
   pwaOfflineStatus,
+  pwaInstallStatus,
   persistenceRequestResult,
   persistenceRequesting,
   onClose,
   onExportJson,
   onReloadLatestWorkspace,
-  onRequestStorageProtection
+  onRequestStorageProtection,
+  onInstallPwa
 }: {
   id: string;
   workspace: TetrisWorkspace;
@@ -3561,12 +3639,14 @@ function StorageReliabilityPanel({
   otherTabCount: number;
   connectivityStatus: ConnectivityStatus;
   pwaOfflineStatus: PwaOfflineReadinessStatus;
+  pwaInstallStatus: PwaInstallStatus;
   persistenceRequestResult: PersistenceRequestResult | null;
   persistenceRequesting: boolean;
   onClose: () => void;
   onExportJson: () => void;
   onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
+  onInstallPwa: () => void;
 }) {
   const localState = createLocalSaveState({
     status,
@@ -3578,8 +3658,12 @@ function StorageReliabilityPanel({
   const exportState = getExportState(workspace, needsExport);
   const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
   const pwaOfflineState = getPwaOfflineReadinessCopy(pwaOfflineStatus);
+  const pwaInstallState = getPwaInstallGuidanceCopy(pwaInstallStatus);
   const canRequestProtection =
     Boolean(storageHealth?.persistSupported) && storageHealth?.persistenceState !== "persisted" && !persistenceRequesting;
+  const pwaInstallActionBusy = pwaInstallStatus === "prompting" || pwaInstallStatus === "accepted";
+  const pwaInstallActionDone = pwaInstallStatus === "installed";
+  const canUsePwaInstallAction = !pwaInstallActionBusy && !pwaInstallActionDone;
 
   return (
     <section
@@ -3631,6 +3715,14 @@ function StorageReliabilityPanel({
           description={pwaOfflineState.description}
           detail={pwaOfflineState.detail}
         />
+        <StorageHealthRow
+          icon={<Smartphone size={18} />}
+          tone={pwaInstallState.tone}
+          label="앱 설치"
+          value={pwaInstallState.value}
+          description={pwaInstallState.description}
+          detail={pwaInstallState.detail}
+        />
         {connectivityStatus.visible ? (
           <StorageHealthRow
             icon={<WifiOff size={18} />}
@@ -3662,6 +3754,15 @@ function StorageReliabilityPanel({
         >
           <ShieldCheck size={16} />
           {persistenceRequesting ? "보호 요청 중" : "작업 보호 강화"}
+        </button>
+        <button
+          className="secondary-button"
+          onClick={onInstallPwa}
+          disabled={!canUsePwaInstallAction}
+          title={pwaInstallStatus === "installed" ? "이미 앱처럼 열 수 있는 상태입니다." : undefined}
+        >
+          <Smartphone size={16} />
+          {getPwaInstallActionLabel(pwaInstallStatus)}
         </button>
       </div>
     </section>
