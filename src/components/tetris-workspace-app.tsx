@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Copy,
   Download,
+  Eye,
   FileUp,
   HardDrive,
   ListOrdered,
@@ -2481,8 +2482,10 @@ const ResultStage = ({
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const [offsetRecommendation, setOffsetRecommendation] = useState<OffsetAdjustmentRecommendation | null>(null);
+  const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
   const displayedSpaces = useMemo(
@@ -2631,6 +2634,7 @@ const ResultStage = ({
     setInstructionCopyStatus("idle");
     setInstructionDownloadStatus("idle");
     setInstructionDownloadFilename(null);
+    setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
   useEffect(() => {
@@ -2638,6 +2642,12 @@ const ResultStage = ({
     setInstructionDownloadStatus("idle");
     setInstructionDownloadFilename(null);
   }, [stackingInstructionText]);
+
+  useEffect(() => {
+    if (!offsetRecommendation) {
+      setOffsetPreviewDialogOpen(false);
+    }
+  }, [offsetRecommendation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2767,6 +2777,21 @@ const ResultStage = ({
     if (restoreFocus) {
       window.setTimeout(() => {
         resultInspectionDialogTriggerRef.current?.focus();
+      }, 0);
+    }
+  }
+
+  function openOffsetPreviewDialog(trigger: HTMLButtonElement) {
+    offsetPreviewDialogTriggerRef.current = trigger;
+    setOffsetPreviewDialogOpen(true);
+  }
+
+  function closeOffsetPreviewDialog({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
+    setOffsetPreviewDialogOpen(false);
+
+    if (restoreFocus) {
+      window.setTimeout(() => {
+        offsetPreviewDialogTriggerRef.current?.focus();
       }, 0);
     }
   }
@@ -3090,10 +3115,21 @@ const ResultStage = ({
               </span>
             </div>
           </div>
-          <button className="secondary-button" onClick={onReviewSpaceOffset}>
-            <PencilLine size={16} />
-            공간 설정 확인
-          </button>
+          <div className="offset-recommendation-actions">
+            <button className="secondary-button" onClick={onReviewSpaceOffset}>
+              <PencilLine size={16} />
+              공간 설정 확인
+            </button>
+            <button
+              className="secondary-button"
+              aria-haspopup="dialog"
+              aria-controls="offset-preview-dialog"
+              onClick={(event) => openOffsetPreviewDialog(event.currentTarget)}
+            >
+              <Eye size={16} />
+              추천 미리보기
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -3411,6 +3447,12 @@ const ResultStage = ({
             onDownloadStackingInstructions={downloadStackingInstructions}
             onClose={closeResultInspectionDialog}
           />
+          <OffsetRecommendationPreviewDialog
+            open={offsetPreviewDialogOpen && Boolean(offsetRecommendation)}
+            recommendation={offsetRecommendation}
+            resultSpace={resultSpace ?? null}
+            onClose={closeOffsetPreviewDialog}
+          />
         </div>
       ) : (
                 <div className="result-preview result-preview-empty" tabIndex={0} aria-label="결과 대기 상태">
@@ -3666,6 +3708,230 @@ function ResultInspectionDialog({
       </div>
     </dialog>
   );
+}
+
+function OffsetRecommendationPreviewDialog({
+  open,
+  recommendation,
+  resultSpace,
+  onClose
+}: {
+  open: boolean;
+  recommendation: OffsetAdjustmentRecommendation | null;
+  resultSpace: SpaceDefinition | null;
+  onClose: (options?: { restoreFocus?: boolean }) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = "offset-preview-dialog-title";
+  const descriptionId = "offset-preview-dialog-description";
+  const [selectedPreviewSpaceId, setSelectedPreviewSpaceId] = useState<string | null>(null);
+  const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
+  const [cameraPreset, setCameraPreset] = useState<ThreeCameraPreset>("isometric");
+  const [resetToken, setResetToken] = useState(0);
+  const previewSpaces = recommendation?.previewSpaces ?? [];
+  const selectedPreviewSpace =
+    previewSpaces.find((space) => space.spaceInstanceId === selectedPreviewSpaceId) ?? previewSpaces[0] ?? null;
+  const selectedPreviewSpaceIndex = selectedPreviewSpace
+    ? Math.max(
+        0,
+        previewSpaces.findIndex((space) => space.spaceInstanceId === selectedPreviewSpace.spaceInstanceId)
+      )
+    : -1;
+  const previewSpaceSummaries = useMemo(
+    () => new Map(previewSpaces.map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)),
+    [previewSpaces]
+  );
+  const emptyPreviewBlockIds = useMemo(() => new Set<string>(), []);
+
+  useEffect(() => {
+    if (!open || !recommendation) {
+      return;
+    }
+
+    setSelectedPreviewSpaceId(recommendation.previewSpaces[0]?.spaceInstanceId ?? null);
+    setSelectedBlockTemplateId(null);
+    setCameraPreset("isometric");
+    setResetToken((value) => value + 1);
+  }, [open, recommendation]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-offset-preview-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  function toggleSelectedPreviewBlock(blockTemplateId: string) {
+    setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
+  }
+
+  function resetPreviewViewer() {
+    setCameraPreset("isometric");
+    setResetToken((value) => value + 1);
+    setSelectedBlockTemplateId(null);
+  }
+
+  return (
+    <dialog
+      id="offset-preview-dialog"
+      ref={dialogRef}
+      className="offset-preview-dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="offset-preview-dialog-sheet">
+        <div className="space-form-dialog-head offset-preview-dialog-head">
+          <div>
+            <h2 id={titleId}>추천 적용 미리보기</h2>
+            <p id={descriptionId} className="fine-print">
+              실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요.
+            </p>
+          </div>
+          <button
+            className="icon-button panel-close-button"
+            data-offset-preview-close="true"
+            onClick={() => onClose()}
+            aria-label="추천 적용 미리보기 닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {recommendation ? (
+          <>
+            <div className="offset-preview-summary" aria-label="추천 미리보기 요약">
+              <span>
+                현재 공간 수
+                <strong>{recommendation.originalUsedSpaceCount}개</strong>
+              </span>
+              <span>
+                추천 후 공간 수
+                <strong>{recommendation.improvedUsedSpaceCount}개</strong>
+              </span>
+              <span>
+                현재 안전 여유
+                <strong>{formatOffset(recommendation.originalOffset)}</strong>
+              </span>
+              <span>
+                추천 검토값
+                <strong>{formatOffset(recommendation.suggestedOffset)}</strong>
+              </span>
+            </div>
+
+            <div className="offset-preview-dialog-body">
+              <aside className="offset-preview-space-list" aria-label="추천값 기준 공간 선택">
+                <strong>추천값 기준 3D 보기</strong>
+                <span className="fine-print">
+                  {resultSpace?.name ?? "선택 공간"} · {formatDimensions(recommendation.usableSizeAfter)}
+                </span>
+                <div className="space-instance-list">
+                  {previewSpaces.map((space, index) => (
+                    <button
+                      key={space.spaceInstanceId}
+                      className="space-instance-button"
+                      aria-pressed={space.spaceInstanceId === selectedPreviewSpace?.spaceInstanceId}
+                      onClick={() => {
+                        setSelectedPreviewSpaceId(space.spaceInstanceId);
+                        setSelectedBlockTemplateId(null);
+                      }}
+                    >
+                      <strong>Space {index + 1}</strong>
+                      <span>
+                        {space.blocks.length}개 · {Math.round(space.utilizationRate * 100)}%
+                      </span>
+                      <small className="space-load-summary">
+                        {previewSpaceSummaries.get(space.spaceInstanceId) ?? "적재 박스 없음"}
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <section className="offset-preview-stage" aria-label="추천값 기준 3D 결과">
+                <div className="projection-toolbar">
+                  <div>
+                    <strong>
+                      {selectedPreviewSpace ? `Space ${selectedPreviewSpaceIndex + 1}` : "미리보기 없음"}
+                    </strong>
+                    <span className="fine-print">
+                      추천 적재 가능 {formatDimensions(recommendation.usableSizeAfter)}
+                    </span>
+                  </div>
+                  <div className="view-buttons three-camera-buttons" aria-label="추천 미리보기 카메라 시점 선택">
+                    {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
+                      <button
+                        key={item.preset}
+                        className="secondary-button"
+                        aria-label={`추천 미리보기 ${item.ariaLabel}`}
+                        aria-pressed={cameraPreset === item.preset}
+                        onClick={() => setCameraPreset(item.preset)}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                    <button className="secondary-button" onClick={resetPreviewViewer} aria-label="추천 미리보기 처음 보기">
+                      <RotateCcw size={16} />
+                      처음
+                    </button>
+                  </div>
+                </div>
+
+                {selectedPreviewSpace ? (
+                  <Result3DCanvas
+                    blocks={selectedPreviewSpace.blocks}
+                    bounds={recommendation.usableSizeAfter}
+                    selectedBlockTemplateId={selectedBlockTemplateId}
+                    chainPreviewBlockIds={emptyPreviewBlockIds}
+                    cameraPreset={cameraPreset}
+                    resetToken={resetToken}
+                    spaceLabel={`추천 Space ${selectedPreviewSpaceIndex + 1}`}
+                    utilizationLabel={`적재율 ${Math.round(selectedPreviewSpace.utilizationRate * 100)}%`}
+                    onSelectBlockTemplate={toggleSelectedPreviewBlock}
+                    onClearSelection={() => setSelectedBlockTemplateId(null)}
+                  />
+                ) : (
+                  <p className="meta">추천 미리보기로 표시할 공간 결과가 없습니다.</p>
+                )}
+              </section>
+            </div>
+          </>
+        ) : (
+          <p className="meta">추천 결과가 있을 때 미리보기를 확인할 수 있습니다.</p>
+        )}
+      </div>
+    </dialog>
+  );
+}
+
+function formatOffset(offset: OffsetAdjustmentRecommendation["originalOffset"]) {
+  return `${offset.widthMm} / ${offset.depthMm} / ${offset.heightMm}mm`;
 }
 
 function PlacementDetailContent({

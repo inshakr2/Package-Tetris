@@ -11,6 +11,7 @@ export interface OffsetAdjustmentRecommendation {
   originalUsedSpaceCount: number;
   improvedUsedSpaceCount: number;
   improvedAverageUtilizationRate: number;
+  previewSpaces: PackedSpace[];
   usableSizeBefore: SpaceDefinition["dimensions"];
   usableSizeAfter: SpaceDefinition["dimensions"];
 }
@@ -66,6 +67,7 @@ export async function createOffsetAdjustmentRecommendation({
         originalUsedSpaceCount: spaces.length,
         improvedUsedSpaceCount: output.usedSpaceCount,
         improvedAverageUtilizationRate: output.averageUtilizationRate,
+        previewSpaces: output.spaces,
         usableSizeBefore: calculateUsableSize(space),
         usableSizeAfter: calculateUsableSize(candidateSpace)
       };
