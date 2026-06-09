@@ -113,6 +113,7 @@ import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import {
   createStackingInstructionText,
+  createStackingInstructionSpaceLabel,
   createStackingInstructionSteps,
   createStackingLayerSummaries
 } from "@/lib/workspace/stacking-layer-summary";
@@ -2081,6 +2082,10 @@ const ResultStage = ({
     () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
     [selectedPackedSpace]
   );
+  const stackingInstructionSpaceLabel = useMemo(
+    () => createStackingInstructionSpaceLabel(resultSpace?.name, selectedPackedSpaceIndex),
+    [resultSpace?.name, selectedPackedSpaceIndex]
+  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
@@ -2099,14 +2104,14 @@ const ResultStage = ({
   const stackingInstructionText = useMemo(
     () =>
       createStackingInstructionText(
-        selectedPackedSpaceIndex >= 0 ? `Space ${selectedPackedSpaceIndex + 1}` : "선택한 공간",
+        stackingInstructionSpaceLabel,
         stackingInstructionSteps,
         {
           unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
           warnings: stackingInstructionWarningMessages
         }
       ),
-    [latestResult?.unloadedBlockCount, selectedPackedSpaceIndex, stackingInstructionSteps, stackingInstructionWarningMessages]
+    [latestResult?.unloadedBlockCount, stackingInstructionSpaceLabel, stackingInstructionSteps, stackingInstructionWarningMessages]
   );
 
   useEffect(() => {
@@ -2694,7 +2699,7 @@ const ResultStage = ({
               <h3>쌓는 순서</h3>
               <p className="meta">
                 {latestResult && selectedPackedSpace
-                  ? `선택한 Space ${selectedPackedSpaceIndex + 1} 기준 · 아래층부터 확인`
+                  ? `선택한 ${stackingInstructionSpaceLabel} 기준 · 아래층부터 확인`
                   : "결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다."}
               </p>
             </div>

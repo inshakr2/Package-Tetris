@@ -19,9 +19,9 @@ describe("stacking-layer-summary-layout", () => {
       source.includes("stackingLayerSummaries") &&
       source.includes('className="sub-panel stacking-layer-panel"') &&
       source.includes("쌓는 순서") &&
-      source.includes("선택한 Space") &&
       source.includes('className="stacking-layer-list"') &&
-      source.includes('className="stacking-layer-row"');
+      source.includes('className="stacking-layer-row"') &&
+      source.includes("선택한 ${stackingInstructionSpaceLabel} 기준");
 
     // Then
     assert.equal(hasStackingPanel, true);
@@ -111,6 +111,9 @@ describe("stacking-layer-summary-layout", () => {
   it("복사용 현장 적재 지시는 결과의 미적재와 경고 요약을 함께 전달한다", () => {
     // Given / When
     const hasWarningAwareCopy =
+      source.includes("createStackingInstructionSpaceLabel") &&
+      source.includes("stackingInstructionSpaceLabel") &&
+      source.includes("resultSpace?.name") &&
       source.includes("stackingInstructionWarningMessages") &&
       source.includes("resultWarningSummary.map") &&
       source.includes("safetySpaceSplitWarning") &&

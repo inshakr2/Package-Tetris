@@ -114,6 +114,20 @@ export function createStackingInstructionText(
   return [`${normalizedSpaceLabel} 쌓는 순서`, ...noticeLines, ...instructionLines].join("\n");
 }
 
+export function createStackingInstructionSpaceLabel(
+  spaceName: string | undefined,
+  selectedPackedSpaceIndex: number
+): string {
+  const normalizedSpaceName = normalizeInstructionLine(spaceName ?? "");
+  const spaceIndexLabel = selectedPackedSpaceIndex >= 0 ? `Space ${selectedPackedSpaceIndex + 1}` : "";
+
+  if (normalizedSpaceName && spaceIndexLabel) {
+    return `${normalizedSpaceName} · ${spaceIndexLabel}`;
+  }
+
+  return normalizedSpaceName || spaceIndexLabel || "선택한 공간";
+}
+
 function createHeightLabel(zMm: number): string {
   if (zMm === 0) {
     return "바닥층";

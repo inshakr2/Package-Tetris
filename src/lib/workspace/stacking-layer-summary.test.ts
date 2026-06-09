@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   createStackingInstructionText,
+  createStackingInstructionSpaceLabel,
   createStackingInstructionSteps,
   createStackingLayerSummaries
 } from "./stacking-layer-summary";
@@ -238,6 +239,37 @@ describe("stacking-layer-summary", () => {
         "1층: 바닥 박스 1개를 바닥에 먼저 놓습니다. (바닥층 · 총 1개)"
       ].join("\n")
     );
+  });
+
+  it("작업 지시서 공간 라벨은 공간명과 Space 번호를 함께 보여준다", () => {
+    // Given / When
+    const label = createStackingInstructionSpaceLabel(" 2.5톤반   냉장칸 ", 1);
+
+    // Then
+    assert.equal(label, "2.5톤반 냉장칸 · Space 2");
+  });
+
+  it("작업 지시서 공간 라벨은 공간명이 없으면 Space 번호나 선택한 공간으로 대체한다", () => {
+    // Given / When
+    const indexedLabel = createStackingInstructionSpaceLabel("", 2);
+    const fallbackLabel = createStackingInstructionSpaceLabel("", -1);
+
+    // Then
+    assert.equal(indexedLabel, "Space 3");
+    assert.equal(fallbackLabel, "선택한 공간");
+  });
+
+  it("현장 적재 지시 헤더는 대상 공간명을 포함한다", () => {
+    // Given
+    const packedSpace = createPackedSpace([createPackedBlock("block-1", "template-floor", "바닥 박스", 0)]);
+    const instructions = createStackingInstructionSteps(packedSpace);
+    const spaceLabel = createStackingInstructionSpaceLabel("2.5톤반", 0);
+
+    // When
+    const text = createStackingInstructionText(spaceLabel, instructions);
+
+    // Then
+    assert.match(text, /^2\.5톤반 · Space 1 쌓는 순서/);
   });
 });
 
