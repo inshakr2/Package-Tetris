@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import "fake-indexeddb/auto";
+import { calculateBlockVolumeM3 } from "../workspace/block-measurements";
+import { resolveDraftBlocks } from "../workspace/block-library";
+import { PRESET_SPACES } from "../workspace/presets";
+import { reviewExecutionReadiness } from "../workspace/review-gate";
 import { createDefaultWorkspace } from "../workspace/workspace-factory";
 import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "./indexed-db";
 
@@ -95,6 +99,53 @@ describe("IndexedDbTetrisStorage", () => {
     assert.equal(restored?.blockTemplates[0]?.fragile, true);
     assert.equal(restored?.draft.selectedSpaceId, "space-custom-1");
     assert.equal(restored?.draft.blockItems[0]?.quantity, 12);
+  });
+
+  it("복원된 작업본에 비정상 숫자가 있어도 실행 전 검토와 부피 계산은 안전하게 처리한다", async () => {
+    // Given
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-09T00:00:00.000Z"
+    });
+    workspace.blockTemplates.push({
+      blockTemplateId: "block-invalid-1",
+      entityVersion: 1,
+      name: "비정상 박스",
+      dimensions: { widthMm: Number.POSITIVE_INFINITY, depthMm: 220, heightMm: 180 },
+      fragile: false,
+      createdAt: workspace.updatedAt,
+      updatedAt: workspace.updatedAt
+    });
+    workspace.draft.blockItems = [
+      {
+        draftBlockItemId: "item-invalid-1",
+        blockTemplateId: "block-invalid-1",
+        quantity: Number.NaN,
+        createdAt: workspace.updatedAt,
+        updatedAt: workspace.updatedAt
+      }
+    ];
+
+    // When
+    await storage.saveWorkspace(workspace);
+    const restored = await storage.loadWorkspace();
+    const blocks = restored ? resolveDraftBlocks(restored) : [];
+    const review = reviewExecutionReadiness({
+      selectedSpace: PRESET_SPACES[0],
+      blocks,
+      fragileStackOnFragileAllowed: true
+    });
+
+    // Then
+    assert.equal(Number.isNaN(blocks[0]?.quantity), true);
+    assert.equal(calculateBlockVolumeM3(blocks[0]!), 0);
+    assert.equal(review.status, "error");
+    assert.deepEqual(
+      review.messages.map((message) => message.code),
+      ["block-quantity-invalid", "block-dimensions-invalid"]
+    );
   });
 
   it("저장소 revision이 expectedRevision보다 최신이면 stale 탭 저장을 거부한다", async () => {

@@ -1,5 +1,11 @@
 import { calculateUsableSize } from "./presets";
 import { OptimizationInput } from "./engine-contract";
+import {
+  calculateBlockVolumeM3,
+  dimensionsVolumeM3,
+  hasPositiveBlockQuantity,
+  hasPositiveDimensions
+} from "./block-measurements";
 import { BlockDefinition, ResultSummary, SpaceDefinition } from "./types";
 
 type ReviewGateStatus = "valid" | "warning" | "error";
@@ -62,7 +68,12 @@ export function reviewExecutionReadiness({
 }: ReviewExecutionReadinessInput): ReviewGateResult {
   const messages: ReviewGateMessage[] = [];
   const usableSize = selectedSpace ? calculateUsableSize(selectedSpace) : null;
-  const totalBlockCount = blocks.reduce((sum, block) => sum + block.quantity, 0);
+  const quantityInvalidBlocks = blocks.filter((block) => !hasPositiveBlockQuantity(block.quantity));
+  const dimensionsInvalidBlocks = blocks.filter((block) => !hasPositiveDimensions(block.dimensions));
+  const totalBlockCount = blocks.reduce(
+    (sum, block) => sum + (hasPositiveBlockQuantity(block.quantity) ? block.quantity : 0),
+    0
+  );
   const totalBlockVolumeM3 = blocks.reduce((sum, block) => sum + calculateBlockVolumeM3(block), 0);
   const usableSpaceVolumeM3 = usableSize && hasPositiveDimensions(usableSize) ? dimensionsVolumeM3(usableSize) : 0;
 
@@ -82,7 +93,7 @@ export function reviewExecutionReadiness({
     });
   }
 
-  if (blocks.length === 0 || totalBlockCount < 1) {
+  if (blocks.length === 0 || (totalBlockCount < 1 && quantityInvalidBlocks.length === 0)) {
     messages.push({
       code: "blocks-required",
       level: "error",
@@ -90,7 +101,6 @@ export function reviewExecutionReadiness({
     });
   }
 
-  const quantityInvalidBlocks = blocks.filter((block) => block.quantity < 1);
   if (quantityInvalidBlocks.length > 0) {
     messages.push({
       code: "block-quantity-invalid",
@@ -99,7 +109,6 @@ export function reviewExecutionReadiness({
     });
   }
 
-  const dimensionsInvalidBlocks = blocks.filter((block) => !hasPositiveDimensions(block.dimensions));
   if (dimensionsInvalidBlocks.length > 0) {
     messages.push({
       code: "block-dimensions-invalid",
@@ -110,7 +119,7 @@ export function reviewExecutionReadiness({
 
   const blocksThatDoNotFit =
     usableSize && hasPositiveDimensions(usableSize)
-      ? blocks.filter((block) => !canFitInsideUsableSize(block, usableSize))
+      ? blocks.filter((block) => hasPositiveDimensions(block.dimensions) && !canFitInsideUsableSize(block, usableSize))
       : [];
 
   if (blocksThatDoNotFit.length > 0) {
@@ -226,16 +235,4 @@ function canFitInsideUsableSize(
       block.dimensions[heightKey] <= usableSize.heightMm
     );
   });
-}
-
-function hasPositiveDimensions(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
-  return dimensions.widthMm > 0 && dimensions.depthMm > 0 && dimensions.heightMm > 0;
-}
-
-function calculateBlockVolumeM3(block: BlockDefinition) {
-  return dimensionsVolumeM3(block.dimensions) * block.quantity;
-}
-
-function dimensionsVolumeM3(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
-  return (dimensions.widthMm * dimensions.depthMm * dimensions.heightMm) / 1_000_000_000;
 }

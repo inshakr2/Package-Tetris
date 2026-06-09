@@ -620,6 +620,20 @@ select:focus-visible {
   color: var(--text);
 }
 
+.form-grid input[aria-invalid="true"],
+.field-row input[aria-invalid="true"],
+.block-detail-grid input[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(194, 65, 59, 0.12);
+}
+
+.field-error {
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(90px, 0.45fr);

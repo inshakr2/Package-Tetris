@@ -83,6 +83,39 @@ describe("review-gate", () => {
     );
   });
 
+  it("가져온 작업본의 수량과 치수가 비정상 숫자이면 실행 전 검토에서 막는다", () => {
+    // Given
+    const selectedSpace = createSpace();
+    const blocks = [
+      createBlock({
+        quantity: Number.NaN,
+        dimensions: { widthMm: 300, depthMm: 200, heightMm: 100 }
+      }),
+      createBlock({
+        blockId: "block-b",
+        draftBlockItemId: "item-b",
+        quantity: 1,
+        dimensions: { widthMm: Number.POSITIVE_INFINITY, depthMm: 200, heightMm: 100 }
+      })
+    ];
+
+    // When
+    const review = reviewExecutionReadiness({
+      selectedSpace,
+      blocks,
+      fragileStackOnFragileAllowed: true
+    });
+
+    // Then
+    assert.equal(review.status, "error");
+    assert.equal(review.cta.disabled, true);
+    assert.equal(review.preparedInput, null);
+    assert.deepEqual(
+      review.messages.map((message) => message.code),
+      ["block-quantity-invalid", "block-dimensions-invalid"]
+    );
+  });
+
   it("블록이 90도 직교 회전 중 하나로 usable size에 들어가면 valid이며 엔진 입력을 만들 수 있다", () => {
     // Given
     const selectedSpace = createSpace({

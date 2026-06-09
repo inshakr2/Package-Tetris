@@ -20,7 +20,17 @@ import {
   X
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  FocusEvent,
+  MouseEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { IndexedDbTetrisStorage, WorkspaceSaveConflictError } from "@/lib/persistence/indexed-db";
 import {
   copyWorkspaceForNewFile,
@@ -58,6 +68,11 @@ import {
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
+  calculateBlockVolumeM3,
+  hasPositiveDimensions,
+  isValidBlockMeasurementInput
+} from "@/lib/workspace/block-measurements";
+import {
   createOptimizationInput,
   reviewExecutionReadiness,
   ReviewGateResult
@@ -70,6 +85,7 @@ import {
 } from "@/lib/workspace/delete-confirmation-copy";
 import { getSaveConflictBannerCopy } from "@/lib/workspace/save-conflict-banner-copy";
 import { createLocalSaveState } from "@/lib/workspace/storage-save-state";
+import { parseFieldIntegerInput } from "@/lib/workspace/field-number-input";
 import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineV0 } from "@/lib/workspace/packing-engine";
@@ -1693,42 +1709,38 @@ function BlockCreatePanel({
         </label>
         <label>
           가로(mm)
-          <input
-            inputMode="numeric"
-            type="number"
-            min="1"
+          <NumberFieldInput
+            aria-label="박스 가로 mm"
+            min={1}
             value={form.widthMm}
-            onChange={(event) => onChange({ ...form, widthMm: Number(event.target.value) })}
+            onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
           />
         </label>
         <label>
           세로(mm)
-          <input
-            inputMode="numeric"
-            type="number"
-            min="1"
+          <NumberFieldInput
+            aria-label="박스 세로 mm"
+            min={1}
             value={form.depthMm}
-            onChange={(event) => onChange({ ...form, depthMm: Number(event.target.value) })}
+            onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
           />
         </label>
         <label>
           높이(mm)
-          <input
-            inputMode="numeric"
-            type="number"
-            min="1"
+          <NumberFieldInput
+            aria-label="박스 높이 mm"
+            min={1}
             value={form.heightMm}
-            onChange={(event) => onChange({ ...form, heightMm: Number(event.target.value) })}
+            onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
           />
         </label>
         <label>
-          기본 수량
-          <input
-            inputMode="numeric"
-            type="number"
-            min="1"
+          기본 수량(개)
+          <NumberFieldInput
+            aria-label="박스 기본 수량 개"
+            min={1}
             value={form.quantity}
-            onChange={(event) => onChange({ ...form, quantity: Number(event.target.value) })}
+            onValidValueChange={(quantity) => onChange({ ...form, quantity })}
           />
         </label>
         <label className="checkbox-line">
@@ -1802,18 +1814,17 @@ function CurrentWorkBlocksPanel({
               </div>
               <div className="block-detail-grid">
                 <label>
-                  이번 작업 수량
-                  <input
-                    inputMode="numeric"
-                    type="number"
-                    min="1"
+                  이번 작업 수량(개)
+                  <NumberFieldInput
+                    aria-label="이번 작업 수량 개"
+                    min={1}
                     value={block.quantity}
-                    onChange={(event) => onQuantityChange(block.draftBlockItemId, Number(event.target.value))}
+                    onValidValueChange={(quantity) => onQuantityChange(block.draftBlockItemId, quantity)}
                   />
                 </label>
                 <div className="summary-tile compact">
                   <span>총 부피</span>
-                  <strong>{formatM3(calculateBlockVolumeM3(block))}</strong>
+                  <strong>{formatBlockVolumeM3(block)}</strong>
                 </div>
                 <button
                   className="danger-button"
@@ -3726,65 +3737,133 @@ function SpaceForm({
       </label>
       <label>
         가로(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="1"
+        <NumberFieldInput
+          aria-label="공간 가로 mm"
+          min={1}
           value={value.widthMm}
-          onChange={(event) => onChange({ ...value, widthMm: Number(event.target.value) })}
+          onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
         />
       </label>
       <label>
         세로(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="1"
+        <NumberFieldInput
+          aria-label="공간 세로 mm"
+          min={1}
           value={value.depthMm}
-          onChange={(event) => onChange({ ...value, depthMm: Number(event.target.value) })}
+          onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
         />
       </label>
       <label>
         높이(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="1"
+        <NumberFieldInput
+          aria-label="공간 높이 mm"
+          min={1}
           value={value.heightMm}
-          onChange={(event) => onChange({ ...value, heightMm: Number(event.target.value) })}
+          onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
         />
       </label>
       <label>
         안전 여유 가로(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="0"
+        <NumberFieldInput
+          aria-label="안전 여유 가로 mm"
+          min={0}
           value={value.offsetWidthMm}
-          onChange={(event) => onChange({ ...value, offsetWidthMm: Number(event.target.value) })}
+          onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
         />
       </label>
       <label>
         안전 여유 세로(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="0"
+        <NumberFieldInput
+          aria-label="안전 여유 세로 mm"
+          min={0}
           value={value.offsetDepthMm}
-          onChange={(event) => onChange({ ...value, offsetDepthMm: Number(event.target.value) })}
+          onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
         />
       </label>
       <label>
         안전 여유 높이(mm)
-        <input
-          inputMode="numeric"
-          type="number"
-          min="0"
+        <NumberFieldInput
+          aria-label="안전 여유 높이 mm"
+          min={0}
           value={value.offsetHeightMm}
-          onChange={(event) => onChange({ ...value, offsetHeightMm: Number(event.target.value) })}
+          onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
         />
       </label>
     </div>
+  );
+}
+
+function NumberFieldInput({
+  value,
+  min,
+  onValidValueChange,
+  "aria-label": ariaLabel
+}: {
+  value: number;
+  min: number;
+  onValidValueChange: (value: number) => void;
+  "aria-label": string;
+}) {
+  const errorId = useId();
+  const [draftValue, setDraftValue] = useState(() => formatNumberFieldDraftValue(value));
+  const [error, setError] = useState<string | null>(() => getCommittedNumberFieldError(value, min));
+
+  useEffect(() => {
+    setDraftValue(formatNumberFieldDraftValue(value));
+    setError(getCommittedNumberFieldError(value, min));
+  }, [min, value]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextDraftValue = event.target.value;
+    setDraftValue(nextDraftValue);
+
+    const result = parseFieldIntegerInput(nextDraftValue, { min });
+
+    if (result.status !== "valid") {
+      setError(result.message);
+      return;
+    }
+
+    setError(null);
+    onValidValueChange(result.value);
+  };
+
+  const handleBlur = () => {
+    const result = parseFieldIntegerInput(draftValue, { min });
+
+    if (result.status !== "valid") {
+      setDraftValue(formatNumberFieldDraftValue(value));
+      setError(getCommittedNumberFieldError(value, min));
+      return;
+    }
+
+    setDraftValue(String(result.value));
+    setError(null);
+    onValidValueChange(result.value);
+  };
+
+  return (
+    <>
+      <input
+        aria-describedby={error ? errorId : undefined}
+        aria-invalid={Boolean(error)}
+        aria-label={ariaLabel}
+        inputMode="numeric"
+        type="number"
+        min={min}
+        step="1"
+        value={draftValue}
+        onBlur={handleBlur}
+        onClick={selectNumberFieldValue}
+        onFocus={selectNumberFieldValue}
+        onChange={handleChange}
+      />
+      {error ? (
+        <span className="field-error" id={errorId} role="status">
+          {error}
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -3842,10 +3921,6 @@ function ImportConflictPanel({
   );
 }
 
-function calculateBlockVolumeM3(block: BlockDefinition) {
-  return dimensionsVolumeM3(block.dimensions) * block.quantity;
-}
-
 function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
   const templateMap = new Map<string, BlockTemplate>();
 
@@ -3868,16 +3943,52 @@ function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
   return Array.from(templateMap.values());
 }
 
-function dimensionsVolumeM3(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
-  return (dimensions.widthMm * dimensions.depthMm * dimensions.heightMm) / 1_000_000_000;
-}
-
 function formatDimensions(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
+  if (!hasPositiveDimensions(dimensions)) {
+    return "입력 확인 필요";
+  }
+
   return `${dimensions.widthMm} / ${dimensions.depthMm} / ${dimensions.heightMm}mm`;
 }
 
 function formatM3(value: number) {
+  if (!Number.isFinite(value)) {
+    return "0.000m³";
+  }
+
   return `${value.toFixed(3)}m³`;
+}
+
+function formatBlockVolumeM3(block: BlockDefinition) {
+  if (!isValidBlockMeasurementInput(block)) {
+    return "입력 확인 필요";
+  }
+
+  return formatM3(calculateBlockVolumeM3(block));
+}
+
+function selectNumberFieldValue(event: FocusEvent<HTMLInputElement> | MouseEvent<HTMLInputElement>) {
+  event.currentTarget.select();
+}
+
+function formatNumberFieldDraftValue(value: number) {
+  return Number.isFinite(value) ? String(value) : "";
+}
+
+function getCommittedNumberFieldError(value: number, min: number) {
+  if (!Number.isFinite(value)) {
+    return "숫자를 입력하세요.";
+  }
+
+  if (!Number.isInteger(value)) {
+    return "정수만 입력하세요.";
+  }
+
+  if (value < min) {
+    return `${min} 이상 입력하세요.`;
+  }
+
+  return null;
 }
 
 function formatDateTime(value: string) {
