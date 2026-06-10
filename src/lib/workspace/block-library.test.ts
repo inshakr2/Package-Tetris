@@ -7,6 +7,7 @@ import {
   removeDraftBlockItem,
   restoreDraftBlockItem,
   searchBlockTemplates,
+  updateBlockTemplate,
   updateDraftBlockItemQuantity
 } from "./block-library";
 
@@ -82,6 +83,74 @@ describe("block-library", () => {
     assert.equal(updated.draft.blockItems.length, 2);
     assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-a")?.quantity, 9);
     assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-b")?.quantity, 7);
+  });
+
+  it("저장된 박스는 선택 입력인 무게와 상위/하위 그룹을 저장하고 수정한다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "스피커 박스",
+        dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+        fragile: false,
+        weightKg: 12.5,
+        group1: "금영",
+        group2: "스피커",
+        quantity: 5,
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+
+    // When
+    const updated = updateBlockTemplate(workspace, {
+      blockTemplateId: "template-a",
+      name: "앰프 박스",
+      dimensions: { widthMm: 430, depthMm: 370, heightMm: 290 },
+      fragile: true,
+      weightKg: null,
+      group1: "엔터그레인",
+      group2: "앰프",
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(workspace.blockTemplates[0]?.weightKg, 12.5);
+    assert.equal(workspace.blockTemplates[0]?.group1, "금영");
+    assert.equal(workspace.blockTemplates[0]?.group2, "스피커");
+    assert.equal(updated.blockTemplates[0]?.name, "앰프 박스");
+    assert.equal(updated.blockTemplates[0]?.fragile, true);
+    assert.equal(updated.blockTemplates[0]?.weightKg, null);
+    assert.equal(updated.blockTemplates[0]?.group1, "엔터그레인");
+    assert.equal(updated.blockTemplates[0]?.group2, "앰프");
+    assert.equal(updated.blockTemplates[0]?.entityVersion, 2);
+  });
+
+  it("저장 후 이번 작업에 바로 추가할 때 수량을 생략하면 작업 수량은 1개가 된다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+
+    // When
+    const nextWorkspace = createBlockTemplate(workspace, {
+      blockTemplateId: "template-a",
+      name: "A-박스",
+      dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+      fragile: false,
+      addToDraft: true,
+      now: "2026-06-08T01:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(nextWorkspace.draft.blockItems[0]?.quantity, 1);
   });
 
   it("현재 작업에서 블록을 제거해도 라이브러리 템플릿은 삭제하지 않는다", () => {
@@ -317,7 +386,7 @@ describe("block-library", () => {
     );
   });
 
-  it("저장된 박스 검색은 이름, 치수, 깨짐주의 여부를 현장 문구로 찾는다", () => {
+  it("저장된 박스 검색은 이름, 치수, 깨짐주의, 무게, 그룹을 현장 문구로 찾는다", () => {
     // Given
     const templates = [
       {
@@ -326,6 +395,9 @@ describe("block-library", () => {
         name: "긴 박스 A",
         dimensions: { widthMm: 600, depthMm: 400, heightMm: 200 },
         fragile: false,
+        weightKg: 12.5,
+        group1: "금영",
+        group2: "스피커",
         createdAt: "2026-06-09T00:00:00.000Z",
         updatedAt: "2026-06-09T00:00:00.000Z"
       },
@@ -335,6 +407,9 @@ describe("block-library", () => {
         name: "유리컵 박스",
         dimensions: { widthMm: 300, depthMm: 200, heightMm: 100 },
         fragile: true,
+        weightKg: null,
+        group1: "엔터그레인",
+        group2: "소모품",
         createdAt: "2026-06-09T00:00:00.000Z",
         updatedAt: "2026-06-09T00:00:00.000Z"
       }
@@ -344,12 +419,18 @@ describe("block-library", () => {
     const nameMatches = searchBlockTemplates(templates, "유리컵");
     const dimensionMatches = searchBlockTemplates(templates, "600");
     const fragileMatches = searchBlockTemplates(templates, "깨짐주의");
+    const weightMatches = searchBlockTemplates(templates, "12.5kg");
+    const group1Matches = searchBlockTemplates(templates, "금영");
+    const group2Matches = searchBlockTemplates(templates, "소모품");
     const allMatches = searchBlockTemplates(templates, "   ");
 
     // Then
     assert.deepEqual(nameMatches.map((template) => template.blockTemplateId), ["template-b"]);
     assert.deepEqual(dimensionMatches.map((template) => template.blockTemplateId), ["template-a"]);
     assert.deepEqual(fragileMatches.map((template) => template.blockTemplateId), ["template-b"]);
+    assert.deepEqual(weightMatches.map((template) => template.blockTemplateId), ["template-a"]);
+    assert.deepEqual(group1Matches.map((template) => template.blockTemplateId), ["template-a"]);
+    assert.deepEqual(group2Matches.map((template) => template.blockTemplateId), ["template-b"]);
     assert.deepEqual(allMatches.map((template) => template.blockTemplateId), ["template-a", "template-b"]);
   });
 });

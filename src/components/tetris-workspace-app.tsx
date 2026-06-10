@@ -248,11 +248,13 @@ const DEFAULT_SPACE_FORM = {
 };
 
 const DEFAULT_BLOCK_FORM = {
-  name: "신규 박스",
+  name: "",
   widthMm: 300,
   depthMm: 220,
   heightMm: 180,
-  quantity: 10,
+  weightKg: "",
+  group1: "",
+  group2: "",
   fragile: false
 };
 
@@ -916,6 +918,9 @@ export function TetrisWorkspaceApp() {
             heightMm: Number(blockForm.heightMm)
           },
           fragile: blockForm.fragile,
+          weightKg: parseOptionalWeightKg(blockForm.weightKg),
+          group1: blockForm.group1,
+          group2: blockForm.group2,
           now
         })
       );
@@ -935,7 +940,9 @@ export function TetrisWorkspaceApp() {
           heightMm: Number(blockForm.heightMm)
         },
         fragile: blockForm.fragile,
-        quantity: Number(blockForm.quantity),
+        weightKg: parseOptionalWeightKg(blockForm.weightKg),
+        group1: blockForm.group1,
+        group2: blockForm.group2,
         addToDraft,
         now
       })
@@ -950,7 +957,9 @@ export function TetrisWorkspaceApp() {
       widthMm: template.dimensions.widthMm,
       depthMm: template.dimensions.depthMm,
       heightMm: template.dimensions.heightMm,
-      quantity: 1,
+      weightKg: formatOptionalWeightFormValue(template.weightKg),
+      group1: template.group1 ?? "",
+      group2: template.group2 ?? "",
       fragile: template.fragile
     });
   }
@@ -1899,7 +1908,31 @@ function BlockLibraryPanel({
   ) => void;
 }) {
   const [blockLibrarySearchTerm, setBlockLibrarySearchTerm] = useState("");
-  const visibleTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
+  const [blockLibraryGroup1Filter, setBlockLibraryGroup1Filter] = useState("");
+  const [blockLibraryGroup2Filter, setBlockLibraryGroup2Filter] = useState("");
+  const blockLibraryGroup1Options = useMemo(() => createBlockLibraryGroupOptions(templates, "group1"), [templates]);
+  const blockLibraryGroup2Options = useMemo(
+    () =>
+      createBlockLibraryGroupOptions(
+        blockLibraryGroup1Filter
+          ? templates.filter((template) => template.group1 === blockLibraryGroup1Filter)
+          : templates,
+        "group2"
+      ),
+    [blockLibraryGroup1Filter, templates]
+  );
+  const searchedTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
+  const visibleTemplates = searchedTemplates.filter((template) => {
+    const matchesGroup1 = !blockLibraryGroup1Filter || template.group1 === blockLibraryGroup1Filter;
+    const matchesGroup2 = !blockLibraryGroup2Filter || template.group2 === blockLibraryGroup2Filter;
+    return matchesGroup1 && matchesGroup2;
+  });
+
+  useEffect(() => {
+    if (blockLibraryGroup2Filter && !blockLibraryGroup2Options.includes(blockLibraryGroup2Filter)) {
+      setBlockLibraryGroup2Filter("");
+    }
+  }, [blockLibraryGroup2Filter, blockLibraryGroup2Options]);
 
   return (
     <section className="rail-section block-template-library">
@@ -1909,11 +1942,43 @@ function BlockLibraryPanel({
         저장된 박스 찾기
         <input
           aria-label="저장된 박스 검색"
-          placeholder="박스명, 치수, 깨짐주의 검색"
+          placeholder="박스명, 치수, 무게, 그룹 검색"
           value={blockLibrarySearchTerm}
           onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
         />
       </label>
+      <div className="block-library-filters" aria-label="저장된 박스 그룹 필터">
+        <label>
+          상위그룹
+          <select
+            aria-label="상위그룹 필터"
+            value={blockLibraryGroup1Filter}
+            onChange={(event) => setBlockLibraryGroup1Filter(event.target.value)}
+          >
+            <option value="">전체 상위그룹</option>
+            {blockLibraryGroup1Options.map((groupName) => (
+              <option key={groupName} value={groupName}>
+                {groupName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          하위그룹
+          <select
+            aria-label="하위그룹 필터"
+            value={blockLibraryGroup2Filter}
+            onChange={(event) => setBlockLibraryGroup2Filter(event.target.value)}
+          >
+            <option value="">전체 하위그룹</option>
+            {blockLibraryGroup2Options.map((groupName) => (
+              <option key={groupName} value={groupName}>
+                {groupName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="list library-card-grid">
         {templates.length === 0 ? (
           <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
@@ -1932,7 +1997,7 @@ function BlockLibraryPanel({
                   <span className="badge">일반</span>
                 )}
               </div>
-              <p className="meta">{formatDimensions(template.dimensions)} · v{template.entityVersion}</p>
+              <p className="meta">{createBlockTemplateCardMeta(template).join(" · ")}</p>
               <div className="form-actions">
                 <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
                   이번 작업에 추가
@@ -1978,13 +2043,17 @@ function BlockCreatePanel({
         </span>
         <div>
           <h2 id="block-library-title">{getWorkspaceSectionTitle("blocks")}</h2>
-                  <p className="panel-subtitle">박스 크기와 수량을 입력합니다. 저장한 박스는 다음 작업에도 다시 쓸 수 있습니다.</p>
+          <p className="panel-subtitle">박스 크기와 분류 정보를 저장합니다. 수량은 이번 작업에 넣을 때 조정합니다.</p>
         </div>
       </div>
       <div className="form-grid block-template-form">
         <label>
           박스명
-          <input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} />
+          <input
+            placeholder="예: 스피커 박스"
+            value={form.name}
+            onChange={(event) => onChange({ ...form, name: event.target.value })}
+          />
         </label>
         <label>
           가로(mm)
@@ -2014,12 +2083,34 @@ function BlockCreatePanel({
           />
         </label>
         <label>
-          기본 수량(개)
-          <NumberFieldInput
-            aria-label="박스 기본 수량 개"
-            min={1}
-            value={form.quantity}
-            onValidValueChange={(quantity) => onChange({ ...form, quantity })}
+          무게(kg)
+          <input
+            aria-label="박스 무게 kg"
+            inputMode="decimal"
+            min="0"
+            placeholder="선택 입력"
+            step="0.1"
+            type="number"
+            value={form.weightKg}
+            onClick={selectNumberFieldValue}
+            onFocus={selectNumberFieldValue}
+            onChange={(event) => onChange({ ...form, weightKg: event.target.value })}
+          />
+        </label>
+        <label>
+          상위그룹
+          <input
+            placeholder="예: 금영"
+            value={form.group1}
+            onChange={(event) => onChange({ ...form, group1: event.target.value })}
+          />
+        </label>
+        <label>
+          하위그룹
+          <input
+            placeholder="예: 스피커"
+            value={form.group2}
+            onChange={(event) => onChange({ ...form, group2: event.target.value })}
           />
         </label>
         <label className="checkbox-line">
@@ -2028,17 +2119,17 @@ function BlockCreatePanel({
             checked={form.fragile}
             onChange={(event) => onChange({ ...form, fragile: event.target.checked })}
           />
-                  깨짐주의
+          깨짐주의
         </label>
       </div>
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
-                  {editingTemplateId ? "박스 수정" : "저장 후 이번 작업에 추가"}
+          {editingTemplateId ? "박스 수정" : "저장 후 1개 추가"}
         </button>
         {!editingTemplateId ? (
           <button className="secondary-button" onClick={() => onSave(false)}>
-                    저장만 하기
+            저장만 하기
           </button>
         ) : (
           <button className="secondary-button" onClick={onCancel}>
@@ -5390,12 +5481,56 @@ function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
       name: block.name,
       dimensions: block.dimensions,
       fragile: block.fragile,
+      weightKg: block.weightKg,
+      group1: block.group1,
+      group2: block.group2,
       createdAt: block.createdAt,
       updatedAt: block.updatedAt
     });
   });
 
   return Array.from(templateMap.values());
+}
+
+function createBlockLibraryGroupOptions(templates: BlockTemplate[], groupKey: "group1" | "group2") {
+  const groupNames = templates
+    .map((template) => template[groupKey]?.trim())
+    .filter((groupName): groupName is string => Boolean(groupName));
+
+  return Array.from(new Set(groupNames)).sort((left, right) => left.localeCompare(right, "ko-KR"));
+}
+
+function createBlockTemplateCardMeta(template: BlockTemplate) {
+  return [
+    formatDimensions(template.dimensions),
+    formatOptionalWeightDisplay(template.weightKg),
+    template.group1 ? `상위 ${template.group1}` : "상위그룹 없음",
+    template.group2 ? `하위 ${template.group2}` : "하위그룹 없음",
+    `v${template.entityVersion}`
+  ];
+}
+
+function parseOptionalWeightKg(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function formatOptionalWeightFormValue(weightKg: number | null | undefined) {
+  return typeof weightKg === "number" && Number.isFinite(weightKg) ? String(weightKg) : "";
+}
+
+function formatOptionalWeightDisplay(weightKg: number | null | undefined) {
+  if (typeof weightKg !== "number" || !Number.isFinite(weightKg)) {
+    return "무게 미입력";
+  }
+
+  return `${weightKg}kg`;
 }
 
 function formatDimensions(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {

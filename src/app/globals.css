@@ -565,9 +565,28 @@ select:focus-visible {
   font-size: 13px;
 }
 
-.block-library-search input {
+.block-library-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.block-library-filters label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.block-library-search input,
+.block-library-filters select {
   width: 100%;
   min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  padding: 9px 10px;
 }
 
 .library-card,
@@ -2787,7 +2806,8 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .block-library-search {
+  .block-library-search,
+  .block-library-filters {
     grid-template-columns: 1fr;
   }
 

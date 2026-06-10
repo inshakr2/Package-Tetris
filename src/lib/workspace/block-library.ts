@@ -11,7 +11,10 @@ interface CreateBlockTemplateOptions {
   name: string;
   dimensions: Dimensions;
   fragile: boolean;
-  quantity: number;
+  weightKg?: number | null;
+  group1?: string;
+  group2?: string;
+  quantity?: number;
   addToDraft: boolean;
   now: string;
 }
@@ -45,6 +48,9 @@ interface UpdateBlockTemplateOptions {
   name: string;
   dimensions: Dimensions;
   fragile: boolean;
+  weightKg?: number | null;
+  group1?: string;
+  group2?: string;
   now: string;
 }
 
@@ -63,6 +69,9 @@ export function createBlockTemplate(
     name: options.name,
     dimensions: options.dimensions,
     fragile: options.fragile,
+    weightKg: normalizeOptionalWeightKg(options.weightKg),
+    group1: normalizeOptionalTemplateText(options.group1),
+    group2: normalizeOptionalTemplateText(options.group2),
     createdAt: options.now,
     updatedAt: options.now
   };
@@ -79,7 +88,7 @@ export function createBlockTemplate(
   return addBlockTemplateToDraft(nextWorkspace, {
     draftBlockItemId: `item-${options.blockTemplateId}`,
     blockTemplateId: options.blockTemplateId,
-    quantity: options.quantity,
+    quantity: options.quantity ?? 1,
     now: options.now
   });
 }
@@ -98,6 +107,9 @@ export function updateBlockTemplate(
             name: options.name,
             dimensions: options.dimensions,
             fragile: options.fragile,
+            weightKg: "weightKg" in options ? normalizeOptionalWeightKg(options.weightKg) : template.weightKg ?? null,
+            group1: "group1" in options ? normalizeOptionalTemplateText(options.group1) : template.group1,
+            group2: "group2" in options ? normalizeOptionalTemplateText(options.group2) : template.group2,
             updatedAt: options.now
           }
         : template
@@ -235,7 +247,10 @@ export function searchBlockTemplates(templates: BlockTemplate[], searchTerm: str
       template.dimensions.widthMm,
       template.dimensions.depthMm,
       template.dimensions.heightMm,
-      template.fragile ? "깨짐주의" : "일반"
+      template.fragile ? "깨짐주의" : "일반",
+      formatSearchableWeight(template.weightKg),
+      template.group1,
+      template.group2
     ]
       .join(" ")
       .toLocaleLowerCase("ko-KR");
@@ -285,4 +300,25 @@ function touchDraft(workspace: TetrisWorkspace, now: string): TetrisWorkspace {
       updatedAt: now
     }
   };
+}
+
+function normalizeOptionalWeightKg(weightKg: number | null | undefined) {
+  if (typeof weightKg !== "number" || !Number.isFinite(weightKg) || weightKg <= 0) {
+    return null;
+  }
+
+  return weightKg;
+}
+
+function normalizeOptionalTemplateText(value: string | undefined) {
+  const normalizedValue = value?.trim();
+  return normalizedValue ? normalizedValue : undefined;
+}
+
+function formatSearchableWeight(weightKg: number | null | undefined) {
+  if (typeof weightKg !== "number" || !Number.isFinite(weightKg)) {
+    return "무게 미입력";
+  }
+
+  return `${weightKg} ${weightKg}kg ${weightKg} kg`;
 }
