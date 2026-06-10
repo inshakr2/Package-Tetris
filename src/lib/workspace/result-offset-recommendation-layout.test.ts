@@ -12,9 +12,9 @@ describe("result-offset-recommendation-layout", () => {
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
     // When
-    const importsRecommendation = source.includes(
-      "createOffsetAdjustmentRecommendation,\n  type OffsetAdjustmentRecommendation"
-    );
+    const importsRecommendation =
+      source.includes("createOffsetAdjustmentRecommendation") &&
+      source.includes("type ResultSpaceAdjustmentRecommendation");
     const hasRecommendationState =
       source.includes("const [offsetRecommendation, setOffsetRecommendation]") &&
       source.includes("createOffsetAdjustmentRecommendation({") &&
@@ -25,7 +25,7 @@ describe("result-offset-recommendation-layout", () => {
       source.includes("focusSpaceInputs") &&
       source.includes("안전 여유 조정 추천") &&
       source.includes("현장 책임자 확인 후") &&
-      source.includes('안전 여유를 조정하면{" "}') &&
+      source.includes("안전 여유를 조정하면") &&
       source.includes("공간을 더 적게 쓸 가능성이 있습니다.");
     const hasPreviewAction =
       source.includes('className="offset-recommendation-actions"') &&
@@ -39,6 +39,28 @@ describe("result-offset-recommendation-layout", () => {
     assert.ok(hasRecommendationState, "ResultStage should calculate recommendations asynchronously");
     assert.ok(hasRecommendationCard, "result area should render a field-language recommendation card");
     assert.ok(hasPreviewAction, "recommendation card should expose a preview dialog action");
+  });
+
+  it("결과 화면은 기본 파레트 결과에서 오버행 파레트 검토 추천을 계산하고 현장 문구로 표시한다", () => {
+    // Given
+    const source = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
+
+    // When
+    const importsOverhangRecommendation =
+      source.includes("createOverhangPalletRecommendation") &&
+      source.includes("type ResultSpaceAdjustmentRecommendation");
+    const calculatesOverhangRecommendation =
+      source.includes("const overhangRecommendation = await createOverhangPalletRecommendation") &&
+      source.includes("unloadedBlockCount: latestResult.unloadedBlockCount");
+    const hasFieldCopy =
+      source.includes("오버행 파레트 검토") &&
+      source.includes("자동으로 바꾸지 않습니다") &&
+      source.includes("현장 책임자 확인 후 오버행 파레트를 선택해 다시 계산하세요");
+
+    // Then
+    assert.ok(importsOverhangRecommendation, "ResultStage should import the overhang recommendation helper");
+    assert.ok(calculatesOverhangRecommendation, "ResultStage should calculate overhang recommendations");
+    assert.ok(hasFieldCopy, "overhang recommendation should use field review wording");
   });
 
   it("추천 미리보기 dialog는 실제 설정을 바꾸지 않는 3D 미리보기로 구성된다", () => {

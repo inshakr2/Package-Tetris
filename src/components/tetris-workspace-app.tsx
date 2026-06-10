@@ -142,7 +142,8 @@ import {
 } from "@/lib/workspace/result-calculation-failure";
 import {
   createOffsetAdjustmentRecommendation,
-  type OffsetAdjustmentRecommendation
+  createOverhangPalletRecommendation,
+  type ResultSpaceAdjustmentRecommendation
 } from "@/lib/workspace/result-offset-recommendation";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import {
@@ -633,7 +634,7 @@ export function TetrisWorkspaceApp() {
   }, [workspace?.spaces]);
 
   const selectedSpace = allSpaces.find((space) => space.spaceId === workspace?.draft.selectedSpaceId);
-  const draftBlocks = workspace ? resolveDraftBlocks(workspace) : [];
+  const draftBlocks = useMemo(() => (workspace ? resolveDraftBlocks(workspace) : []), [workspace]);
   const review = workspace
     ? reviewExecutionReadiness({
         selectedSpace,
@@ -2491,7 +2492,7 @@ const ResultStage = ({
   const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
   const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
   const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
-  const [offsetRecommendation, setOffsetRecommendation] = useState<OffsetAdjustmentRecommendation | null>(null);
+  const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -2647,6 +2648,7 @@ const ResultStage = ({
       stackingInstructionWarningMessages.length
     ]
   );
+  const recommendationCopy = offsetRecommendation ? createResultSpaceRecommendationCopy(offsetRecommendation) : null;
 
   useEffect(() => {
     setResultViewMode("three");
@@ -2684,30 +2686,47 @@ const ResultStage = ({
     let cancelled = false;
 
     async function calculateOffsetRecommendation() {
-      if (
-        !latestResult ||
-        !resultSpace ||
-        latestResult.unloadedBlockCount > 0 ||
-        resultFreshnessState.status === "stale"
-      ) {
+      if (!latestResult || !resultSpace || resultFreshnessState.status === "stale") {
         setOffsetRecommendation(null);
         return;
       }
 
       const recommendationSpaces =
         isChainComparisonActive && chainComparisonMode === "preview" ? displayedSpaces : packedSpaces;
+      const recommendationPolicy = {
+        fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
+        nonFragileOnFragileAllowed: false,
+        rotation: "orthogonal-90deg"
+      } as const;
 
       setOffsetRecommendation(null);
 
       try {
+        const overhangRecommendation = await createOverhangPalletRecommendation({
+          space: resultSpace,
+          blocks: draftBlocks,
+          spaces: packedSpaces,
+          unloadedBlockCount: latestResult.unloadedBlockCount,
+          policy: recommendationPolicy,
+          runPackingEngine: runPackingEngineInWorker
+        });
+
+        if (!cancelled && overhangRecommendation) {
+          setOffsetRecommendation(overhangRecommendation);
+          return;
+        }
+
+        if (latestResult.unloadedBlockCount > 0) {
+          if (!cancelled) {
+            setOffsetRecommendation(null);
+          }
+          return;
+        }
+
         const recommendation = await createOffsetAdjustmentRecommendation({
           space: resultSpace,
           spaces: recommendationSpaces,
-          policy: {
-            fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
-            nonFragileOnFragileAllowed: false,
-            rotation: "orthogonal-90deg"
-          },
+          policy: recommendationPolicy,
           runPackingEngine: runPackingEngineInWorker
         });
 
@@ -2729,6 +2748,7 @@ const ResultStage = ({
   }, [
     chainComparisonMode,
     displayedSpaces,
+    draftBlocks,
     isChainComparisonActive,
     latestResult,
     packedSpaces,
@@ -3160,25 +3180,20 @@ const ResultStage = ({
       ) : null}
 
       {offsetRecommendation ? (
-        <div className="offset-recommendation-card" role="status" aria-label="안전 여유 조정 추천">
+        <div className="offset-recommendation-card" role="status" aria-label={recommendationCopy?.ariaLabel}>
           <div className="offset-recommendation-copy">
             <span className="badge" data-tone="green">
-              안전 여유 조정 추천
+              {recommendationCopy?.badge}
             </span>
-            <strong>
-              안전 여유를 최대 {offsetRecommendation.reductionMm}mm 검토하면 공간을 더 적게 쓸 가능성이 있습니다.
-            </strong>
-            <p className="fine-print">
-              현재 {offsetRecommendation.originalUsedSpaceCount}개 공간이 필요하지만, 현장 책임자 확인 후 안전 여유를 조정하면{" "}
-              {offsetRecommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.
-            </p>
+            <strong>{recommendationCopy?.title}</strong>
+            <p className="fine-print">{recommendationCopy?.description}</p>
             <div className="offset-recommendation-values" aria-label="추천 수치 비교">
               <span>
-                현재 적재 가능
+                {recommendationCopy?.currentValueLabel}
                 <strong>{formatDimensions(offsetRecommendation.usableSizeBefore)}</strong>
               </span>
               <span>
-                추천 검토값
+                {recommendationCopy?.suggestedValueLabel}
                 <strong>{formatDimensions(offsetRecommendation.usableSizeAfter)}</strong>
               </span>
             </div>
@@ -3186,7 +3201,7 @@ const ResultStage = ({
           <div className="offset-recommendation-actions">
             <button className="secondary-button" onClick={onReviewSpaceOffset}>
               <PencilLine size={16} />
-              공간 설정 확인
+              {recommendationCopy?.reviewActionLabel}
             </button>
             <button
               className="secondary-button"
@@ -3836,6 +3851,38 @@ function ResultInspectionDialog({
   );
 }
 
+function createResultSpaceRecommendationCopy(recommendation: ResultSpaceAdjustmentRecommendation) {
+  if (recommendation.kind === "overhang-pallet") {
+    const improvedUnloaded = recommendation.improvedUnloadedBlockCount < recommendation.originalUnloadedBlockCount;
+    const improvementText = improvedUnloaded
+      ? `현재 미적재 ${recommendation.originalUnloadedBlockCount}개가 있지만, 오버행 파레트로 검토하면 미적재를 ${recommendation.improvedUnloadedBlockCount}개까지 줄일 수 있습니다.`
+      : `현재 ${recommendation.originalUsedSpaceCount}개 공간이 필요하지만, 오버행 파레트로 검토하면 ${recommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.`;
+
+    return {
+      ariaLabel: "오버행 파레트 검토 추천",
+      badge: "오버행 파레트 검토",
+      title: "오버행 파레트로 다시 계산하면 공간 사용을 줄일 가능성이 있습니다.",
+      description: `${improvementText} 자동으로 바꾸지 않습니다. 현장 책임자 확인 후 오버행 파레트를 선택해 다시 계산하세요.`,
+      currentValueLabel: recommendation.originalSpace.name,
+      suggestedValueLabel: recommendation.suggestedSpace.name,
+      reviewActionLabel: "공간 선택 확인",
+      previewDescription:
+        "실제 공간 선택은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 오버행 파레트를 선택해 다시 계산하세요."
+    };
+  }
+
+  return {
+    ariaLabel: "안전 여유 조정 추천",
+    badge: "안전 여유 조정 추천",
+    title: `안전 여유를 최대 ${recommendation.reductionMm}mm 검토하면 공간을 더 적게 쓸 가능성이 있습니다.`,
+    description: `현재 ${recommendation.originalUsedSpaceCount}개 공간이 필요하지만, 현장 책임자 확인 후 안전 여유를 조정하면 ${recommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.`,
+    currentValueLabel: "현재 적재 가능",
+    suggestedValueLabel: "추천 검토값",
+    reviewActionLabel: "공간 설정 확인",
+    previewDescription: "실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요."
+  };
+}
+
 function OffsetRecommendationPreviewDialog({
   open,
   recommendation,
@@ -3843,7 +3890,7 @@ function OffsetRecommendationPreviewDialog({
   onClose
 }: {
   open: boolean;
-  recommendation: OffsetAdjustmentRecommendation | null;
+  recommendation: ResultSpaceAdjustmentRecommendation | null;
   resultSpace: SpaceDefinition | null;
   onClose: (options?: { restoreFocus?: boolean }) => void;
 }) {
@@ -3855,6 +3902,7 @@ function OffsetRecommendationPreviewDialog({
   const [cameraPreset, setCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [resetToken, setResetToken] = useState(0);
   const previewSpaces = recommendation?.previewSpaces ?? [];
+  const recommendationCopy = recommendation ? createResultSpaceRecommendationCopy(recommendation) : null;
   const selectedPreviewSpace =
     previewSpaces.find((space) => space.spaceInstanceId === selectedPreviewSpaceId) ?? previewSpaces[0] ?? null;
   const selectedPreviewSpaceIndex = selectedPreviewSpace
@@ -3937,7 +3985,8 @@ function OffsetRecommendationPreviewDialog({
           <div>
             <h2 id={titleId}>추천 적용 미리보기</h2>
             <p id={descriptionId} className="fine-print">
-              실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요.
+              {recommendationCopy?.previewDescription ??
+                "실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요."}
             </p>
           </div>
           <button
@@ -3963,11 +4012,11 @@ function OffsetRecommendationPreviewDialog({
               </span>
               <span>
                 현재 안전 여유
-                <strong>{formatOffset(recommendation.originalOffset)}</strong>
+                <strong>{formatRecommendationCurrentSetting(recommendation)}</strong>
               </span>
               <span>
                 추천 검토값
-                <strong>{formatOffset(recommendation.suggestedOffset)}</strong>
+                <strong>{formatRecommendationSuggestedSetting(recommendation)}</strong>
               </span>
             </div>
 
@@ -3975,7 +4024,10 @@ function OffsetRecommendationPreviewDialog({
               <aside className="offset-preview-space-list" aria-label="추천값 기준 공간 선택">
                 <strong>추천값 기준 3D 보기</strong>
                 <span className="fine-print">
-                  {resultSpace?.name ?? "선택 공간"} · {formatDimensions(recommendation.usableSizeAfter)}
+                  {recommendation.kind === "overhang-pallet"
+                    ? recommendation.suggestedSpace.name
+                    : (resultSpace?.name ?? "선택 공간")}{" "}
+                  · {formatDimensions(recommendation.usableSizeAfter)}
                 </span>
                 <div className="space-instance-list">
                   {previewSpaces.map((space, index) => (
@@ -4056,7 +4108,19 @@ function OffsetRecommendationPreviewDialog({
   );
 }
 
-function formatOffset(offset: OffsetAdjustmentRecommendation["originalOffset"]) {
+function formatRecommendationCurrentSetting(recommendation: ResultSpaceAdjustmentRecommendation) {
+  return recommendation.kind === "overhang-pallet"
+    ? recommendation.originalSpace.name
+    : formatOffset(recommendation.originalOffset);
+}
+
+function formatRecommendationSuggestedSetting(recommendation: ResultSpaceAdjustmentRecommendation) {
+  return recommendation.kind === "overhang-pallet"
+    ? recommendation.suggestedSpace.name
+    : formatOffset(recommendation.suggestedOffset);
+}
+
+function formatOffset(offset: { widthMm: number; depthMm: number; heightMm: number }) {
   return `${offset.widthMm} / ${offset.depthMm} / ${offset.heightMm}mm`;
 }
 

@@ -1,10 +1,17 @@
 import type { OptimizationInput, OptimizationOutput } from "./engine-contract";
-import { calculateUsableSize } from "./presets";
+import {
+  calculateUsableSize,
+  DEFAULT_PALLET_SPACE_ID,
+  findPresetSpaceById,
+  normalizePresetSpaceId,
+  OVERHANG_PALLET_SPACE_ID
+} from "./presets";
 import type { BlockDefinition, Offset, PackedBlock, PackedSpace, SpaceDefinition } from "./types";
 
 export const OFFSET_RECOMMENDATION_REDUCTION_CANDIDATES_MM = [10, 20, 50] as const;
 
 export interface OffsetAdjustmentRecommendation {
+  kind: "offset";
   reductionMm: number;
   originalOffset: Offset;
   suggestedOffset: Offset;
@@ -16,9 +23,36 @@ export interface OffsetAdjustmentRecommendation {
   usableSizeAfter: SpaceDefinition["dimensions"];
 }
 
+export interface OverhangPalletRecommendation {
+  kind: "overhang-pallet";
+  originalSpace: SpaceDefinition;
+  suggestedSpace: SpaceDefinition;
+  originalUsedSpaceCount: number;
+  improvedUsedSpaceCount: number;
+  originalUnloadedBlockCount: number;
+  improvedUnloadedBlockCount: number;
+  improvedAverageUtilizationRate: number;
+  previewSpaces: PackedSpace[];
+  usableSizeBefore: SpaceDefinition["dimensions"];
+  usableSizeAfter: SpaceDefinition["dimensions"];
+}
+
+export type ResultSpaceAdjustmentRecommendation =
+  | OffsetAdjustmentRecommendation
+  | OverhangPalletRecommendation;
+
 interface OffsetAdjustmentRecommendationInput {
   space: SpaceDefinition;
   spaces: PackedSpace[];
+  policy: OptimizationInput["policy"];
+  runPackingEngine: (input: OptimizationInput) => OptimizationOutput | Promise<OptimizationOutput>;
+}
+
+interface OverhangPalletRecommendationInput {
+  space: SpaceDefinition;
+  blocks: BlockDefinition[];
+  spaces: PackedSpace[];
+  unloadedBlockCount: number;
   policy: OptimizationInput["policy"];
   runPackingEngine: (input: OptimizationInput) => OptimizationOutput | Promise<OptimizationOutput>;
 }
@@ -61,6 +95,7 @@ export async function createOffsetAdjustmentRecommendation({
 
     if (output.usedSpaceCount < spaces.length) {
       return {
+        kind: "offset",
         reductionMm,
         originalOffset: space.offset,
         suggestedOffset: candidateSpace.offset,
@@ -75,6 +110,66 @@ export async function createOffsetAdjustmentRecommendation({
   }
 
   return null;
+}
+
+export async function createOverhangPalletRecommendation({
+  space,
+  blocks,
+  spaces,
+  unloadedBlockCount,
+  policy,
+  runPackingEngine
+}: OverhangPalletRecommendationInput): Promise<OverhangPalletRecommendation | null> {
+  if (normalizePresetSpaceId(space.spaceId) !== DEFAULT_PALLET_SPACE_ID || blocks.length === 0) {
+    return null;
+  }
+
+  const overhangPallet = findPresetSpaceById(OVERHANG_PALLET_SPACE_ID);
+
+  if (!overhangPallet) {
+    return null;
+  }
+
+  const output = await runPackingEngine({
+    runId: "overhang-pallet-recommendation",
+    space: overhangPallet,
+    blocks,
+    policy
+  });
+
+  if (!isOverhangImprovement(output, spaces.length, unloadedBlockCount)) {
+    return null;
+  }
+
+  return {
+    kind: "overhang-pallet",
+    originalSpace: space,
+    suggestedSpace: overhangPallet,
+    originalUsedSpaceCount: spaces.length,
+    improvedUsedSpaceCount: output.usedSpaceCount,
+    originalUnloadedBlockCount: unloadedBlockCount,
+    improvedUnloadedBlockCount: output.unloadedBlockCount,
+    improvedAverageUtilizationRate: output.averageUtilizationRate,
+    previewSpaces: output.spaces,
+    usableSizeBefore: calculateUsableSize(space),
+    usableSizeAfter: calculateUsableSize(overhangPallet)
+  };
+}
+
+function isOverhangImprovement(
+  output: OptimizationOutput,
+  originalUsedSpaceCount: number,
+  originalUnloadedBlockCount: number
+) {
+  if (output.unloadedBlockCount > originalUnloadedBlockCount) {
+    return false;
+  }
+
+  if (output.unloadedBlockCount < originalUnloadedBlockCount) {
+    return true;
+  }
+
+  return output.usedSpaceCount < originalUsedSpaceCount;
 }
 
 function hasReducibleOffset(offset: Offset) {
