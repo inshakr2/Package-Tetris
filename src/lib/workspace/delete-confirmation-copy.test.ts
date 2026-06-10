@@ -44,4 +44,18 @@ describe("delete-confirmation-copy", () => {
       confirmLabel: "작업에서 제거"
     });
   });
+
+  it("block-group 삭제 문구를 반환한다", () => {
+    // Given
+
+    // When
+    const copy = getDeleteConfirmationCopy("block-group", "금영");
+
+    // Then
+    assert.deepEqual(copy, {
+      title: "그룹을 삭제할까요?",
+      description: "금영 그룹을 삭제하면 저장된 박스는 남고, 해당 그룹 분류만 비워집니다.",
+      confirmLabel: "그룹 삭제"
+    });
+  });
 });

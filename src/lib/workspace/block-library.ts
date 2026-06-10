@@ -65,6 +65,11 @@ interface CreateBlockGroupOptions {
   now: string;
 }
 
+interface RemoveBlockGroupOptions {
+  blockGroupId: string;
+  now: string;
+}
+
 interface RemoveBlockTemplateOptions {
   blockTemplateId: string;
   now: string;
@@ -148,6 +153,60 @@ export function createBlockGroup(
       parentGroupId: options.parentGroupId,
       now: options.now
     })
+  };
+}
+
+export function removeBlockGroup(
+  workspace: TetrisWorkspace,
+  options: RemoveBlockGroupOptions
+): TetrisWorkspace {
+  const targetGroup = workspace.blockGroups.find((group) => group.blockGroupId === options.blockGroupId);
+
+  if (!targetGroup) {
+    return workspace;
+  }
+
+  if (targetGroup.parentGroupId === null) {
+    const childGroupIds = new Set(
+      workspace.blockGroups
+        .filter((group) => group.parentGroupId === targetGroup.blockGroupId)
+        .map((group) => group.blockGroupId)
+    );
+
+    return {
+      ...touchDraft(workspace, options.now),
+      blockGroups: workspace.blockGroups.filter(
+        (group) => group.blockGroupId !== targetGroup.blockGroupId && !childGroupIds.has(group.blockGroupId)
+      ),
+      blockTemplates: workspace.blockTemplates.map((template) =>
+        template.group1 === targetGroup.name
+          ? {
+              ...template,
+              entityVersion: template.entityVersion + 1,
+              group1: undefined,
+              group2: undefined,
+              updatedAt: options.now
+            }
+          : template
+      )
+    };
+  }
+
+  const parentGroup = workspace.blockGroups.find((group) => group.blockGroupId === targetGroup.parentGroupId);
+
+  return {
+    ...touchDraft(workspace, options.now),
+    blockGroups: workspace.blockGroups.filter((group) => group.blockGroupId !== targetGroup.blockGroupId),
+    blockTemplates: workspace.blockTemplates.map((template) =>
+      template.group1 === parentGroup?.name && template.group2 === targetGroup.name
+        ? {
+            ...template,
+            entityVersion: template.entityVersion + 1,
+            group2: undefined,
+            updatedAt: options.now
+          }
+        : template
+    )
   };
 }
 

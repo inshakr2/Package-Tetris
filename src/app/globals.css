@@ -612,7 +612,8 @@ select:focus-visible {
   border: 0;
   border-radius: 8px;
   padding: 0;
-  background: transparent;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
 }
 
 .block-library-dialog::backdrop {
@@ -649,6 +650,22 @@ select:focus-visible {
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
+}
+
+.block-library-pagination {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 48px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.block-library-pagination .secondary-button {
+  min-height: 44px;
 }
 
 .library-card,
@@ -725,7 +742,27 @@ select:focus-visible {
   gap: 10px;
 }
 
+.space-form-rows,
+.block-template-form-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.form-row {
+  display: grid;
+  gap: 10px;
+}
+
+.form-row-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-row-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .form-grid label,
+.form-row label,
 .field-row label {
   display: grid;
   gap: 5px;
@@ -735,6 +772,8 @@ select:focus-visible {
 
 .form-grid input,
 .form-grid select,
+.form-row input,
+.form-row select,
 .field-row input,
 .field-row select {
   width: 100%;
@@ -748,6 +787,8 @@ select:focus-visible {
 
 .form-grid input[aria-invalid="true"],
 .form-grid select[aria-invalid="true"],
+.form-row input[aria-invalid="true"],
+.form-row select[aria-invalid="true"],
 .field-row input[aria-invalid="true"],
 .block-detail-grid input[aria-invalid="true"] {
   border-color: var(--red);
@@ -790,6 +831,57 @@ select:focus-visible {
   padding: 9px 10px;
   background: white;
   color: var(--text);
+}
+
+.block-group-manager {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.block-group-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 10px;
+}
+
+.block-group-card-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.block-group-card-head strong {
+  overflow-wrap: anywhere;
+}
+
+.block-group-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.block-group-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 5px 6px 5px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .field-error {
@@ -2930,6 +3022,8 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .form-row-two,
+  .form-row-three,
   .space-form,
   .block-template-form {
     grid-template-columns: 1fr;

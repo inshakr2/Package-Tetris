@@ -5,6 +5,7 @@ import {
   addBlockTemplateToDraft,
   createBlockGroup,
   createBlockTemplate,
+  removeBlockGroup,
   removeDraftBlockItem,
   restoreDraftBlockItem,
   searchBlockTemplates,
@@ -202,6 +203,86 @@ describe("block-library", () => {
     assert.equal(childWorkspace.blockGroups.length, 2);
     assert.equal(childWorkspace.blockGroups.find((group) => group.name === "앰프")?.parentGroupId, topGroup.blockGroupId);
     assert.equal(childWorkspace.revision, topWorkspace.revision + 1);
+  });
+
+  it("상위 그룹 삭제는 박스를 삭제하지 않고 해당 상위/하위 그룹 분류만 비운다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "스피커 박스",
+        dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+        fragile: false,
+        group1: "금영",
+        group2: "스피커",
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+    const topGroup = workspace.blockGroups.find((group) => group.name === "금영");
+
+    if (!topGroup) {
+      throw new Error("expected top group");
+    }
+
+    // When
+    const nextWorkspace = removeBlockGroup(workspace, {
+      blockGroupId: topGroup.blockGroupId,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(nextWorkspace.blockTemplates.length, 1);
+    assert.equal(nextWorkspace.blockTemplates[0]?.group1, undefined);
+    assert.equal(nextWorkspace.blockTemplates[0]?.group2, undefined);
+    assert.equal(nextWorkspace.blockGroups.some((group) => group.name === "금영"), false);
+    assert.equal(nextWorkspace.blockGroups.some((group) => group.name === "스피커"), false);
+    assert.equal(nextWorkspace.revision, workspace.revision + 1);
+  });
+
+  it("하위 그룹 삭제는 상위 그룹과 박스를 유지하고 하위 그룹 분류만 비운다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "스피커 박스",
+        dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+        fragile: false,
+        group1: "금영",
+        group2: "스피커",
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+    const childGroup = workspace.blockGroups.find((group) => group.name === "스피커");
+
+    if (!childGroup) {
+      throw new Error("expected child group");
+    }
+
+    // When
+    const nextWorkspace = removeBlockGroup(workspace, {
+      blockGroupId: childGroup.blockGroupId,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(nextWorkspace.blockTemplates.length, 1);
+    assert.equal(nextWorkspace.blockTemplates[0]?.group1, "금영");
+    assert.equal(nextWorkspace.blockTemplates[0]?.group2, undefined);
+    assert.equal(nextWorkspace.blockGroups.some((group) => group.name === "금영"), true);
+    assert.equal(nextWorkspace.blockGroups.some((group) => group.name === "스피커"), false);
+    assert.equal(nextWorkspace.revision, workspace.revision + 1);
   });
 
   it("저장 후 이번 작업에 바로 추가할 때 수량을 생략하면 작업 수량은 1개가 된다", () => {

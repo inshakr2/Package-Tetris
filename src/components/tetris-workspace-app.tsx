@@ -65,6 +65,7 @@ import {
   addBlockTemplateToDraft,
   createBlockGroup,
   createBlockTemplate,
+  removeBlockGroup,
   removeBlockTemplate,
   removeDraftBlockItem,
   restoreDraftBlockItem,
@@ -267,6 +268,7 @@ const MOBILE_STICKY_HELPER_ID = "mobile-sticky-helper";
 const RESULT_PROGRESS_REVIEW_DELAY_MS = 80;
 const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
 const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
+const BLOCK_LIBRARY_PAGE_SIZE = 12;
 
 const Result3DCanvas = dynamic(
   () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
@@ -886,6 +888,8 @@ export function TetrisWorkspaceApp() {
       deleteSpace(pendingDelete.entityId);
     } else if (pendingDelete.kind === "block-template") {
       deleteBlockTemplate(pendingDelete.entityId);
+    } else if (pendingDelete.kind === "block-group") {
+      deleteBlockGroup(pendingDelete.entityId);
     } else {
       deleteCurrentBlockItem(pendingDelete.entityId);
     }
@@ -971,6 +975,15 @@ export function TetrisWorkspaceApp() {
       createBlockGroup(current, {
         name,
         parentGroupId,
+        now
+      })
+    );
+  }
+
+  function deleteBlockGroup(blockGroupId: string) {
+    updateWorkspace((current, now) =>
+      removeBlockGroup(current, {
+        blockGroupId,
         now
       })
     );
@@ -1625,6 +1638,9 @@ export function TetrisWorkspaceApp() {
                 blockGroups={workspace.blockGroups}
                 onChange={setBlockForm}
                 onAddBlockGroup={addBlockGroup}
+                onDeleteBlockGroup={(group, trigger) =>
+                  requestDelete("block-group", group.blockGroupId, group.name, trigger)
+                }
                 onSave={(addToDraft) => saveBlockTemplate(addToDraft)}
                 onCancel={() => {
                   setEditingTemplateId(null);
@@ -2003,6 +2019,7 @@ function BlockLibraryDialog({
   const [blockLibrarySearchTerm, setBlockLibrarySearchTerm] = useState("");
   const [blockLibraryGroup1Filter, setBlockLibraryGroup1Filter] = useState("");
   const [blockLibraryGroup2Filter, setBlockLibraryGroup2Filter] = useState("");
+  const [blockLibraryPage, setBlockLibraryPage] = useState(1);
   const blockLibraryGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
   const blockLibraryGroup2Options = useMemo(
     () => createChildBlockGroups(blockGroups, blockLibraryGroup1Filter),
@@ -2014,6 +2031,23 @@ function BlockLibraryDialog({
     const matchesGroup2 = !blockLibraryGroup2Filter || template.group2 === blockLibraryGroup2Filter;
     return matchesGroup1 && matchesGroup2;
   });
+  const blockLibraryPageCount = Math.max(1, Math.ceil(visibleTemplates.length / BLOCK_LIBRARY_PAGE_SIZE));
+  const currentBlockLibraryPage = Math.min(blockLibraryPage, blockLibraryPageCount);
+  const blockLibraryPageStart = (currentBlockLibraryPage - 1) * BLOCK_LIBRARY_PAGE_SIZE;
+  const pagedTemplates = visibleTemplates.slice(
+    blockLibraryPageStart,
+    blockLibraryPageStart + BLOCK_LIBRARY_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setBlockLibraryPage(1);
+  }, [blockLibraryGroup1Filter, blockLibraryGroup2Filter, blockLibrarySearchTerm]);
+
+  useEffect(() => {
+    if (blockLibraryPage > blockLibraryPageCount) {
+      setBlockLibraryPage(blockLibraryPageCount);
+    }
+  }, [blockLibraryPage, blockLibraryPageCount]);
 
   useEffect(() => {
     if (
@@ -2112,12 +2146,15 @@ function BlockLibraryDialog({
               </label>
             </div>
           </div>
-          <p className="fine-print">검색 결과 {visibleTemplates.length}개 / 전체 {templates.length}개</p>
+          <p className="fine-print">
+            검색 결과 {visibleTemplates.length}개 / 전체 {templates.length}개 · {currentBlockLibraryPage}/
+            {blockLibraryPageCount} 페이지
+          </p>
           <div className="block-library-dialog-list">
             {visibleTemplates.length === 0 ? (
               <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
             ) : (
-              visibleTemplates.map((template) => (
+              pagedTemplates.map((template) => (
                 <article key={template.blockTemplateId} className="library-card">
                   <div className="card-heading">
                     <strong>{template.name}</strong>
@@ -2151,6 +2188,25 @@ function BlockLibraryDialog({
               ))
             )}
           </div>
+          <div className="block-library-pagination" aria-label="저장된 박스 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setBlockLibraryPage((page) => Math.max(1, page - 1))}
+              disabled={currentBlockLibraryPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentBlockLibraryPage} / {blockLibraryPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setBlockLibraryPage((page) => Math.min(blockLibraryPageCount, page + 1))}
+              disabled={currentBlockLibraryPage >= blockLibraryPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
         </div>
       </div>
     </dialog>
@@ -2163,6 +2219,7 @@ function BlockCreatePanel({
   blockGroups,
   onChange,
   onAddBlockGroup,
+  onDeleteBlockGroup,
   onSave,
   onCancel
 }: {
@@ -2171,6 +2228,7 @@ function BlockCreatePanel({
   blockGroups: BlockGroup[];
   onChange: (value: BlockForm) => void;
   onAddBlockGroup: (name: string, parentGroupId: string | null) => void;
+  onDeleteBlockGroup: (group: BlockGroup, trigger?: HTMLElement | null) => void;
   onSave: (addToDraft: boolean) => void;
   onCancel: () => void;
 }) {
@@ -2222,89 +2280,95 @@ function BlockCreatePanel({
           <p className="panel-subtitle">박스 크기와 분류 정보를 저장합니다. 수량은 이번 작업에 넣을 때 조정합니다.</p>
         </div>
       </div>
-      <div className="form-grid block-template-form">
-        <label>
-          박스명
-          <input
-            placeholder="예: 스피커 박스"
-            value={form.name}
-            onChange={(event) => onChange({ ...form, name: event.target.value })}
-          />
-        </label>
-        <label>
-          가로(mm)
-          <NumberFieldInput
-            aria-label="박스 가로 mm"
-            min={1}
-            value={form.widthMm}
-            onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
-          />
-        </label>
-        <label>
-          세로(mm)
-          <NumberFieldInput
-            aria-label="박스 세로 mm"
-            min={1}
-            value={form.depthMm}
-            onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
-          />
-        </label>
-        <label>
-          높이(mm)
-          <NumberFieldInput
-            aria-label="박스 높이 mm"
-            min={1}
-            value={form.heightMm}
-            onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
-          />
-        </label>
-        <label>
-          무게(kg)
-          <input
-            aria-label="박스 무게 kg"
-            inputMode="decimal"
-            min="0"
-            placeholder="선택 입력"
-            step="0.1"
-            type="number"
-            value={form.weightKg}
-            onClick={selectNumberFieldValue}
-            onFocus={selectNumberFieldValue}
-            onChange={(event) => onChange({ ...form, weightKg: event.target.value })}
-          />
-        </label>
-        <label>
-          상위그룹
-          <select
-            aria-label="박스 상위그룹 선택"
-            value={form.group1}
-            onChange={(event) => onChange({ ...form, group1: event.target.value, group2: "" })}
-          >
-            <option value="">상위그룹 없음</option>
-            {topBlockGroups.map((group) => (
-              <option key={group.blockGroupId} value={group.name}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          하위그룹
-          <select
-            aria-label="박스 하위그룹 선택"
-            value={form.group2}
-            onChange={(event) => onChange({ ...form, group2: event.target.value })}
-            disabled={!form.group1}
-          >
-            <option value="">하위그룹 없음</option>
-            {childBlockGroups.map((group) => (
-              <option key={group.blockGroupId} value={group.name}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="checkbox-line">
+      <div className="block-template-form-rows block-template-form">
+        <div className="form-row form-row-two block-template-name-row">
+          <label>
+            박스명
+            <input
+              placeholder="예: 스피커 박스"
+              value={form.name}
+              onChange={(event) => onChange({ ...form, name: event.target.value })}
+            />
+          </label>
+          <label>
+            무게(kg)
+            <input
+              aria-label="박스 무게 kg"
+              inputMode="decimal"
+              min="0"
+              placeholder="선택 입력"
+              step="0.1"
+              type="number"
+              value={form.weightKg}
+              onClick={selectNumberFieldValue}
+              onFocus={selectNumberFieldValue}
+              onChange={(event) => onChange({ ...form, weightKg: event.target.value })}
+            />
+          </label>
+        </div>
+        <div className="form-row form-row-three block-template-dimension-row">
+          <label>
+            가로(mm)
+            <NumberFieldInput
+              aria-label="박스 가로 mm"
+              min={1}
+              value={form.widthMm}
+              onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
+            />
+          </label>
+          <label>
+            세로(mm)
+            <NumberFieldInput
+              aria-label="박스 세로 mm"
+              min={1}
+              value={form.depthMm}
+              onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
+            />
+          </label>
+          <label>
+            높이(mm)
+            <NumberFieldInput
+              aria-label="박스 높이 mm"
+              min={1}
+              value={form.heightMm}
+              onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
+            />
+          </label>
+        </div>
+        <div className="form-row form-row-two block-template-group-row">
+          <label>
+            상위그룹
+            <select
+              aria-label="박스 상위그룹 선택"
+              value={form.group1}
+              onChange={(event) => onChange({ ...form, group1: event.target.value, group2: "" })}
+            >
+              <option value="">상위그룹 없음</option>
+              {topBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            하위그룹
+            <select
+              aria-label="박스 하위그룹 선택"
+              value={form.group2}
+              onChange={(event) => onChange({ ...form, group2: event.target.value })}
+              disabled={!form.group1}
+            >
+              <option value="">하위그룹 없음</option>
+              {childBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="checkbox-line block-template-fragile-row">
           <input
             type="checkbox"
             checked={form.fragile}
@@ -2362,6 +2426,50 @@ function BlockCreatePanel({
           >
             하위그룹 추가
           </button>
+        </div>
+        <div className="block-group-manager" aria-label="등록된 그룹 관리">
+          {topBlockGroups.length === 0 ? (
+            <p className="fine-print">등록된 그룹이 아직 없습니다.</p>
+          ) : (
+            topBlockGroups.map((group) => {
+              const children = blockGroups
+                .filter((candidate) => candidate.parentGroupId === group.blockGroupId)
+                .sort(compareBlockGroupNames);
+
+              return (
+                <article className="block-group-card" key={group.blockGroupId}>
+                  <div className="block-group-card-head">
+                    <strong>{group.name}</strong>
+                    <button
+                      className="danger-button icon-button"
+                      aria-label={`상위 그룹 ${group.name} 삭제`}
+                      onClick={(event) => onDeleteBlockGroup(group, event.currentTarget)}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  <div className="block-group-children">
+                    {children.length === 0 ? (
+                      <span className="fine-print">하위 그룹 없음</span>
+                    ) : (
+                      children.map((childGroup) => (
+                        <span className="block-group-chip" key={childGroup.blockGroupId}>
+                          {childGroup.name}
+                          <button
+                            className="danger-button icon-button"
+                            aria-label={`하위 그룹 ${childGroup.name} 삭제`}
+                            onClick={(event) => onDeleteBlockGroup(childGroup, event.currentTarget)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
         </div>
       </details>
       <div className="form-actions">
@@ -5519,65 +5627,71 @@ function SpaceForm({
   onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
 }) {
   return (
-    <div className="form-grid space-form">
-      <label>
-        공간명
-        <input value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />
-      </label>
-      <label>
-        가로(mm)
-        <NumberFieldInput
-          aria-label="공간 가로 mm"
-          min={1}
-          value={value.widthMm}
-          onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
-        />
-      </label>
-      <label>
-        세로(mm)
-        <NumberFieldInput
-          aria-label="공간 세로 mm"
-          min={1}
-          value={value.depthMm}
-          onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
-        />
-      </label>
-      <label>
-        높이(mm)
-        <NumberFieldInput
-          aria-label="공간 높이 mm"
-          min={1}
-          value={value.heightMm}
-          onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
-        />
-      </label>
-      <label>
-        안전 여유 가로(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 가로 mm"
-          min={0}
-          value={value.offsetWidthMm}
-          onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
-        />
-      </label>
-      <label>
-        안전 여유 세로(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 세로 mm"
-          min={0}
-          value={value.offsetDepthMm}
-          onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
-        />
-      </label>
-      <label>
-        안전 여유 높이(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 높이 mm"
-          min={0}
-          value={value.offsetHeightMm}
-          onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
-        />
-      </label>
+    <div className="space-form-rows space-form">
+      <div className="form-row space-form-name-row">
+        <label>
+          공간명
+          <input value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />
+        </label>
+      </div>
+      <div className="form-row form-row-three space-form-dimension-row">
+        <label>
+          가로(mm)
+          <NumberFieldInput
+            aria-label="공간 가로 mm"
+            min={1}
+            value={value.widthMm}
+            onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
+          />
+        </label>
+        <label>
+          세로(mm)
+          <NumberFieldInput
+            aria-label="공간 세로 mm"
+            min={1}
+            value={value.depthMm}
+            onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
+          />
+        </label>
+        <label>
+          높이(mm)
+          <NumberFieldInput
+            aria-label="공간 높이 mm"
+            min={1}
+            value={value.heightMm}
+            onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
+          />
+        </label>
+      </div>
+      <div className="form-row form-row-three space-form-offset-row">
+        <label>
+          안전 여유 가로(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 가로 mm"
+            min={0}
+            value={value.offsetWidthMm}
+            onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
+          />
+        </label>
+        <label>
+          안전 여유 세로(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 세로 mm"
+            min={0}
+            value={value.offsetDepthMm}
+            onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
+          />
+        </label>
+        <label>
+          안전 여유 높이(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 높이 mm"
+            min={0}
+            value={value.offsetHeightMm}
+            onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
+          />
+        </label>
+      </div>
     </div>
   );
 }

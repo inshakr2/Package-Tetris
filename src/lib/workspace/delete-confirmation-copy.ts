@@ -1,4 +1,4 @@
-export type DeleteConfirmationKind = "space" | "block-template" | "draft-block";
+export type DeleteConfirmationKind = "space" | "block-template" | "draft-block" | "block-group";
 
 export function getDeleteConfirmationCopy(kind: DeleteConfirmationKind, itemName: string) {
   if (kind === "space") {
@@ -14,6 +14,14 @@ export function getDeleteConfirmationCopy(kind: DeleteConfirmationKind, itemName
       title: "저장된 박스를 삭제할까요?",
       description: `${itemName}를 삭제하면 저장된 박스와 이번 작업에 담긴 같은 박스도 함께 빠집니다.`,
       confirmLabel: "저장된 박스 삭제"
+    };
+  }
+
+  if (kind === "block-group") {
+    return {
+      title: "그룹을 삭제할까요?",
+      description: `${itemName} 그룹을 삭제하면 저장된 박스는 남고, 해당 그룹 분류만 비워집니다.`,
+      confirmLabel: "그룹 삭제"
     };
   }
 
