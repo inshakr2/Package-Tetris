@@ -182,6 +182,7 @@ import {
   formatStackingInstructionCalculatedAt
 } from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
+import { normalizeWorkspace as normalizeWorkspaceForV2 } from "@/lib/workspace/workspace-migration";
 import {
   BlockDefinition,
   BlockTemplate,
@@ -5404,45 +5405,7 @@ function createClientId(prefix: string) {
 }
 
 function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace {
-  const legacyWorkspace = workspace as unknown as TetrisWorkspace & {
-    blocks?: Array<BlockTemplate & { blockId?: string; quantity?: number }>;
-    draft?: TetrisWorkspace["draft"] & { blockIds?: string[] };
-  };
-
-  if (workspace.blockTemplates && workspace.draft.blockItems) {
-    return workspace;
-  }
-
-  const now = workspace.updatedAt ?? new Date().toISOString();
-  const blockTemplates =
-    legacyWorkspace.blocks?.map((block, index) => ({
-      blockTemplateId: block.blockTemplateId ?? block.blockId ?? `legacy-template-${index + 1}`,
-      entityVersion: block.entityVersion ?? 1,
-      name: block.name,
-      dimensions: block.dimensions,
-      fragile: block.fragile,
-      createdAt: block.createdAt ?? now,
-      updatedAt: block.updatedAt ?? now
-    })) ?? [];
-
-  return {
-    ...workspace,
-    blockTemplates,
-    draft: {
-      ...workspace.draft,
-      blockItems:
-        legacyWorkspace.draft?.blockIds?.map((blockId, index) => {
-          const block = legacyWorkspace.blocks?.find((candidate) => candidate.blockId === blockId);
-          return {
-            draftBlockItemId: `legacy-item-${blockId}-${index + 1}`,
-            blockTemplateId: blockId,
-            quantity: block?.quantity ?? 1,
-            createdAt: block?.createdAt ?? now,
-            updatedAt: block?.updatedAt ?? now
-          };
-        }) ?? []
-    }
-  };
+  return normalizeWorkspaceForV2(workspace);
 }
 
 function isWorkspaceSyncMessage(value: unknown): value is WorkspaceSyncMessage {

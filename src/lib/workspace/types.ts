@@ -1,6 +1,11 @@
-export const WORKSPACE_SCHEMA_VERSION = 1;
+export const WORKSPACE_SCHEMA_VERSION = 2;
+export const SUPPORTED_WORKSPACE_SCHEMA_VERSIONS = [1, WORKSPACE_SCHEMA_VERSION] as const;
 export const APP_VERSION = "0.1.0";
 export const TRUCK_PRESET_DISPLAY_NAME = "2.5톤반";
+export const DEFAULT_MINIMUM_SUPPORT_RATIO = 1;
+export const PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO = 0.55;
+
+export type WorkspaceSchemaVersion = (typeof SUPPORTED_WORKSPACE_SCHEMA_VERSIONS)[number];
 
 export type SpaceType = "pallet" | "container" | "truck" | "custom";
 export type StepKey = "space" | "blocks" | "review" | "result" | "chain";
@@ -37,6 +42,9 @@ export interface BlockTemplate {
   name: string;
   dimensions: Dimensions;
   fragile: boolean;
+  weightKg?: number | null;
+  group1?: string;
+  group2?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,6 +53,7 @@ export interface DraftBlockItem {
   draftBlockItemId: string;
   blockTemplateId: string;
   quantity: number;
+  loadPriority?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -58,6 +67,10 @@ export interface BlockDefinition {
   dimensions: Dimensions;
   quantity: number;
   fragile: boolean;
+  weightKg?: number | null;
+  group1?: string;
+  group2?: string;
+  loadPriority?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +129,8 @@ export interface ChainHistoryItem {
 
 export interface WorkspacePolicy {
   fragileStackOnFragileAllowed: boolean;
+  partialSupportEnabled: boolean;
+  minimumSupportRatio: number;
   truckPresetDisplayName: typeof TRUCK_PRESET_DISPLAY_NAME;
 }
 

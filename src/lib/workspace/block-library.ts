@@ -264,6 +264,10 @@ export function resolveDraftBlocks(workspace: TetrisWorkspace): BlockDefinition[
         dimensions: template.dimensions,
         quantity: item.quantity,
         fragile: template.fragile,
+        weightKg: template.weightKg,
+        group1: template.group1,
+        group2: template.group2,
+        loadPriority: item.loadPriority,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       }

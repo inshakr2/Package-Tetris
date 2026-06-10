@@ -1,4 +1,5 @@
 import { TetrisWorkspace } from "../workspace/types";
+import { normalizeWorkspace } from "../workspace/workspace-migration";
 
 const DEFAULT_DB_NAME = "package-tetris";
 const LEGACY_DB_NAME = "my-tetris";
@@ -60,11 +61,16 @@ export class IndexedDbTetrisStorage {
         store.get(ACTIVE_WORKSPACE_KEY)
       );
 
-      assertCanSaveWorkspace(currentRecord?.workspace, workspace, options.expectedRevision);
+      const normalizedWorkspace = normalizeWorkspace(workspace);
+      const normalizedStoredWorkspace = currentRecord?.workspace
+        ? normalizeWorkspace(currentRecord.workspace)
+        : undefined;
+
+      assertCanSaveWorkspace(normalizedStoredWorkspace, normalizedWorkspace, options.expectedRevision);
 
       store.put({
         key: ACTIVE_WORKSPACE_KEY,
-        workspace: cloneForStorage(workspace)
+        workspace: cloneForStorage(normalizedWorkspace)
       } satisfies WorkspaceRecord);
       await waitForTransaction(transaction);
     } finally {
@@ -107,7 +113,7 @@ export class IndexedDbTetrisStorage {
         store.get(ACTIVE_WORKSPACE_KEY)
       );
       await waitForTransaction(transaction);
-      return record?.workspace ?? null;
+      return record?.workspace ? normalizeWorkspace(record.workspace) : null;
     } finally {
       db.close();
     }

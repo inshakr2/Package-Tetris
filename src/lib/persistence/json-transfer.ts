@@ -2,14 +2,18 @@ import {
   APP_VERSION,
   BlockTemplate,
   ChainHistoryItem,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
   DraftState,
   ImportConflict,
+  PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
   ResultSummary,
   SpaceDefinition,
+  SUPPORTED_WORKSPACE_SCHEMA_VERSIONS,
   TetrisWorkspace,
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
 } from "../workspace/types";
+import { normalizeWorkspace } from "../workspace/workspace-migration";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -19,7 +23,7 @@ interface CopyOptions {
   now: string;
 }
 
-interface WorkspaceExportV1 {
+interface WorkspaceExportPayload {
   schema_version: number;
   app_version: string;
   exported_at: string;
@@ -30,6 +34,8 @@ interface WorkspaceExportV1 {
   updated_at: string;
   policy: {
     fragile_stack_on_fragile_allowed: boolean;
+    partial_support_enabled: boolean;
+    minimum_support_ratio: number;
     truck_preset_display_name: string;
   };
   custom_spaces: SpaceDefinition[];
@@ -43,7 +49,7 @@ export function exportWorkspaceToJson(
   workspace: TetrisWorkspace,
   exportedAt = new Date().toISOString()
 ) {
-  const payload: WorkspaceExportV1 = {
+  const payload: WorkspaceExportPayload = {
     schema_version: workspace.schemaVersion,
     app_version: workspace.appVersion,
     exported_at: exportedAt,
@@ -54,6 +60,8 @@ export function exportWorkspaceToJson(
     updated_at: workspace.updatedAt,
     policy: {
       fragile_stack_on_fragile_allowed: workspace.policy.fragileStackOnFragileAllowed,
+      partial_support_enabled: workspace.policy.partialSupportEnabled,
+      minimum_support_ratio: workspace.policy.minimumSupportRatio,
       truck_preset_display_name: workspace.policy.truckPresetDisplayName
     },
     custom_spaces: workspace.spaces,
@@ -75,7 +83,7 @@ export function parseWorkspaceImport(jsonText: string): TetrisWorkspace {
 
   assertAllowedTopLevelKeys(payload);
 
-  if (payload.schema_version !== WORKSPACE_SCHEMA_VERSION) {
+  if (!isSupportedSchemaVersion(payload.schema_version)) {
     throw new Error(`지원하지 않는 schema_version입니다: ${String(payload.schema_version)}`);
   }
 
@@ -86,7 +94,7 @@ export function parseWorkspaceImport(jsonText: string): TetrisWorkspace {
   const blockMigration = migrateBlocks(payload.custom_blocks, payload.draft);
   const draft = requireDraft(payload.draft, blockMigration.legacyDraftItems);
 
-  return {
+  return normalizeWorkspace({
     schemaVersion: WORKSPACE_SCHEMA_VERSION,
     appVersion: asString(payload.app_version, APP_VERSION),
     fileId: requireString(payload.file_id, "file_id"),
@@ -96,7 +104,17 @@ export function parseWorkspaceImport(jsonText: string): TetrisWorkspace {
     updatedAt: requireString(payload.updated_at, "updated_at"),
     lastExportedAt: asString(payload.exported_at, null),
     policy: {
-      fragileStackOnFragileAllowed: Boolean(payload.policy.fragile_stack_on_fragile_allowed),
+      fragileStackOnFragileAllowed:
+        typeof payload.policy.fragile_stack_on_fragile_allowed === "boolean"
+          ? payload.policy.fragile_stack_on_fragile_allowed
+          : true,
+      partialSupportEnabled: Boolean(payload.policy.partial_support_enabled),
+      minimumSupportRatio: normalizeSupportRatio(
+        payload.policy.minimum_support_ratio,
+        payload.policy.partial_support_enabled
+          ? PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO
+          : DEFAULT_MINIMUM_SUPPORT_RATIO
+      ),
       truckPresetDisplayName: TRUCK_PRESET_DISPLAY_NAME
     },
     spaces: asArray<SpaceDefinition>(payload.custom_spaces),
@@ -104,7 +122,7 @@ export function parseWorkspaceImport(jsonText: string): TetrisWorkspace {
     draft,
     recentResults: asArray<ResultSummary>(payload.recent_results),
     chainHistory: asArray<ChainHistoryItem>(payload.chain_history)
-  };
+  } satisfies TetrisWorkspace);
 }
 
 export function detectImportConflict(
@@ -211,6 +229,16 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+function isSupportedSchemaVersion(value: unknown) {
+  return SUPPORTED_WORKSPACE_SCHEMA_VERSIONS.some((version) => version === value);
+}
+
+function normalizeSupportRatio(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1
+    ? value
+    : fallback;
+}
+
 function requireDraft(value: unknown, fallbackBlockItems: DraftState["blockItems"] = []): DraftState {
   if (!isRecord(value)) {
     throw new Error("draft 정보가 올바르지 않습니다.");
@@ -272,6 +300,9 @@ function migrateBlocks(customBlocks: unknown, draft: unknown) {
           }
         : { widthMm: 1, depthMm: 1, heightMm: 1 },
       fragile: Boolean(item.fragile),
+      weightKg: typeof item.weightKg === "number" && Number.isFinite(item.weightKg) ? item.weightKg : null,
+      group1: typeof item.group1 === "string" && item.group1.trim().length > 0 ? item.group1.trim() : undefined,
+      group2: typeof item.group2 === "string" && item.group2.trim().length > 0 ? item.group2.trim() : undefined,
       createdAt: typeof item.createdAt === "string" ? item.createdAt : now,
       updatedAt: now
     };

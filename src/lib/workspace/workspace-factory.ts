@@ -1,5 +1,6 @@
 import {
   APP_VERSION,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
   TetrisWorkspace,
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
@@ -32,6 +33,8 @@ export function createDefaultWorkspace(options: WorkspaceFactoryOptions = {}): T
     lastExportedAt: null,
     policy: {
       fragileStackOnFragileAllowed: true,
+      partialSupportEnabled: false,
+      minimumSupportRatio: DEFAULT_MINIMUM_SUPPORT_RATIO,
       truckPresetDisplayName: TRUCK_PRESET_DISPLAY_NAME
     },
     spaces: [],
