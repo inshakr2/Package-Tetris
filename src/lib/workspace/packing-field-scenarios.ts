@@ -1,6 +1,6 @@
 import type { OptimizationInput, OptimizationOutput } from "./engine-contract";
 import { validatePackedSpace } from "./packed-result-validation";
-import { calculateUsableSize, PRESET_SPACES } from "./presets";
+import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "./presets";
 import type { BlockDefinition, SpaceDefinition } from "./types";
 
 export interface FieldPackingScenario {
@@ -46,7 +46,7 @@ export function createFieldPackingScenarios(): FieldPackingScenario[] {
     createScenario({
       name: "파레트 기본 대량 혼합 박스",
       runId: "field-pallet-mixed",
-      spaceId: "preset-pallet-1150",
+      spaceId: DEFAULT_PALLET_SPACE_ID,
       blocks: [
         createBlock("pallet-normal-500", "일반 박스 500", { widthMm: 500, depthMm: 500, heightMm: 450 }, 8),
         createBlock("pallet-flat-1000", "받침 판형 박스", { widthMm: 1000, depthMm: 1000, heightMm: 180 }, 2),

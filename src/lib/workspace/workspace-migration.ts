@@ -8,6 +8,7 @@ import {
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
 } from "./types";
+import { normalizePresetSpaceId } from "./presets";
 
 type LegacyWorkspace = Partial<TetrisWorkspace> & {
   blocks?: Array<Partial<BlockTemplate> & { blockId?: string; quantity?: number }>;
@@ -96,7 +97,8 @@ function normalizeDraft(
     : legacyDraftItems;
 
   return {
-    selectedSpaceId: typeof draft.selectedSpaceId === "string" ? draft.selectedSpaceId : null,
+    selectedSpaceId:
+      typeof draft.selectedSpaceId === "string" ? normalizePresetSpaceId(draft.selectedSpaceId) : null,
     blockItems,
     currentStep: normalizeStepKey(draft.currentStep),
     updatedAt: asString(draft.updatedAt, now)

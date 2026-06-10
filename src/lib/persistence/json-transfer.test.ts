@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { DEFAULT_PALLET_SPACE_ID } from "../workspace/presets";
 import { createDefaultWorkspace } from "../workspace/workspace-factory";
 import {
   copyWorkspaceForNewFile,
@@ -135,6 +136,7 @@ describe("json-transfer", () => {
     assert.equal(workspace.blockTemplates[0]?.weightKg, null);
     assert.equal(workspace.blockTemplates[0]?.group1, undefined);
     assert.equal(workspace.blockTemplates[0]?.group2, undefined);
+    assert.equal(workspace.draft.selectedSpaceId, DEFAULT_PALLET_SPACE_ID);
     assert.equal(workspace.draft.blockItems[0]?.loadPriority, null);
   });
 

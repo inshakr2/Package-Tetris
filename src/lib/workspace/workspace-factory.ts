@@ -5,6 +5,7 @@ import {
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
 } from "./types";
+import { DEFAULT_PALLET_SPACE_ID } from "./presets";
 
 interface WorkspaceFactoryOptions {
   deviceId?: string;
@@ -40,7 +41,7 @@ export function createDefaultWorkspace(options: WorkspaceFactoryOptions = {}): T
     spaces: [],
     blockTemplates: [],
     draft: {
-      selectedSpaceId: "preset-pallet-1150",
+      selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
       blockItems: [],
       currentStep: "space",
       updatedAt: now

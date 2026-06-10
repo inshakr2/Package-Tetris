@@ -171,7 +171,7 @@ import {
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
 import { loadFieldDemoCurrentWork } from "@/lib/workspace/field-demo-workspace";
-import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
+import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import {
@@ -897,7 +897,7 @@ export function TetrisWorkspaceApp() {
       draft: {
         ...current.draft,
         selectedSpaceId:
-          current.draft.selectedSpaceId === spaceId ? "preset-pallet-1150" : current.draft.selectedSpaceId,
+          current.draft.selectedSpaceId === spaceId ? DEFAULT_PALLET_SPACE_ID : current.draft.selectedSpaceId,
         updatedAt: now
       }
     }));
