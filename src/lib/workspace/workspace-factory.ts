@@ -39,6 +39,7 @@ export function createDefaultWorkspace(options: WorkspaceFactoryOptions = {}): T
       truckPresetDisplayName: TRUCK_PRESET_DISPLAY_NAME
     },
     spaces: [],
+    blockGroups: [],
     blockTemplates: [],
     draft: {
       selectedSpaceId: DEFAULT_PALLET_SPACE_ID,

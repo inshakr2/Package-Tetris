@@ -1,5 +1,6 @@
 import {
   APP_VERSION,
+  BlockGroup,
   BlockTemplate,
   ChainHistoryItem,
   DEFAULT_MINIMUM_SUPPORT_RATIO,
@@ -13,6 +14,7 @@ import {
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
 } from "../workspace/types";
+import { deriveBlockGroupsFromTemplates } from "../workspace/block-groups";
 import { normalizeWorkspace } from "../workspace/workspace-migration";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -39,6 +41,7 @@ interface WorkspaceExportPayload {
     truck_preset_display_name: string;
   };
   custom_spaces: SpaceDefinition[];
+  block_groups: BlockGroup[];
   custom_blocks: BlockTemplate[];
   draft: DraftState;
   recent_results: ResultSummary[];
@@ -65,6 +68,11 @@ export function exportWorkspaceToJson(
       truck_preset_display_name: workspace.policy.truckPresetDisplayName
     },
     custom_spaces: workspace.spaces,
+    block_groups: deriveBlockGroupsFromTemplates(
+      workspace.blockTemplates,
+      workspace.blockGroups ?? [],
+      exportedAt
+    ),
     custom_blocks: workspace.blockTemplates,
     draft: workspace.draft,
     recent_results: workspace.recentResults,
@@ -118,6 +126,7 @@ export function parseWorkspaceImport(jsonText: string): TetrisWorkspace {
       truckPresetDisplayName: TRUCK_PRESET_DISPLAY_NAME
     },
     spaces: asArray<SpaceDefinition>(payload.custom_spaces),
+    blockGroups: asArray<BlockGroup>(payload.block_groups),
     blockTemplates: blockMigration.blockTemplates,
     draft,
     recentResults: asArray<ResultSummary>(payload.recent_results),
@@ -188,6 +197,7 @@ function assertAllowedTopLevelKeys(payload: Record<string, unknown>) {
     "updated_at",
     "policy",
     "custom_spaces",
+    "block_groups",
     "custom_blocks",
     "draft",
     "recent_results",

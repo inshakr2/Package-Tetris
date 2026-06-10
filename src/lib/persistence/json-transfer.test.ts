@@ -75,6 +75,10 @@ describe("json-transfer", () => {
     assert.equal(parsed.chain_history.length, 1);
     assert.equal(parsed.chain_history[0].blockName, "추가 박스");
     assert.equal(parsed.chain_history[0].previousAverageUtilizationRate, 0.82);
+    assert.ok(Array.isArray(parsed.block_groups));
+    assert.equal(parsed.block_groups.length, 2);
+    assert.equal(parsed.block_groups[0].name, "금영");
+    assert.equal(parsed.block_groups[1].name, "스피커");
     assert.ok(Array.isArray(parsed.custom_blocks));
     assert.equal(parsed.custom_blocks[0].weightKg, 4.5);
     assert.equal(parsed.custom_blocks[0].group1, "금영");
@@ -136,8 +140,62 @@ describe("json-transfer", () => {
     assert.equal(workspace.blockTemplates[0]?.weightKg, null);
     assert.equal(workspace.blockTemplates[0]?.group1, undefined);
     assert.equal(workspace.blockTemplates[0]?.group2, undefined);
+    assert.deepEqual(workspace.blockGroups, []);
     assert.equal(workspace.draft.selectedSpaceId, DEFAULT_PALLET_SPACE_ID);
     assert.equal(workspace.draft.blockItems[0]?.loadPriority, null);
+  });
+
+  it("block_groups가 없는 백업도 저장된 박스의 문자열 그룹을 레지스트리로 보정한다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-10T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 2,
+      created_at: "2026-06-10T00:00:00.000Z",
+      updated_at: "2026-06-10T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: false,
+        minimum_support_ratio: 1,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      custom_blocks: [
+        {
+          blockTemplateId: "template-a",
+          entityVersion: 1,
+          name: "스피커 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          group1: "금영",
+          group2: "스피커",
+          createdAt: "2026-06-10T00:00:00.000Z",
+          updatedAt: "2026-06-10T00:00:00.000Z"
+        }
+      ],
+      draft: {
+        selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
+        blockItems: [],
+        currentStep: "blocks",
+        updatedAt: "2026-06-10T00:00:00.000Z"
+      },
+      recent_results: [],
+      chain_history: []
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+
+    // Then
+    assert.equal(workspace.blockGroups.length, 2);
+    const topGroup = workspace.blockGroups.find((group) => group.name === "금영");
+    const childGroup = workspace.blockGroups.find((group) => group.name === "스피커");
+    assert.ok(topGroup);
+    assert.ok(childGroup);
+    assert.equal(childGroup.parentGroupId, topGroup.blockGroupId);
   });
 
   it("지원 범위 밖 schema_version은 가져오기를 거부한다", () => {

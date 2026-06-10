@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createDefaultWorkspace } from "./workspace-factory";
 import {
   addBlockTemplateToDraft,
+  createBlockGroup,
   createBlockTemplate,
   removeDraftBlockItem,
   restoreDraftBlockItem,
@@ -129,6 +130,78 @@ describe("block-library", () => {
     assert.equal(updated.blockTemplates[0]?.group1, "엔터그레인");
     assert.equal(updated.blockTemplates[0]?.group2, "앰프");
     assert.equal(updated.blockTemplates[0]?.entityVersion, 2);
+  });
+
+  it("저장된 박스의 상위/하위 그룹은 별도 그룹 레지스트리로 등록되고 재사용된다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+
+    // When
+    const firstWorkspace = createBlockTemplate(workspace, {
+      blockTemplateId: "template-a",
+      name: "스피커 박스",
+      dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+      fragile: false,
+      group1: "금영",
+      group2: "스피커",
+      addToDraft: false,
+      now: "2026-06-08T01:00:00.000Z"
+    });
+    const secondWorkspace = createBlockTemplate(firstWorkspace, {
+      blockTemplateId: "template-b",
+      name: "스피커 박스 2",
+      dimensions: { widthMm: 430, depthMm: 370, heightMm: 290 },
+      fragile: false,
+      group1: "금영",
+      group2: "스피커",
+      addToDraft: false,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(secondWorkspace.blockGroups.length, 2);
+    const topGroup = secondWorkspace.blockGroups.find((group) => group.name === "금영");
+    const childGroup = secondWorkspace.blockGroups.find((group) => group.name === "스피커");
+    assert.ok(topGroup);
+    assert.ok(childGroup);
+    assert.equal(topGroup.parentGroupId, null);
+    assert.equal(childGroup.parentGroupId, topGroup.blockGroupId);
+  });
+
+  it("그룹은 박스 저장 전에도 상위 그룹과 하위 그룹을 별도로 등록할 수 있다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+
+    // When
+    const topWorkspace = createBlockGroup(workspace, {
+      name: "엔터그레인",
+      parentGroupId: null,
+      now: "2026-06-08T01:00:00.000Z"
+    });
+    const topGroup = topWorkspace.blockGroups.find((group) => group.name === "엔터그레인");
+
+    if (!topGroup) {
+      throw new Error("expected top group");
+    }
+
+    const childWorkspace = createBlockGroup(topWorkspace, {
+      name: "앰프",
+      parentGroupId: topGroup.blockGroupId,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(childWorkspace.blockGroups.length, 2);
+    assert.equal(childWorkspace.blockGroups.find((group) => group.name === "앰프")?.parentGroupId, topGroup.blockGroupId);
+    assert.equal(childWorkspace.revision, topWorkspace.revision + 1);
   });
 
   it("저장 후 이번 작업에 바로 추가할 때 수량을 생략하면 작업 수량은 1개가 된다", () => {

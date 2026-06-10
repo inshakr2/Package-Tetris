@@ -25,7 +25,8 @@ describe("block-library-search-layout", () => {
       source.includes('aria-label="상위그룹 필터"') &&
       source.includes('aria-label="하위그룹 필터"') &&
       source.includes("blockLibraryGroup1Filter") &&
-      source.includes("blockLibraryGroup2Filter");
+      source.includes("blockLibraryGroup2Filter") &&
+      source.includes("function BlockLibraryDialog");
     const hasEmptyResultCopy = source.includes("검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.");
 
     // Then
@@ -35,7 +36,7 @@ describe("block-library-search-layout", () => {
     assert.ok(hasEmptyResultCopy, "empty search results should explain the next action");
   });
 
-  it("신규 박스 등록은 기본 수량 대신 무게와 상위/하위 그룹 입력을 제공한다", () => {
+  it("신규 박스 등록은 기본 수량 대신 무게 입력과 등록된 상위/하위 그룹 선택을 제공한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -45,16 +46,43 @@ describe("block-library-search-layout", () => {
     const hasOptionalMetadataFields =
       source.includes("무게(kg)") &&
       source.includes('aria-label="박스 무게 kg"') &&
-      source.includes("상위그룹") &&
-      source.includes("하위그룹") &&
-      source.includes('placeholder="예: 금영"') &&
-      source.includes('placeholder="예: 스피커"');
+      source.includes('aria-label="박스 상위그룹 선택"') &&
+      source.includes('aria-label="박스 하위그룹 선택"') &&
+      source.includes("blockGroupRegister") &&
+      source.includes("onAddBlockGroup");
     const hasPlaceholderName = source.includes('placeholder="예: 스피커 박스"');
 
     // Then
     assert.ok(hasRemovedDefaultQuantity, "template form should not ask for a default quantity");
-    assert.ok(hasOptionalMetadataFields, "template form should collect optional weight and group metadata");
+    assert.ok(hasOptionalMetadataFields, "template form should collect optional weight and select registered groups");
     assert.ok(hasPlaceholderName, "box name should use an example placeholder instead of prefilled text");
+  });
+
+  it("저장된 박스는 대량 목록을 본문에 펼치지 않고 dialog에서 검색하고 선택한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const hasLibraryOpenAction =
+      source.includes("저장된 박스 찾아 추가") &&
+      source.includes('aria-haspopup="dialog"') &&
+      source.includes('aria-controls="block-library-dialog"');
+    const hasDialog =
+      source.includes("function BlockLibraryDialog") &&
+      source.includes('id="block-library-dialog"') &&
+      source.includes('className="block-library-dialog"') &&
+      source.includes("block-library-dialog-body");
+    const hasDialogActions =
+      source.includes('aria-label="저장된 박스 찾기 닫기"') &&
+      source.includes("aria-label={`저장된 박스 ${template.name} 삭제`}");
+    const inlinePanelIsCompact =
+      source.includes("block-library-summary-card") && source.includes("저장된 박스 0개");
+
+    // Then
+    assert.ok(hasLibraryOpenAction, "saved boxes should be opened through a clear dialog action");
+    assert.ok(hasDialog, "saved boxes should render in an accessible lookup dialog");
+    assert.ok(hasDialogActions, "saved-box dialog icon actions should have field-readable accessible names");
+    assert.ok(inlinePanelIsCompact, "inline saved-box area should stay compact for 200+ templates");
   });
 
   it("저장된 박스 검색 입력은 모바일에서 48px 터치 타깃과 한 컬럼 배치를 유지한다", () => {
@@ -66,6 +94,10 @@ describe("block-library-search-layout", () => {
       /\.block-library-search\s*{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*6px;[\s\S]*?}/.test(css);
     const filterRule =
       /\.block-library-filters\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+        css
+      );
+    const dialogRule =
+      /\.block-library-dialog\s*{[\s\S]*?width:\s*min\(920px,\s*calc\(100vw\s*-\s*24px\)\);[\s\S]*?max-height:\s*calc\(100dvh\s*-\s*24px\);[\s\S]*?}/.test(
         css
       );
     const inputRule =
@@ -80,6 +112,7 @@ describe("block-library-search-layout", () => {
     // Then
     assert.ok(searchRule, "search wrapper should be a compact grid");
     assert.ok(filterRule, "group filters should use two compact columns on desktop");
+    assert.ok(dialogRule, "saved-box dialog should fit in the viewport");
     assert.ok(inputRule, "search input and filters should keep field-friendly touch targets");
     assert.ok(mobileRule, "search input and filters should remain one column on mobile");
   });

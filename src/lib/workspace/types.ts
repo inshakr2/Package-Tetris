@@ -49,6 +49,15 @@ export interface BlockTemplate {
   updatedAt: string;
 }
 
+export interface BlockGroup {
+  blockGroupId: string;
+  entityVersion: number;
+  name: string;
+  parentGroupId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DraftBlockItem {
   draftBlockItemId: string;
   blockTemplateId: string;
@@ -145,6 +154,7 @@ export interface TetrisWorkspace {
   lastExportedAt: string | null;
   policy: WorkspacePolicy;
   spaces: SpaceDefinition[];
+  blockGroups: BlockGroup[];
   blockTemplates: BlockTemplate[];
   draft: DraftState;
   recentResults: ResultSummary[];

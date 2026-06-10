@@ -9,6 +9,7 @@ import {
   WORKSPACE_SCHEMA_VERSION
 } from "./types";
 import { normalizePresetSpaceId } from "./presets";
+import { normalizeBlockGroups } from "./block-groups";
 
 type LegacyWorkspace = Partial<TetrisWorkspace> & {
   blocks?: Array<Partial<BlockTemplate> & { blockId?: string; quantity?: number }>;
@@ -22,6 +23,7 @@ export function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace 
     legacyWorkspace.blockTemplates ?? legacyWorkspace.blocks ?? [],
     now
   );
+  const blockGroups = normalizeBlockGroups(legacyWorkspace.blockGroups ?? [], blockTemplates, now);
 
   return {
     ...workspace,
@@ -38,6 +40,7 @@ export function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace 
         : null,
     policy: normalizeWorkspacePolicy(legacyWorkspace.policy),
     spaces: Array.isArray(legacyWorkspace.spaces) ? legacyWorkspace.spaces : [],
+    blockGroups,
     blockTemplates,
     draft: normalizeDraft(legacyWorkspace, blockTemplates, now),
     recentResults: Array.isArray(legacyWorkspace.recentResults) ? legacyWorkspace.recentResults : [],

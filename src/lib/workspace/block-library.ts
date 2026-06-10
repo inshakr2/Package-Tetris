@@ -5,6 +5,11 @@ import {
   DraftBlockItem,
   TetrisWorkspace
 } from "./types";
+import {
+  deriveBlockGroupsFromTemplates,
+  ensureBlockGroupsForNames,
+  upsertBlockGroup
+} from "./block-groups";
 
 interface CreateBlockTemplateOptions {
   blockTemplateId: string;
@@ -54,6 +59,12 @@ interface UpdateBlockTemplateOptions {
   now: string;
 }
 
+interface CreateBlockGroupOptions {
+  name: string;
+  parentGroupId: string | null;
+  now: string;
+}
+
 interface RemoveBlockTemplateOptions {
   blockTemplateId: string;
   now: string;
@@ -78,6 +89,12 @@ export function createBlockTemplate(
 
   const nextWorkspace = {
     ...touchDraft(workspace, options.now),
+    blockGroups: ensureBlockGroupsForNames(
+      workspace.blockGroups ?? [],
+      template.group1,
+      template.group2,
+      options.now
+    ),
     blockTemplates: [...workspace.blockTemplates, template]
   };
 
@@ -97,23 +114,40 @@ export function updateBlockTemplate(
   workspace: TetrisWorkspace,
   options: UpdateBlockTemplateOptions
 ): TetrisWorkspace {
+  const nextBlockTemplates = workspace.blockTemplates.map((template) =>
+    template.blockTemplateId === options.blockTemplateId
+      ? {
+          ...template,
+          entityVersion: template.entityVersion + 1,
+          name: options.name,
+          dimensions: options.dimensions,
+          fragile: options.fragile,
+          weightKg: "weightKg" in options ? normalizeOptionalWeightKg(options.weightKg) : template.weightKg ?? null,
+          group1: "group1" in options ? normalizeOptionalTemplateText(options.group1) : template.group1,
+          group2: "group2" in options ? normalizeOptionalTemplateText(options.group2) : template.group2,
+          updatedAt: options.now
+        }
+      : template
+  );
+
   return {
     ...touchDraft(workspace, options.now),
-    blockTemplates: workspace.blockTemplates.map((template) =>
-      template.blockTemplateId === options.blockTemplateId
-        ? {
-            ...template,
-            entityVersion: template.entityVersion + 1,
-            name: options.name,
-            dimensions: options.dimensions,
-            fragile: options.fragile,
-            weightKg: "weightKg" in options ? normalizeOptionalWeightKg(options.weightKg) : template.weightKg ?? null,
-            group1: "group1" in options ? normalizeOptionalTemplateText(options.group1) : template.group1,
-            group2: "group2" in options ? normalizeOptionalTemplateText(options.group2) : template.group2,
-            updatedAt: options.now
-          }
-        : template
-    )
+    blockGroups: deriveBlockGroupsFromTemplates(nextBlockTemplates, workspace.blockGroups ?? [], options.now),
+    blockTemplates: nextBlockTemplates
+  };
+}
+
+export function createBlockGroup(
+  workspace: TetrisWorkspace,
+  options: CreateBlockGroupOptions
+): TetrisWorkspace {
+  return {
+    ...touchDraft(workspace, options.now),
+    blockGroups: upsertBlockGroup(workspace.blockGroups ?? [], {
+      name: options.name,
+      parentGroupId: options.parentGroupId,
+      now: options.now
+    })
   };
 }
 

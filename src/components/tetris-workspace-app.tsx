@@ -63,6 +63,7 @@ import {
 } from "@/lib/persistence/workspace-sync-channel";
 import {
   addBlockTemplateToDraft,
+  createBlockGroup,
   createBlockTemplate,
   removeBlockTemplate,
   removeDraftBlockItem,
@@ -185,6 +186,7 @@ import {
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import { normalizeWorkspace as normalizeWorkspaceForV2 } from "@/lib/workspace/workspace-migration";
 import {
+  BlockGroup,
   BlockDefinition,
   BlockTemplate,
   ChainHistoryItem,
@@ -964,6 +966,16 @@ export function TetrisWorkspaceApp() {
     });
   }
 
+  function addBlockGroup(name: string, parentGroupId: string | null) {
+    updateWorkspace((current, now) =>
+      createBlockGroup(current, {
+        name,
+        parentGroupId,
+        now
+      })
+    );
+  }
+
   function addTemplateToDraft(template: BlockTemplate, quantity = 1) {
     updateWorkspace((current, now) =>
       addBlockTemplateToDraft(current, {
@@ -1610,7 +1622,9 @@ export function TetrisWorkspaceApp() {
               <BlockCreatePanel
                 form={blockForm}
                 editingTemplateId={editingTemplateId}
+                blockGroups={workspace.blockGroups}
                 onChange={setBlockForm}
+                onAddBlockGroup={addBlockGroup}
                 onSave={(addToDraft) => saveBlockTemplate(addToDraft)}
                 onCancel={() => {
                   setEditingTemplateId(null);
@@ -1621,6 +1635,7 @@ export function TetrisWorkspaceApp() {
             <div className="section-column">
               <BlockLibraryPanel
                 templates={workspace.blockTemplates}
+                blockGroups={workspace.blockGroups}
                 onAddToDraft={addTemplateToDraft}
                 onEdit={editBlockTemplate}
                 onDeleteRequest={requestDelete}
@@ -1893,11 +1908,13 @@ function SelectedSpaceSummary({ selectedSpace }: { selectedSpace: SpaceDefinitio
 
 function BlockLibraryPanel({
   templates,
+  blockGroups,
   onAddToDraft,
   onEdit,
   onDeleteRequest
 }: {
   templates: BlockTemplate[];
+  blockGroups: BlockGroup[];
   onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
   onEdit: (template: BlockTemplate) => void;
   onDeleteRequest: (
@@ -1907,19 +1924,89 @@ function BlockLibraryPanel({
     trigger?: HTMLElement | null
   ) => void;
 }) {
+  const [blockLibraryDialogOpen, setBlockLibraryDialogOpen] = useState(false);
+
+  const handleEdit = (template: BlockTemplate) => {
+    setBlockLibraryDialogOpen(false);
+    onEdit(template);
+  };
+
+  const handleDeleteRequest = (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => {
+    setBlockLibraryDialogOpen(false);
+    onDeleteRequest(kind, entityId, name, trigger);
+  };
+
+  return (
+    <section className="rail-section block-template-library">
+      <h3>저장된 박스</h3>
+      <p className="panel-subtitle">저장한 박스를 팝업에서 검색하고 이번 작업에 추가합니다.</p>
+      <div className="block-library-summary-card">
+        <div>
+          <strong>{templates.length === 0 ? "저장된 박스 0개" : `저장된 박스 ${templates.length}개`}</strong>
+          <span className="fine-print">상위/하위 그룹과 검색으로 필요한 박스를 찾습니다.</span>
+        </div>
+        <button
+          className="primary-button"
+          aria-haspopup="dialog"
+          aria-controls="block-library-dialog"
+          onClick={() => setBlockLibraryDialogOpen(true)}
+          disabled={templates.length === 0}
+        >
+          <PackagePlus size={16} />
+          저장된 박스 찾아 추가
+        </button>
+      </div>
+      {templates.length === 0 ? (
+        <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
+      ) : null}
+      <BlockLibraryDialog
+        open={blockLibraryDialogOpen}
+        templates={templates}
+        blockGroups={blockGroups}
+        onClose={() => setBlockLibraryDialogOpen(false)}
+        onAddToDraft={onAddToDraft}
+        onEdit={handleEdit}
+        onDeleteRequest={handleDeleteRequest}
+      />
+    </section>
+  );
+}
+
+function BlockLibraryDialog({
+  open,
+  templates,
+  blockGroups,
+  onClose,
+  onAddToDraft,
+  onEdit,
+  onDeleteRequest
+}: {
+  open: boolean;
+  templates: BlockTemplate[];
+  blockGroups: BlockGroup[];
+  onClose: () => void;
+  onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
+  onEdit: (template: BlockTemplate) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [blockLibrarySearchTerm, setBlockLibrarySearchTerm] = useState("");
   const [blockLibraryGroup1Filter, setBlockLibraryGroup1Filter] = useState("");
   const [blockLibraryGroup2Filter, setBlockLibraryGroup2Filter] = useState("");
-  const blockLibraryGroup1Options = useMemo(() => createBlockLibraryGroupOptions(templates, "group1"), [templates]);
+  const blockLibraryGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
   const blockLibraryGroup2Options = useMemo(
-    () =>
-      createBlockLibraryGroupOptions(
-        blockLibraryGroup1Filter
-          ? templates.filter((template) => template.group1 === blockLibraryGroup1Filter)
-          : templates,
-        "group2"
-      ),
-    [blockLibraryGroup1Filter, templates]
+    () => createChildBlockGroups(blockGroups, blockLibraryGroup1Filter),
+    [blockGroups, blockLibraryGroup1Filter]
   );
   const searchedTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
   const visibleTemplates = searchedTemplates.filter((template) => {
@@ -1929,112 +2016,201 @@ function BlockLibraryPanel({
   });
 
   useEffect(() => {
-    if (blockLibraryGroup2Filter && !blockLibraryGroup2Options.includes(blockLibraryGroup2Filter)) {
+    if (
+      blockLibraryGroup2Filter &&
+      !blockLibraryGroup2Options.some((group) => group.name === blockLibraryGroup2Filter)
+    ) {
       setBlockLibraryGroup2Filter("");
     }
   }, [blockLibraryGroup2Filter, blockLibraryGroup2Options]);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("[data-block-library-search='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
   return (
-    <section className="rail-section block-template-library">
-      <h3>저장된 박스</h3>
-      <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
-      <label className="block-library-search">
-        저장된 박스 찾기
-        <input
-          aria-label="저장된 박스 검색"
-          placeholder="박스명, 치수, 무게, 그룹 검색"
-          value={blockLibrarySearchTerm}
-          onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
-        />
-      </label>
-      <div className="block-library-filters" aria-label="저장된 박스 그룹 필터">
-        <label>
-          상위그룹
-          <select
-            aria-label="상위그룹 필터"
-            value={blockLibraryGroup1Filter}
-            onChange={(event) => setBlockLibraryGroup1Filter(event.target.value)}
-          >
-            <option value="">전체 상위그룹</option>
-            {blockLibraryGroup1Options.map((groupName) => (
-              <option key={groupName} value={groupName}>
-                {groupName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          하위그룹
-          <select
-            aria-label="하위그룹 필터"
-            value={blockLibraryGroup2Filter}
-            onChange={(event) => setBlockLibraryGroup2Filter(event.target.value)}
-          >
-            <option value="">전체 하위그룹</option>
-            {blockLibraryGroup2Options.map((groupName) => (
-              <option key={groupName} value={groupName}>
-                {groupName}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="list library-card-grid">
-        {templates.length === 0 ? (
-          <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
-        ) : visibleTemplates.length === 0 ? (
-          <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
-        ) : (
-          visibleTemplates.map((template) => (
-            <article key={template.blockTemplateId} className="library-card">
-              <div className="card-heading">
-                <strong>{template.name}</strong>
-                {template.fragile ? (
-                  <span className="badge" data-tone="amber">
-                    깨짐주의
-                  </span>
-                ) : (
-                  <span className="badge">일반</span>
-                )}
-              </div>
-              <p className="meta">{createBlockTemplateCardMeta(template).join(" · ")}</p>
-              <div className="form-actions">
-                <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
-                  이번 작업에 추가
-                </button>
-                <button className="secondary-button" onClick={() => onEdit(template)}>
-                  수정
-                </button>
-                <button
-                  className="danger-button"
-                  onClick={(event) =>
-                    onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
-                  }
+    <dialog
+      id="block-library-dialog"
+      ref={dialogRef}
+      className="block-library-dialog"
+      aria-modal="true"
+      aria-labelledby="block-library-dialog-title"
+      onClose={onClose}
+    >
+      <div className="block-library-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-library-dialog-title">저장된 박스 찾기</h2>
+            <p className="fine-print">검색하거나 그룹을 좁힌 뒤 이번 작업에 추가합니다.</p>
+          </div>
+          <button className="icon-button" data-block-library-close="true" onClick={onClose} aria-label="저장된 박스 찾기 닫기">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-library-dialog-body">
+          <div className="block-library-dialog-tools">
+            <label className="block-library-search">
+              저장된 박스 찾기
+              <input
+                data-block-library-search="true"
+                aria-label="저장된 박스 검색"
+                placeholder="박스명, 치수, 무게, 그룹 검색"
+                value={blockLibrarySearchTerm}
+                onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
+              />
+            </label>
+            <div className="block-library-filters" aria-label="저장된 박스 그룹 필터">
+              <label>
+                상위그룹
+                <select
+                  aria-label="상위그룹 필터"
+                  value={blockLibraryGroup1Filter}
+                  onChange={(event) => {
+                    setBlockLibraryGroup1Filter(event.target.value);
+                    setBlockLibraryGroup2Filter("");
+                  }}
                 >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </article>
-          ))
-        )}
+                  <option value="">전체 상위그룹</option>
+                  {blockLibraryGroup1Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                하위그룹
+                <select
+                  aria-label="하위그룹 필터"
+                  value={blockLibraryGroup2Filter}
+                  onChange={(event) => setBlockLibraryGroup2Filter(event.target.value)}
+                  disabled={!blockLibraryGroup1Filter}
+                >
+                  <option value="">전체 하위그룹</option>
+                  {blockLibraryGroup2Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <p className="fine-print">검색 결과 {visibleTemplates.length}개 / 전체 {templates.length}개</p>
+          <div className="block-library-dialog-list">
+            {visibleTemplates.length === 0 ? (
+              <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
+            ) : (
+              visibleTemplates.map((template) => (
+                <article key={template.blockTemplateId} className="library-card">
+                  <div className="card-heading">
+                    <strong>{template.name}</strong>
+                    {template.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createBlockTemplateCardMeta(template).join(" · ")}</p>
+                  <div className="form-actions">
+                    <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
+                      이번 작업에 추가
+                    </button>
+                    <button className="secondary-button" onClick={() => onEdit(template)}>
+                      수정
+                    </button>
+                    <button
+                      className="danger-button"
+                      aria-label={`저장된 박스 ${template.name} 삭제`}
+                      onClick={(event) =>
+                        onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
+                      }
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
       </div>
-    </section>
+    </dialog>
   );
 }
 
 function BlockCreatePanel({
   form,
   editingTemplateId,
+  blockGroups,
   onChange,
+  onAddBlockGroup,
   onSave,
   onCancel
 }: {
   form: BlockForm;
   editingTemplateId: string | null;
+  blockGroups: BlockGroup[];
   onChange: (value: BlockForm) => void;
+  onAddBlockGroup: (name: string, parentGroupId: string | null) => void;
   onSave: (addToDraft: boolean) => void;
   onCancel: () => void;
 }) {
+  const [blockGroupRegister, setBlockGroupRegister] = useState({
+    topName: "",
+    parentGroupId: "",
+    childName: ""
+  });
+  const topBlockGroups = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const childBlockGroups = useMemo(() => createChildBlockGroups(blockGroups, form.group1), [blockGroups, form.group1]);
+
+  const saveTopGroup = () => {
+    const groupName = blockGroupRegister.topName.trim();
+
+    if (!groupName) {
+      return;
+    }
+
+    onAddBlockGroup(groupName, null);
+    onChange({ ...form, group1: groupName, group2: "" });
+    setBlockGroupRegister((current) => ({ ...current, topName: "" }));
+  };
+
+  const saveChildGroup = () => {
+    const groupName = blockGroupRegister.childName.trim();
+
+    if (!groupName || !blockGroupRegister.parentGroupId) {
+      return;
+    }
+
+    const parentGroup = blockGroups.find((group) => group.blockGroupId === blockGroupRegister.parentGroupId);
+    onAddBlockGroup(groupName, blockGroupRegister.parentGroupId);
+
+    if (parentGroup) {
+      onChange({ ...form, group1: parentGroup.name, group2: groupName });
+    }
+
+    setBlockGroupRegister((current) => ({ ...current, childName: "" }));
+  };
+
   return (
     <section>
       <div className="section-head">
@@ -2099,19 +2275,34 @@ function BlockCreatePanel({
         </label>
         <label>
           상위그룹
-          <input
-            placeholder="예: 금영"
+          <select
+            aria-label="박스 상위그룹 선택"
             value={form.group1}
-            onChange={(event) => onChange({ ...form, group1: event.target.value })}
-          />
+            onChange={(event) => onChange({ ...form, group1: event.target.value, group2: "" })}
+          >
+            <option value="">상위그룹 없음</option>
+            {topBlockGroups.map((group) => (
+              <option key={group.blockGroupId} value={group.name}>
+                {group.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           하위그룹
-          <input
-            placeholder="예: 스피커"
+          <select
+            aria-label="박스 하위그룹 선택"
             value={form.group2}
             onChange={(event) => onChange({ ...form, group2: event.target.value })}
-          />
+            disabled={!form.group1}
+          >
+            <option value="">하위그룹 없음</option>
+            {childBlockGroups.map((group) => (
+              <option key={group.blockGroupId} value={group.name}>
+                {group.name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="checkbox-line">
           <input
@@ -2122,6 +2313,57 @@ function BlockCreatePanel({
           깨짐주의
         </label>
       </div>
+      <details className="block-group-register">
+        <summary>새 그룹 등록</summary>
+        <div className="block-group-register-grid">
+          <label>
+            새 상위그룹명
+            <input
+              placeholder="예: 금영"
+              value={blockGroupRegister.topName}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, topName: event.target.value }))
+              }
+            />
+          </label>
+          <button className="secondary-button" onClick={saveTopGroup} disabled={!blockGroupRegister.topName.trim()}>
+            상위그룹 추가
+          </button>
+          <label>
+            하위그룹을 넣을 상위
+            <select
+              value={blockGroupRegister.parentGroupId}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, parentGroupId: event.target.value }))
+              }
+            >
+              <option value="">상위그룹 선택</option>
+              {topBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.blockGroupId}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            새 하위그룹명
+            <input
+              placeholder="예: 스피커"
+              value={blockGroupRegister.childName}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, childName: event.target.value }))
+              }
+            />
+          </label>
+          <button
+            className="secondary-button"
+            onClick={saveChildGroup}
+            disabled={!blockGroupRegister.parentGroupId || !blockGroupRegister.childName.trim()}
+          >
+            하위그룹 추가
+          </button>
+        </div>
+      </details>
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
@@ -5492,12 +5734,26 @@ function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
   return Array.from(templateMap.values());
 }
 
-function createBlockLibraryGroupOptions(templates: BlockTemplate[], groupKey: "group1" | "group2") {
-  const groupNames = templates
-    .map((template) => template[groupKey]?.trim())
-    .filter((groupName): groupName is string => Boolean(groupName));
+function createTopBlockGroups(blockGroups: BlockGroup[]) {
+  return blockGroups
+    .filter((group) => group.parentGroupId === null)
+    .sort(compareBlockGroupNames);
+}
 
-  return Array.from(new Set(groupNames)).sort((left, right) => left.localeCompare(right, "ko-KR"));
+function createChildBlockGroups(blockGroups: BlockGroup[], parentGroupName: string) {
+  const parentGroup = createTopBlockGroups(blockGroups).find((group) => group.name === parentGroupName);
+
+  if (!parentGroup) {
+    return [];
+  }
+
+  return blockGroups
+    .filter((group) => group.parentGroupId === parentGroup.blockGroupId)
+    .sort(compareBlockGroupNames);
+}
+
+function compareBlockGroupNames(left: BlockGroup, right: BlockGroup) {
+  return left.name.localeCompare(right.name, "ko-KR");
 }
 
 function createBlockTemplateCardMeta(template: BlockTemplate) {
