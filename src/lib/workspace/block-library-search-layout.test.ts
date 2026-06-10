@@ -172,14 +172,24 @@ describe("block-library-search-layout", () => {
     assert.ok(mobileRule, "search input and filters should remain one column on mobile");
   });
 
-  it("그룹 등록 영역은 등록된 그룹 삭제 버튼을 제공한다", () => {
+  it("등록된 그룹 관리는 대량 그룹을 대비해 본문에 펼치지 않고 dialog에서 검색하고 삭제한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
     // When
-    const hasGroupManager =
-      source.includes('className="block-group-manager"') &&
-      source.includes('aria-label="등록된 그룹 관리"') &&
+    const hasGroupManageAction =
+      source.includes("등록된 그룹 관리") &&
+      source.includes('aria-haspopup="dialog"') &&
+      source.includes('aria-controls="block-group-management-dialog"');
+    const hasGroupManagementDialog =
+      source.includes("function BlockGroupManagementDialog") &&
+      source.includes('id="block-group-management-dialog"') &&
+      source.includes('className="block-group-management-dialog"') &&
+      source.includes('aria-label="등록된 그룹 검색"') &&
+      source.includes("검색 결과가 없습니다. 다른 그룹명으로 찾아보세요.");
+    const hasDialogControls =
+      source.includes("BLOCK_GROUP_PAGE_SIZE") &&
+      source.includes("block-group-pagination") &&
       source.includes("onDeleteBlockGroup") &&
       source.includes("등록된 그룹이 아직 없습니다.");
     const hasDeleteLabels =
@@ -187,7 +197,41 @@ describe("block-library-search-layout", () => {
       source.includes("aria-label={`하위 그룹 ${childGroup.name} 삭제`}");
 
     // Then
-    assert.ok(hasGroupManager, "registered groups should be visible in the group register area");
+    assert.ok(hasGroupManageAction, "registered groups should open through a clear management dialog action");
+    assert.ok(hasGroupManagementDialog, "registered groups should render in an accessible management dialog");
+    assert.ok(hasDialogControls, "registered group dialog should support pagination and delete actions");
     assert.ok(hasDeleteLabels, "registered group delete buttons should have readable accessible names");
+  });
+
+  it("등록된 그룹 관리 dialog는 불투명 배경, 스크롤 목록, pagination, 모바일 전체 화면을 유지한다", () => {
+    // Given
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const dialogRule =
+      /\.block-group-management-dialog\s*{[\s\S]*?width:\s*min\(720px,\s*calc\(100vw\s*-\s*24px\)\);[\s\S]*?max-height:\s*calc\(100dvh\s*-\s*24px\);[\s\S]*?background:\s*var\(--surface\);[\s\S]*?}/.test(
+        css
+      );
+    const listRule =
+      /\.block-group-management-dialog-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?overflow:\s*auto;[\s\S]*?}/.test(
+        css
+      );
+    const paginationRule =
+      /\.block-group-pagination\s*{[\s\S]*?display:\s*flex;[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(css);
+    const inputRule =
+      /\.block-group-management-search\s+input\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?width:\s*100%;[\s\S]*?}/.test(
+        css
+      );
+    const mobileRule =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.block-group-management-dialog\s*{[\s\S]*?width:\s*100vw;[\s\S]*?height:\s*100dvh;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(dialogRule, "group management dialog should fit in the viewport with an opaque surface");
+    assert.ok(listRule, "group management dialog should keep long lists scrollable");
+    assert.ok(paginationRule, "group management pagination should keep field-friendly touch targets");
+    assert.ok(inputRule, "group management search should keep field-friendly touch targets");
+    assert.ok(mobileRule, "group management dialog should become full-screen on mobile");
   });
 });

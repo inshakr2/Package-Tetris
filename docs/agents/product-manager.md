@@ -16,6 +16,14 @@ Package Tetris의 product-manager는 V1 프론트 단독 제품 범위를 지키
 - 구현 후 code-reviewer는 버그, 회귀, 테스트 공백, 성능 리스크를 검토한다.
 - 피드백이 치명적이면 같은 사이클에서 수정하고 다시 검증한다.
 
+## UI Decision Collaboration Rule
+
+- product-manager는 버튼 추가, 기능 추가, 화면 구조 변경처럼 현장 작업자에게 보이는 UI를 단독으로 결정하지 않는다. 즉, 버튼과 기능 추가 시 단독으로 UI를 결정하지 않는다.
+- product-manager가 먼저 UI 방향을 판단했더라도 구현 전 business-analyst, ui-designer, ui-ux-tester에게 목적, 현장 흐름, 접근성, 확장성 관점의 의견을 받는다.
+- business-analyst는 업무 흐름과 데이터 의미를 검토하고, ui-designer는 화면 구조와 시각적 위계를 검토하며, ui-ux-tester는 모바일/태블릿/데스크톱 조작성과 접근성을 검토한다.
+- 세 역할의 피드백을 product-manager가 정리한 뒤 nextjs-developer에게 전달한다.
+- 피드백이 기존 PM 판단과 다르면 product-manager는 단독 판단을 고집하지 않고 피드백을 반영해 UI 방향을 조정한다.
+
 ## V1 Decision Rules
 
 - 현장 작업자에게 직접 보이는 UI는 기술어보다 작업 언어를 우선한다.

@@ -269,6 +269,7 @@ const RESULT_PROGRESS_REVIEW_DELAY_MS = 80;
 const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
 const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
 const BLOCK_LIBRARY_PAGE_SIZE = 12;
+const BLOCK_GROUP_PAGE_SIZE = 10;
 
 const Result3DCanvas = dynamic(
   () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
@@ -2237,6 +2238,7 @@ function BlockCreatePanel({
     parentGroupId: "",
     childName: ""
   });
+  const [blockGroupDialogOpen, setBlockGroupDialogOpen] = useState(false);
   const topBlockGroups = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
   const childBlockGroups = useMemo(() => createChildBlockGroups(blockGroups, form.group1), [blockGroups, form.group1]);
 
@@ -2427,51 +2429,24 @@ function BlockCreatePanel({
             하위그룹 추가
           </button>
         </div>
-        <div className="block-group-manager" aria-label="등록된 그룹 관리">
-          {topBlockGroups.length === 0 ? (
-            <p className="fine-print">등록된 그룹이 아직 없습니다.</p>
-          ) : (
-            topBlockGroups.map((group) => {
-              const children = blockGroups
-                .filter((candidate) => candidate.parentGroupId === group.blockGroupId)
-                .sort(compareBlockGroupNames);
-
-              return (
-                <article className="block-group-card" key={group.blockGroupId}>
-                  <div className="block-group-card-head">
-                    <strong>{group.name}</strong>
-                    <button
-                      className="danger-button icon-button"
-                      aria-label={`상위 그룹 ${group.name} 삭제`}
-                      onClick={(event) => onDeleteBlockGroup(group, event.currentTarget)}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                  <div className="block-group-children">
-                    {children.length === 0 ? (
-                      <span className="fine-print">하위 그룹 없음</span>
-                    ) : (
-                      children.map((childGroup) => (
-                        <span className="block-group-chip" key={childGroup.blockGroupId}>
-                          {childGroup.name}
-                          <button
-                            className="danger-button icon-button"
-                            aria-label={`하위 그룹 ${childGroup.name} 삭제`}
-                            onClick={(event) => onDeleteBlockGroup(childGroup, event.currentTarget)}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </article>
-              );
-            })
-          )}
+        <div className="block-group-register-actions">
+          <span className="fine-print">등록된 그룹 {blockGroups.length}개</span>
+          <button
+            className="secondary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-group-management-dialog"
+            onClick={() => setBlockGroupDialogOpen(true)}
+          >
+            등록된 그룹 관리
+          </button>
         </div>
       </details>
+      <BlockGroupManagementDialog
+        open={blockGroupDialogOpen}
+        blockGroups={blockGroups}
+        onClose={() => setBlockGroupDialogOpen(false)}
+        onDeleteBlockGroup={onDeleteBlockGroup}
+      />
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
@@ -2489,6 +2464,189 @@ function BlockCreatePanel({
         )}
       </div>
     </section>
+  );
+}
+
+function BlockGroupManagementDialog({
+  open,
+  blockGroups,
+  onClose,
+  onDeleteBlockGroup
+}: {
+  open: boolean;
+  blockGroups: BlockGroup[];
+  onClose: () => void;
+  onDeleteBlockGroup: (group: BlockGroup, trigger?: HTMLElement | null) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [blockGroupSearchTerm, setBlockGroupSearchTerm] = useState("");
+  const [blockGroupPage, setBlockGroupPage] = useState(1);
+  const topBlockGroups = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const normalizedSearchTerm = blockGroupSearchTerm.trim().toLocaleLowerCase("ko-KR");
+  const visibleGroups = topBlockGroups.filter((group) => {
+    if (!normalizedSearchTerm) {
+      return true;
+    }
+
+    const childNames = blockGroups
+      .filter((childGroup) => childGroup.parentGroupId === group.blockGroupId)
+      .map((childGroup) => childGroup.name)
+      .join(" ");
+
+    return `${group.name} ${childNames}`.toLocaleLowerCase("ko-KR").includes(normalizedSearchTerm);
+  });
+  const blockGroupPageCount = Math.max(1, Math.ceil(visibleGroups.length / BLOCK_GROUP_PAGE_SIZE));
+  const currentBlockGroupPage = Math.min(blockGroupPage, blockGroupPageCount);
+  const blockGroupPageStart = (currentBlockGroupPage - 1) * BLOCK_GROUP_PAGE_SIZE;
+  const pagedGroups = visibleGroups.slice(blockGroupPageStart, blockGroupPageStart + BLOCK_GROUP_PAGE_SIZE);
+
+  useEffect(() => {
+    setBlockGroupPage(1);
+  }, [blockGroupSearchTerm]);
+
+  useEffect(() => {
+    if (blockGroupPage > blockGroupPageCount) {
+      setBlockGroupPage(blockGroupPageCount);
+    }
+  }, [blockGroupPage, blockGroupPageCount]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("[data-block-group-search='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  const requestGroupDelete = (group: BlockGroup, trigger: HTMLElement) => {
+    onClose();
+    onDeleteBlockGroup(group, trigger);
+  };
+
+  return (
+    <dialog
+      id="block-group-management-dialog"
+      ref={dialogRef}
+      className="block-group-management-dialog"
+      aria-modal="true"
+      aria-labelledby="block-group-management-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-group-management-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-group-management-dialog-title">등록된 그룹 관리</h2>
+            <p className="fine-print">상위/하위 그룹을 검색하고 필요 없는 분류를 삭제합니다.</p>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="등록된 그룹 관리 닫기">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-group-management-dialog-body">
+          <label className="block-group-management-search">
+            등록된 그룹 찾기
+            <input
+              data-block-group-search="true"
+              aria-label="등록된 그룹 검색"
+              placeholder="상위그룹, 하위그룹 검색"
+              value={blockGroupSearchTerm}
+              onChange={(event) => setBlockGroupSearchTerm(event.target.value)}
+            />
+          </label>
+          <p className="fine-print">
+            검색 결과 {visibleGroups.length}개 / 전체 {topBlockGroups.length}개 · {currentBlockGroupPage}/
+            {blockGroupPageCount} 페이지
+          </p>
+          <div className="block-group-management-dialog-list">
+            {topBlockGroups.length === 0 ? (
+              <p className="fine-print">등록된 그룹이 아직 없습니다.</p>
+            ) : visibleGroups.length === 0 ? (
+              <p className="fine-print">검색 결과가 없습니다. 다른 그룹명으로 찾아보세요.</p>
+            ) : (
+              pagedGroups.map((group) => {
+                const children = blockGroups
+                  .filter((candidate) => candidate.parentGroupId === group.blockGroupId)
+                  .sort(compareBlockGroupNames);
+
+                return (
+                  <article className="block-group-card" key={group.blockGroupId}>
+                    <div className="block-group-card-head">
+                      <strong>{group.name}</strong>
+                      <button
+                        className="danger-button icon-button"
+                        aria-label={`상위 그룹 ${group.name} 삭제`}
+                        onClick={(event) => requestGroupDelete(group, event.currentTarget)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className="block-group-children">
+                      {children.length === 0 ? (
+                        <span className="fine-print">하위 그룹 없음</span>
+                      ) : (
+                        children.map((childGroup) => (
+                          <span className="block-group-chip" key={childGroup.blockGroupId}>
+                            {childGroup.name}
+                            <button
+                              className="danger-button icon-button"
+                              aria-label={`하위 그룹 ${childGroup.name} 삭제`}
+                              onClick={(event) => requestGroupDelete(childGroup, event.currentTarget)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          <div className="block-group-pagination" aria-label="등록된 그룹 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setBlockGroupPage((page) => Math.max(1, page - 1))}
+              disabled={currentBlockGroupPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentBlockGroupPage} / {blockGroupPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setBlockGroupPage((page) => Math.min(blockGroupPageCount, page + 1))}
+              disabled={currentBlockGroupPage >= blockGroupPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
   );
 }
 

@@ -63,6 +63,19 @@ describe("agent role memory", () => {
     assert.match(productManagerDoc, /푸시/);
   });
 
+  it("product-manager 메모리는 버튼과 기능 추가 전 UI 역할 협의를 강제한다", () => {
+    // Given
+    const productManagerDoc = readDoc(`${agentDir}/product-manager.md`);
+
+    // When / Then
+    assert.match(productManagerDoc, /단독으로 UI를 결정하지 않는다/);
+    assert.match(productManagerDoc, /버튼|기능/);
+    assert.match(productManagerDoc, /business-analyst/);
+    assert.match(productManagerDoc, /ui-designer/);
+    assert.match(productManagerDoc, /ui-ux-tester/);
+    assert.match(productManagerDoc, /피드백을 반영/);
+  });
+
   it("code-reviewer와 ui-ux-tester 메모리는 엔진 정합성과 화면 검증 기준을 나눠 가진다", () => {
     // Given
     const codeReviewerDoc = readDoc(`${agentDir}/code-reviewer.md`);
