@@ -1934,6 +1934,11 @@ select:focus-visible {
   background: #fffaf0;
 }
 
+.field-handoff-item[data-status="review"] {
+  border-color: rgba(86, 95, 115, 0.22);
+  background: #f8fafc;
+}
+
 .field-handoff-item span {
   display: grid;
   gap: 3px;

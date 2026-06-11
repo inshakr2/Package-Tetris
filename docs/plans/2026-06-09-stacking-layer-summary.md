@@ -1,5 +1,7 @@
 # Stacking Layer Summary Implementation Plan
 
+> V2 기준: 이 문서는 2026-06-09 V1 구현 이력입니다. V2에서는 배치상세/쌓는순서/작업지시서 산출물을 제거하고 3D와 공간 확인, 미적재/경고, 백업 상태 중심으로 대체했습니다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 결과 화면에서 선택한 공간의 적재 층을 아래층부터 요약해 현장 작업자가 실제로 쌓는 순서를 빠르게 확인할 수 있게 한다.

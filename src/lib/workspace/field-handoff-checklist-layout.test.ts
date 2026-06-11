@@ -21,7 +21,9 @@ describe("field-handoff-checklist-layout", () => {
     const rendersPanel =
       source.includes('className="sub-panel field-handoff-panel"') &&
       source.includes("현장 전달 전 점검") &&
-      source.includes("fieldHandoffChecklist.items.map");
+      source.includes("fieldHandoffChecklist.items.map") &&
+      source.includes('item.status === "review"') &&
+      source.includes("<Eye");
     const wiresExistingActions =
       !source.includes("openResultInspectionDialog") &&
       !source.includes("open-instructions") &&
@@ -52,8 +54,12 @@ describe("field-handoff-checklist-layout", () => {
       /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.field-handoff-actions\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         css
       );
+    const reviewRule =
+      /\.field-handoff-item\[data-status="review"\]\s*{[\s\S]*?border-color:[\s\S]*?background:\s*#f8fafc;[\s\S]*?}/.test(
+        css
+      );
 
     // Then
-    assert.equal(panelRule && listRule && itemRule && actionRule && mobileRule, true);
+    assert.equal(panelRule && listRule && itemRule && actionRule && mobileRule && reviewRule, true);
   });
 });

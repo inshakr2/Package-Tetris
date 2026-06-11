@@ -220,6 +220,151 @@ describe("json-transfer", () => {
     );
   });
 
+  it("가져온 결과와 추가 시뮬레이션 이력의 legacy 산출물 필드는 다시 내보내지 않는다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-11T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 3,
+      created_at: "2026-06-11T00:00:00.000Z",
+      updated_at: "2026-06-11T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: true,
+        minimum_support_ratio: 0.55,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      block_groups: [],
+      custom_blocks: [],
+      draft: {
+        selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
+        blockItems: [],
+        currentStep: "result",
+        updatedAt: "2026-06-11T00:00:00.000Z"
+      },
+      recent_results: [
+        {
+          resultId: "result-legacy",
+          createdAt: "2026-06-11T00:00:00.000Z",
+          usedSpaceCount: 1,
+          averageUtilizationRate: 0.8,
+          unloadedBlockCount: 0,
+          spaces: [
+            {
+              spaceInstanceId: "space-1",
+              utilizationRate: 0.8,
+              blocks: [
+                {
+                  blockId: "block-1",
+                  blockTemplateId: "template-1",
+                  name: "A 박스",
+                  fragile: false,
+                  xMm: 0,
+                  yMm: 0,
+                  zMm: 0,
+                  widthMm: 100,
+                  depthMm: 100,
+                  heightMm: 100,
+                  rotation: "xyz",
+                  placementDetails: ["legacy"]
+                }
+              ],
+              stackingLayers: ["legacy"]
+            }
+          ],
+          warnings: ["확인"],
+          placementDetails: ["legacy"],
+          stackingLayers: ["legacy"],
+          loadingInstructionText: "legacy instruction",
+          workOrder: { legacy: true }
+        }
+      ],
+      chain_history: [
+        {
+          chainId: "chain-legacy",
+          resultId: "result-legacy",
+          blockId: "block-1",
+          blockTemplateId: "template-1",
+          blockName: "추가 박스",
+          addedQuantity: 2,
+          previousAverageUtilizationRate: 0.72,
+          previousSpaces: [
+            {
+              spaceInstanceId: "previous-space-1",
+              utilizationRate: 0.72,
+              blocks: [],
+              loadingInstructionText: "legacy"
+            }
+          ],
+          workOrder: { legacy: true }
+        }
+      ]
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+    const exported = exportWorkspaceToJson(workspace, "2026-06-11T01:00:00.000Z");
+    const exportedPayload = JSON.parse(exported);
+
+    // Then
+    const importedResult = workspace.recentResults[0] as unknown as Record<string, unknown>;
+    const importedChainItem = workspace.chainHistory[0] as unknown as Record<string, unknown>;
+    assert.equal("placementDetails" in importedResult, false);
+    assert.equal("stackingLayers" in importedResult, false);
+    assert.equal("loadingInstructionText" in importedResult, false);
+    assert.equal("workOrder" in importedChainItem, false);
+    assert.equal("placementDetails" in exportedPayload.recent_results[0], false);
+    assert.equal("stackingLayers" in exportedPayload.recent_results[0].spaces[0], false);
+    assert.equal("placementDetails" in exportedPayload.recent_results[0].spaces[0].blocks[0], false);
+    assert.equal("loadingInstructionText" in exportedPayload.chain_history[0].previousSpaces[0], false);
+    assert.doesNotMatch(exported, /legacy instruction|workOrder|placementDetails|stackingLayers/);
+  });
+
+  it("현재 작업본에 legacy 산출물 필드가 섞여도 JSON export는 허용 필드만 내보낸다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-11T00:00:00.000Z"
+    });
+    workspace.recentResults.push({
+      resultId: "result-live-legacy",
+      createdAt: workspace.updatedAt,
+      usedSpaceCount: 1,
+      averageUtilizationRate: 0.8,
+      unloadedBlockCount: 0,
+      spaces: [
+        {
+          spaceInstanceId: "space-1",
+          utilizationRate: 0.8,
+          blocks: []
+        }
+      ],
+      loadingInstructionText: "legacy live instruction"
+    } as unknown as (typeof workspace.recentResults)[number]);
+    workspace.chainHistory.push({
+      chainId: "chain-live-legacy",
+      resultId: "result-live-legacy",
+      blockId: "block-live",
+      addedQuantity: 1,
+      createdAt: workspace.updatedAt,
+      workOrder: { legacy: true }
+    } as unknown as (typeof workspace.chainHistory)[number]);
+
+    // When
+    const exported = exportWorkspaceToJson(workspace, "2026-06-11T01:00:00.000Z");
+    const exportedPayload = JSON.parse(exported);
+
+    // Then
+    assert.equal("loadingInstructionText" in exportedPayload.recent_results[0], false);
+    assert.equal("workOrder" in exportedPayload.chain_history[0], false);
+    assert.doesNotMatch(exported, /legacy live instruction|workOrder/);
+  });
+
   it("block_groups가 없는 백업도 저장된 박스의 문자열 그룹을 레지스트리로 보정한다", () => {
     // Given
     const payload = {

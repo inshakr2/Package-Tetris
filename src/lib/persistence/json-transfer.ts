@@ -15,7 +15,11 @@ import {
   WORKSPACE_SCHEMA_VERSION
 } from "../workspace/types";
 import { deriveBlockGroupsFromTemplates } from "../workspace/block-groups";
-import { normalizeWorkspace } from "../workspace/workspace-migration";
+import {
+  normalizeChainHistory,
+  normalizeRecentResults,
+  normalizeWorkspace
+} from "../workspace/workspace-migration";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -75,8 +79,8 @@ export function exportWorkspaceToJson(
     ),
     custom_blocks: workspace.blockTemplates,
     draft: workspace.draft,
-    recent_results: workspace.recentResults,
-    chain_history: workspace.chainHistory
+    recent_results: normalizeRecentResults(workspace.recentResults, exportedAt),
+    chain_history: normalizeChainHistory(workspace.chainHistory, exportedAt)
   };
 
   return JSON.stringify(payload, null, 2);

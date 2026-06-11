@@ -4822,6 +4822,8 @@ const ResultStage = ({
                   <CheckCircle2 size={18} color="var(--green)" />
                 ) : item.status === "attention" ? (
                   <AlertTriangle size={18} color="var(--amber)" />
+                ) : item.status === "review" ? (
+                  <Eye size={18} color="var(--muted)" />
                 ) : (
                   <AlertTriangle size={18} color="var(--muted)" />
                 )}

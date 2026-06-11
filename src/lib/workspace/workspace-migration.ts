@@ -1,9 +1,15 @@
 import {
   APP_VERSION,
   BlockTemplate,
+  ChainHistoryItem,
   DEFAULT_MINIMUM_SUPPORT_RATIO,
   DraftBlockItem,
+  PackedBlock,
+  PackedSpace,
   PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
+  ResultSummary,
+  SpaceDefinition,
+  SpaceType,
   TetrisWorkspace,
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
@@ -44,9 +50,25 @@ export function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace 
     blockGroups,
     blockTemplates,
     draft: normalizeDraft(legacyWorkspace, blockTemplates, now),
-    recentResults: Array.isArray(legacyWorkspace.recentResults) ? legacyWorkspace.recentResults : [],
-    chainHistory: Array.isArray(legacyWorkspace.chainHistory) ? legacyWorkspace.chainHistory : []
+    recentResults: normalizeRecentResults(legacyWorkspace.recentResults, now),
+    chainHistory: normalizeChainHistory(legacyWorkspace.chainHistory, now)
   };
+}
+
+export function normalizeRecentResults(value: unknown, now = new Date().toISOString()): ResultSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => normalizeResultSummary(item, index, now));
+}
+
+export function normalizeChainHistory(value: unknown, now = new Date().toISOString()): ChainHistoryItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => normalizeChainHistoryItem(item, index, now));
 }
 
 function normalizeWorkspacePolicy(policy: LegacyWorkspace["policy"]): TetrisWorkspace["policy"] {
@@ -87,6 +109,137 @@ function normalizeBlockTemplates(items: unknown[], now: string): BlockTemplate[]
       updatedAt: asString(record.updatedAt, now)
     };
   });
+}
+
+function normalizeResultSummary(value: unknown, index: number, now: string): ResultSummary {
+  const record = isRecord(value) ? value : {};
+  const result: ResultSummary = {
+    resultId: asString(record.resultId, `result-imported-${index + 1}`),
+    createdAt: asString(record.createdAt, now),
+    usedSpaceCount: normalizeNonNegativeNumber(record.usedSpaceCount, 0),
+    averageUtilizationRate: normalizeFiniteNumber(record.averageUtilizationRate, 0),
+    unloadedBlockCount: normalizeNonNegativeNumber(record.unloadedBlockCount, 0)
+  };
+  const runId = normalizeOptionalString(record.runId);
+  const inputFingerprint = normalizeOptionalString(record.inputFingerprint);
+
+  if (runId) {
+    result.runId = runId;
+  }
+
+  if (inputFingerprint) {
+    result.inputFingerprint = inputFingerprint;
+  }
+
+  if (isRecord(record.spaceSnapshot)) {
+    result.spaceSnapshot = normalizeSpaceDefinition(record.spaceSnapshot, now, `space-result-${index + 1}`);
+  }
+
+  if (Array.isArray(record.spaces)) {
+    result.spaces = record.spaces.map((space, spaceIndex) => normalizePackedSpace(space, spaceIndex));
+  }
+
+  if (Array.isArray(record.warnings)) {
+    result.warnings = record.warnings.filter((warning): warning is string => typeof warning === "string");
+  }
+
+  return result;
+}
+
+function normalizeChainHistoryItem(value: unknown, index: number, now: string): ChainHistoryItem {
+  const record = isRecord(value) ? value : {};
+  const item: ChainHistoryItem = {
+    chainId: asString(record.chainId, `chain-imported-${index + 1}`),
+    resultId: asString(record.resultId, `result-imported-${index + 1}`),
+    blockId: asString(record.blockId, `block-imported-${index + 1}`),
+    addedQuantity: normalizeNonNegativeNumber(record.addedQuantity, 0),
+    createdAt: asString(record.createdAt, now)
+  };
+  const blockTemplateId = normalizeOptionalString(record.blockTemplateId);
+  const blockName = normalizeOptionalString(record.blockName);
+
+  if (blockTemplateId) {
+    item.blockTemplateId = blockTemplateId;
+  }
+
+  if (blockName) {
+    item.blockName = blockName;
+  }
+
+  if (Array.isArray(record.previousSpaces)) {
+    item.previousSpaces = record.previousSpaces.map((space, spaceIndex) =>
+      normalizePackedSpace(space, spaceIndex)
+    );
+  }
+
+  if (typeof record.previousAverageUtilizationRate === "number") {
+    item.previousAverageUtilizationRate = normalizeFiniteNumber(record.previousAverageUtilizationRate, 0);
+  }
+
+  return item;
+}
+
+function normalizeSpaceDefinition(
+  value: Record<string, unknown>,
+  now: string,
+  fallbackSpaceId: string
+): SpaceDefinition {
+  const space: SpaceDefinition = {
+    spaceId: asString(value.spaceId, fallbackSpaceId),
+    entityVersion: normalizeNonNegativeNumber(value.entityVersion, 1),
+    name: asString(value.name, "가져온 공간"),
+    type: normalizeSpaceType(value.type),
+    dimensions: normalizeDimensions(value.dimensions),
+    offset: normalizeOffset(value.offset),
+    createdAt: asString(value.createdAt, now),
+    updatedAt: asString(value.updatedAt, now)
+  };
+  const source = normalizeOptionalString(value.source);
+  const verifiedAt = normalizeOptionalString(value.verifiedAt);
+
+  if (source) {
+    space.source = source;
+  }
+
+  if (verifiedAt) {
+    space.verifiedAt = verifiedAt;
+  }
+
+  if (typeof value.isPreset === "boolean") {
+    space.isPreset = value.isPreset;
+  }
+
+  return space;
+}
+
+function normalizePackedSpace(value: unknown, index: number): PackedSpace {
+  const record = isRecord(value) ? value : {};
+
+  return {
+    spaceInstanceId: asString(record.spaceInstanceId, `space-instance-imported-${index + 1}`),
+    utilizationRate: normalizeFiniteNumber(record.utilizationRate, 0),
+    blocks: Array.isArray(record.blocks)
+      ? record.blocks.map((block, blockIndex) => normalizePackedBlock(block, blockIndex))
+      : []
+  };
+}
+
+function normalizePackedBlock(value: unknown, index: number): PackedBlock {
+  const record = isRecord(value) ? value : {};
+
+  return {
+    blockId: asString(record.blockId, `block-imported-${index + 1}`),
+    blockTemplateId: asString(record.blockTemplateId, `template-imported-${index + 1}`),
+    name: asString(record.name, "가져온 박스"),
+    fragile: Boolean(record.fragile),
+    xMm: normalizeFiniteNumber(record.xMm, 0),
+    yMm: normalizeFiniteNumber(record.yMm, 0),
+    zMm: normalizeFiniteNumber(record.zMm, 0),
+    widthMm: normalizeFiniteNumber(record.widthMm, 1),
+    depthMm: normalizeFiniteNumber(record.depthMm, 1),
+    heightMm: normalizeFiniteNumber(record.heightMm, 1),
+    rotation: isPackedBlockRotation(record.rotation) ? record.rotation : "xyz"
+  };
 }
 
 function normalizeDraft(
@@ -170,10 +323,36 @@ function normalizeDimensions(value: unknown) {
   };
 }
 
+function normalizeOffset(value: unknown) {
+  if (!isRecord(value)) {
+    return { widthMm: 0, depthMm: 0, heightMm: 0 };
+  }
+
+  return {
+    widthMm: Number(value.widthMm ?? 0),
+    depthMm: Number(value.depthMm ?? 0),
+    heightMm: Number(value.heightMm ?? 0)
+  };
+}
+
+function normalizeSpaceType(value: unknown): SpaceType {
+  return value === "pallet" || value === "container" || value === "truck" || value === "custom"
+    ? value
+    : "custom";
+}
+
 function normalizeSupportRatio(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1
     ? value
     : fallback;
+}
+
+function normalizeFiniteNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeNonNegativeNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function normalizeNullableNumber(value: unknown) {
@@ -202,4 +381,15 @@ function asString(value: unknown, fallback: string | null) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPackedBlockRotation(value: unknown): value is PackedBlock["rotation"] {
+  return (
+    value === "xyz" ||
+    value === "xzy" ||
+    value === "yxz" ||
+    value === "yzx" ||
+    value === "zxy" ||
+    value === "zyx"
+  );
 }

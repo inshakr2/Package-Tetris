@@ -134,7 +134,7 @@ npm run v1:verify
 - `docs/non-developer-start-guide.md`: 개발 지식 없는 사용자의 시작 문서
 - `docs/windows-cmd-launch-guide.md`: Windows `.cmd` 자동 실행 가이드
 - `docs/field-demo-user-guide.md`: 현장 시연 상세 가이드
-- `docs/v1-readiness.md`: V1 완료 기준과 운영 전 파일럿 확인 범위
+- `docs/v1-readiness.md`: V1 역사 완료 기준과 운영 전 파일럿 확인 범위
 - `docs/tetris-ui-planning-draft.md`: UI/UX 기획서
 - `docs/agents/*.md`: PM, BA, UI, QA, 개발 역할 메모리
 - `docs/plans/*.md`: 기능 증분별 개발 계획 기록

@@ -35,6 +35,7 @@ describe("field demo user guide document", () => {
     // When / Then
     assert.match(document, /\.xlsx 일괄등록 가능/);
     assert.match(document, /오류 행과 사유 확인 가능/);
+    assert.match(document, /3D와 공간 확인/);
     assert.doesNotMatch(document, /작업 지시서/);
   });
 });

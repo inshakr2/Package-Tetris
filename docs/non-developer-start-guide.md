@@ -8,7 +8,7 @@
 
 1. Windows PC를 사용하고 자동 실행 파일로 열고 싶다면 [docs/windows-cmd-launch-guide.md](docs/windows-cmd-launch-guide.md)를 먼저 본다.
 2. Node.js 설치, ZIP 다운로드, 앱 실행, 시연 순서까지 자세히 보려면 [docs/field-demo-user-guide.md](docs/field-demo-user-guide.md)를 본다.
-3. V1에서 가능한 범위와 운영 전 확인할 범위는 [docs/v1-readiness.md](docs/v1-readiness.md)를 본다.
+3. V1 역사 기준과 운영 전 확인할 범위는 [docs/v1-readiness.md](docs/v1-readiness.md)를 본다. V2 현행 흐름은 현장 시연 가이드의 결과 확인/백업 순서를 따른다.
 
 ## Windows 사용자에게 권장하는 방식
 
