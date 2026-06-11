@@ -5297,6 +5297,28 @@ function ChainSimulationPanel({
               </div>
             ) : null}
 
+            {canConfirm || latestChainItem ? (
+              <div className="chain-apply-guidance" data-state={canConfirm ? "preview" : "applied"} role="status">
+                {canConfirm ? (
+                  <>
+                    <strong>반영 전 미리보기</strong>
+                    <span>
+                      아직 원본 결과에는 반영되지 않았습니다. 3D 화면에서 원본과 추가 결과를 비교한 뒤 이 결과 반영을 누르세요.
+                      적용하지 않으려면 미리보기 취소로 원본 화면으로 돌아갈 수 있습니다.
+                    </span>
+                  </>
+                ) : latestChainItem ? (
+                  <>
+                    <strong>직전 추가 반영됨</strong>
+                    <span>
+                      {latestChainItem.blockName ?? "선택 박스"} {latestChainItem.addedQuantity}개가 결과에 반영되었습니다.
+                      잘못 반영했다면 직전 추가를 취소할 수 있습니다.
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="chain-quantity-control">
               <label className="chain-quantity-field">
                 원하는 추가 수량(개) 단일 박스

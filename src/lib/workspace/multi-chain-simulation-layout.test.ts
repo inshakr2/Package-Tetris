@@ -99,6 +99,30 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasQuantityComparisonContract, true);
   });
 
+  it("추가 결과는 반영 전 미리보기와 반영 후 취소 가능 상태를 같은 자리에서 안내한다", () => {
+    // Given
+    const hasApplyGuidance =
+      workspaceSource.includes('className="chain-apply-guidance"') &&
+      workspaceSource.includes("아직 원본 결과에는 반영되지 않았습니다.") &&
+      workspaceSource.includes("이 결과 반영을 누르세요.") &&
+      workspaceSource.includes("미리보기 취소로 원본 화면으로 돌아갈 수 있습니다.") &&
+      workspaceSource.includes("직전 추가를 취소할 수 있습니다.");
+    const hasGuidanceState =
+      workspaceSource.includes('data-state={canConfirm ? "preview" : "applied"}') &&
+      workspaceSource.includes("latestChainItem ? (") &&
+      workspaceSource.includes("canConfirm ? (");
+    const hasGuidanceStyles =
+      /\.chain-apply-guidance\s*{[\s\S]*?display:\s*grid;[\s\S]*?border:[\s\S]*?background:[\s\S]*?}/.test(styles) &&
+      /\.chain-apply-guidance\[data-state="preview"\]\s*{[\s\S]*?border-color:[\s\S]*?}/.test(styles) &&
+      /\.chain-apply-guidance\[data-state="applied"\]\s*{[\s\S]*?border-color:[\s\S]*?}/.test(styles);
+
+    // When
+    const hasApplyGuidanceContract = hasApplyGuidance && hasGuidanceState && hasGuidanceStyles;
+
+    // Then
+    assert.equal(hasApplyGuidanceContract, true);
+  });
+
   it("다중 선택과 variant 영역은 태블릿/모바일에서 한 컬럼으로 접히고 버튼 터치 타깃을 유지한다", () => {
     // Given
     const hasSelectionSummary =

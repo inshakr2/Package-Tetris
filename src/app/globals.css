@@ -2611,6 +2611,31 @@ select:focus-visible {
   background: #f8fafc;
 }
 
+.chain-apply-guidance {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(100, 116, 139, 0.22);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.chain-apply-guidance[data-state="preview"] {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: #eff6ff;
+}
+
+.chain-apply-guidance[data-state="applied"] {
+  border-color: rgba(23, 130, 83, 0.28);
+  background: #f4fbf7;
+}
+
+.chain-apply-guidance span {
+  color: var(--muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .chain-actions {
   margin-top: 0;
 }
