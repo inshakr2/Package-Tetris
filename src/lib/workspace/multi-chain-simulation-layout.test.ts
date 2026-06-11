@@ -336,15 +336,35 @@ describe("multi-chain-simulation-layout", () => {
       toggleSelectionHandler.includes("chainPreview") &&
       toggleSelectionHandler.includes('setChainStatus("preview");') &&
       toggleSelectionHandler.includes("현재 미리보기는 유지됩니다.");
-    const stillBlocksWithoutPreview =
-      toggleSelectionHandler.includes('setChainStatus("error");') &&
-      toggleSelectionHandler.includes("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
 
     // When
-    const hasPreviewPreservationContract = preservesActivePreview && stillBlocksWithoutPreview;
+    const hasPreviewPreservationContract = preservesActivePreview;
 
     // Then
     assert.equal(hasPreviewPreservationContract, true);
+  });
+
+  it("추가 결과 미리보기 전 4번째 박스 선택 제한은 계산 오류 상태로 바꾸지 않는다", () => {
+    // Given
+    const toggleSelectionHandler =
+      workspaceSource.match(/function\s+toggleChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/)?.[0] ??
+      "";
+    const maxSelectionBranch =
+      toggleSelectionHandler.match(/if\s*\(!isSelected\s*&&\s*selectedChainTemplateIds\.length\s*>=\s*CHAIN_MAX_SELECTED_TEMPLATE_COUNT\)\s*{[\s\S]*?setChainStatusMessage\("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다\."\);[\s\S]*?return;\s*}/)?.[0] ??
+      "";
+
+    const keepsSelectionLimitAsGuidance =
+      maxSelectionBranch.includes('setChainStatus("idle");') &&
+      !maxSelectionBranch.includes('setChainStatus("error");');
+    const doesNotExposeResultRecoveryAction =
+      workspaceSource.includes('chainStatus === "error" ? (') &&
+      maxSelectionBranch.includes("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
+
+    // When
+    const hasGuidanceOnlyMaxSelectionContract = keepsSelectionLimitAsGuidance && doesNotExposeResultRecoveryAction;
+
+    // Then
+    assert.equal(hasGuidanceOnlyMaxSelectionContract, true);
   });
 
   it("다중 선택과 variant 영역은 태블릿/모바일에서 한 컬럼으로 접히고 버튼 터치 타깃을 유지한다", () => {

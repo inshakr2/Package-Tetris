@@ -4467,7 +4467,7 @@ const ResultStage = ({
         return;
       }
 
-      setChainStatus("error");
+      setChainStatus("idle");
       setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
       return;
     }
