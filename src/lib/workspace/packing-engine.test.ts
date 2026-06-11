@@ -118,6 +118,112 @@ describe("packing-engine v0", () => {
     assert.equal(output.spaces[0]?.blocks[1]?.blockTemplateId, "template-fragile");
   });
 
+  it("loadPriority가 높은 작업 박스를 기존 크기 정렬보다 먼저 바닥에 배치한다", () => {
+    // Given
+    const input = createInput({
+      space: {
+        ...createInput().space,
+        dimensions: { widthMm: 1000, depthMm: 500, heightMm: 1000 }
+      },
+      blocks: [
+        {
+          ...createInput().blocks[0],
+          blockId: "block-large-low-priority",
+          blockTemplateId: "template-large-low-priority",
+          draftBlockItemId: "item-large-low-priority",
+          name: "큰 일반 박스",
+          dimensions: { widthMm: 500, depthMm: 500, heightMm: 700 },
+          quantity: 1,
+          loadPriority: 1
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-small-high-priority",
+          blockTemplateId: "template-small-high-priority",
+          draftBlockItemId: "item-small-high-priority",
+          name: "먼저 깔 박스",
+          dimensions: { widthMm: 500, depthMm: 500, heightMm: 200 },
+          quantity: 1,
+          loadPriority: 10
+        }
+      ]
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+    const firstSpace = output.spaces[0];
+
+    // Then
+    assert.equal(output.usedSpaceCount, 1);
+    assert.equal(output.unloadedBlockCount, 0);
+    assert.ok(firstSpace);
+    assert.deepEqual(
+      firstSpace?.blocks.map((block) => ({
+        blockTemplateId: block.blockTemplateId,
+        xMm: block.xMm,
+        yMm: block.yMm,
+        zMm: block.zMm
+      })),
+      [
+        {
+          blockTemplateId: "template-small-high-priority",
+          xMm: 0,
+          yMm: 0,
+          zMm: 0
+        },
+        {
+          blockTemplateId: "template-large-low-priority",
+          xMm: 500,
+          yMm: 0,
+          zMm: 0
+        }
+      ]
+    );
+    assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
+  });
+
+  it("loadPriority가 같으면 기존 결정론적 크기 정렬을 유지한다", () => {
+    // Given
+    const input = createInput({
+      blocks: [
+        {
+          ...createInput().blocks[0],
+          blockId: "block-flat",
+          blockTemplateId: "template-flat",
+          name: "일반 판형 박스",
+          dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 150 },
+          quantity: 1,
+          fragile: false,
+          loadPriority: 3
+        },
+        {
+          ...createInput().blocks[0],
+          blockId: "block-solid",
+          blockTemplateId: "template-solid",
+          name: "일반 고형 박스",
+          dimensions: { widthMm: 500, depthMm: 500, heightMm: 700 },
+          quantity: 1,
+          fragile: false,
+          loadPriority: 3
+        }
+      ]
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+    const firstSpace = output.spaces[0];
+
+    // Then
+    assert.equal(output.usedSpaceCount, 1);
+    assert.equal(output.unloadedBlockCount, 0);
+    assert.ok(firstSpace);
+    assert.deepEqual(
+      firstSpace?.blocks.map((block) => block.blockTemplateId),
+      ["template-flat", "template-solid"]
+    );
+    assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
+  });
+
   it("90도 직교 회전을 적용해 들어갈 수 있는 방향을 선택한다", () => {
     // Given
     const input = createInput({
