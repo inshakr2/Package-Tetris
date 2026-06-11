@@ -284,9 +284,9 @@ const DRAFT_LOAD_PRIORITY_OPTIONS = [
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
 const CHAIN_TEMPLATE_PRIORITY_OPTIONS = [
-  { value: 0, label: "기본" },
-  { value: 5, label: "먼저 추가" },
-  { value: 10, label: "최우선 추가" }
+  { value: 0, label: "기본 계산", description: "추천 순서 유지" },
+  { value: 5, label: "먼저 계산", description: "이 박스를 먼저 추가 시도" },
+  { value: 10, label: "맨 먼저 계산", description: "가장 앞 순서로 추가 시도" }
 ] as const;
 
 const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
@@ -6176,7 +6176,7 @@ function ChainSimulationPanel({
 
                   return (
                     <div className="chain-template-quantity-row" key={template.blockTemplateId}>
-                      <div>
+                      <div className="chain-template-summary">
                         <strong>{template.name}</strong>
                         <span className="fine-print">{formatDimensions(template.dimensions)}</span>
                       </div>
@@ -6218,11 +6218,13 @@ function ChainSimulationPanel({
                           {CHAIN_TEMPLATE_PRIORITY_OPTIONS.map((option) => (
                             <button
                               key={option.value}
-                              className="secondary-button"
+                              className="secondary-button chain-priority-button"
                               aria-pressed={templatePriority === option.value}
+                              aria-label={`${template.name} ${option.label}: ${option.description}`}
                               onClick={() => onTemplatePriorityChange(template.blockTemplateId, option.value)}
                             >
-                              {option.label}
+                              <strong>{option.label}</strong>
+                              <span>{option.description}</span>
                             </button>
                           ))}
                         </div>
@@ -7315,9 +7317,8 @@ function createChainConditionCopy(
   priority: DraftLoadPriorityOptionValue
 ) {
   const quantityCopy = requestedQuantity ? `${requestedQuantity}개까지` : "최대";
-  const priorityCopy = createChainPriorityLabel(priority);
 
-  return priorityCopy === "기본" ? quantityCopy : `${quantityCopy} · ${priorityCopy}`;
+  return priority <= 0 ? quantityCopy : `${quantityCopy} · ${createChainPriorityLabel(priority)}`;
 }
 
 function createChainPriorityLabel(priority: DraftLoadPriorityOptionValue) {

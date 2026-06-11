@@ -166,8 +166,10 @@ describe("multi-chain-simulation-layout", () => {
     const hasPriorityControls =
       workspaceSource.includes('className="chain-template-priority-mode"') &&
       workspaceSource.includes('aria-label={`${template.name} 추가 우선순위`}') &&
-      workspaceSource.includes("먼저 추가") &&
-      workspaceSource.includes("최우선 추가");
+      workspaceSource.includes("먼저 계산") &&
+      workspaceSource.includes("맨 먼저 계산") &&
+      workspaceSource.includes("이 박스를 먼저 추가 시도") &&
+      workspaceSource.includes("가장 앞 순서로 추가 시도");
     const hasPriorityStyles =
       /\.chain-template-priority-mode\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
       /\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
@@ -179,6 +181,34 @@ describe("multi-chain-simulation-layout", () => {
 
     // Then
     assert.equal(hasPriorityContract, true);
+  });
+
+  it("추가 박스별 조건 행은 선택 후에도 좁은 결과 패널 안에서 카드형으로 접힌다", () => {
+    // Given
+    const hasConditionCardMarkup =
+      workspaceSource.includes('className="chain-template-summary"') &&
+      workspaceSource.includes('className="secondary-button chain-priority-button"');
+    const hasSafeConditionCardGrid =
+      /\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?background:\s*white;[\s\S]*?}/.test(
+        styles
+      );
+    const hasWrappingControlGrid =
+      /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-priority-mode\s+>\s+div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+        styles
+      );
+    const hasReadablePriorityButton =
+      /\.chain-priority-button\s*{[\s\S]*?display:\s*grid;[\s\S]*?text-align:\s*left;[\s\S]*?}/.test(styles) &&
+      /\.chain-priority-button\s+span\s*{[\s\S]*?font-size:\s*11px;[\s\S]*?}/.test(styles);
+
+    // When
+    const hasStableConditionLayout =
+      hasConditionCardMarkup && hasSafeConditionCardGrid && hasWrappingControlGrid && hasReadablePriorityButton;
+
+    // Then
+    assert.equal(hasStableConditionLayout, true);
   });
 
   it("결과 변경 또는 선택 초기화 시 추가 박스별 수량과 우선순위 조건을 함께 비운다", () => {

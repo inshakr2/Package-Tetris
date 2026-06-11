@@ -2703,15 +2703,17 @@ select:focus-visible {
 
 .chain-template-quantity-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) minmax(120px, 150px) minmax(220px, 0.95fr);
-  gap: 8px;
-  align-items: center;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: stretch;
   min-width: 0;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 10px;
 }
 
-.chain-template-quantity-row > div:first-child {
+.chain-template-summary {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -2719,8 +2721,9 @@ select:focus-visible {
 
 .chain-template-quantity-mode {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, auto));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 6px;
+  min-width: 0;
 }
 
 .chain-template-priority-mode {
@@ -2737,7 +2740,7 @@ select:focus-visible {
 
 .chain-template-priority-mode > div {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 6px;
 }
 
@@ -2762,8 +2765,28 @@ select:focus-visible {
 
 .chain-template-quantity-mode button,
 .chain-template-priority-mode button {
+  min-width: 0;
   min-height: 48px;
   white-space: normal;
+}
+
+.chain-priority-button {
+  display: grid;
+  gap: 3px;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+}
+
+.chain-priority-button strong {
+  line-height: 1.2;
+}
+
+.chain-priority-button span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .chain-status-box {

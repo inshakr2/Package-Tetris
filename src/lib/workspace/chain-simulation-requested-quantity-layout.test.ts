@@ -33,11 +33,14 @@ describe("chain-simulation-requested-quantity-layout", () => {
     assert.equal(hasRequestedQuantityUi, true);
   });
 
-  it("박스별 수량 조건 컨트롤은 태블릿 이하에서 한 컬럼으로 접히고 터치 타깃을 유지한다", () => {
+  it("박스별 수량 조건 컨트롤은 선택 후에도 카드형으로 접히고 터치 타깃을 유지한다", () => {
     // Given
     const hasBaseLayout =
       /\.chain-template-quantity-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
-      /\.chain-template-quantity-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(150px,\s*auto\)\s+minmax\(120px,\s*150px\)\s+minmax\(220px,\s*0\.95fr\);[\s\S]*?}/.test(
+      /\.chain-template-quantity-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?background:\s*white;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-summary\s*{[\s\S]*?display:\s*grid;[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(
         styles
       );
     const hasTouchTarget =
@@ -45,11 +48,11 @@ describe("chain-simulation-requested-quantity-layout", () => {
       /\.chain-template-quantity-mode\s+button,[\s\S]*?\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
       );
-    const hasTabletLayout =
-      /@media\s*\(max-width:\s*1360px\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+    const hasFlexibleButtonLayout =
+      /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       ) &&
-      /@media\s*\(max-width:\s*1360px\)\s*{[\s\S]*?\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+      /\.chain-template-priority-mode\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       );
     const hasMobileLayout =
@@ -58,7 +61,7 @@ describe("chain-simulation-requested-quantity-layout", () => {
       );
 
     // When
-    const hasResponsiveQuantityControl = hasBaseLayout && hasTouchTarget && hasTabletLayout && hasMobileLayout;
+    const hasResponsiveQuantityControl = hasBaseLayout && hasTouchTarget && hasFlexibleButtonLayout && hasMobileLayout;
 
     // Then
     assert.equal(hasResponsiveQuantityControl, true);
