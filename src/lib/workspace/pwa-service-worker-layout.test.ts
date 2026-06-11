@@ -18,7 +18,8 @@ describe("pwa-service-worker-layout", () => {
       appSource.includes("const [pwaOfflineStatus, setPwaOfflineStatus] = useState<PwaOfflineReadinessStatus>(\"checking\")") &&
       appSource.includes("onStatusChange={setPwaOfflineStatus}") &&
       appSource.includes("pwaOfflineStatus={pwaOfflineStatus}") &&
-      appSource.includes("getPwaOfflineReadinessCopy(pwaOfflineStatus)") &&
+      appSource.includes("getPwaOfflineReadinessCopy(pwaOfflineStatus, {") &&
+      appSource.includes("isDevelopmentMode: process.env.NODE_ENV !== \"production\"") &&
       appSource.includes('label="오프라인 준비"');
 
     // Then

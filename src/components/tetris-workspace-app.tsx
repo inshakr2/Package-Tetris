@@ -6701,7 +6701,9 @@ function StorageReliabilityPanel({
   });
   const exportState = getExportState(workspace, needsExport);
   const browserState = getBrowserProtectionState(storageHealth, persistenceRequestResult);
-  const pwaOfflineState = getPwaOfflineReadinessCopy(pwaOfflineStatus);
+  const pwaOfflineState = getPwaOfflineReadinessCopy(pwaOfflineStatus, {
+    isDevelopmentMode: process.env.NODE_ENV !== "production"
+  });
   const pwaInstallState = getPwaInstallGuidanceCopy(pwaInstallStatus);
   const canRequestProtection =
     Boolean(storageHealth?.persistSupported) && storageHealth?.persistenceState !== "persisted" && !persistenceRequesting;
