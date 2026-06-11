@@ -1757,6 +1757,7 @@ export function TetrisWorkspaceApp() {
           selectedSpace={selectedSpace}
           workspacePolicy={workspace.policy}
           review={review}
+          blockGroups={workspace.blockGroups}
           blockTemplates={workspace.blockTemplates}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
@@ -3315,6 +3316,7 @@ const ResultStage = ({
   selectedSpace,
   workspacePolicy,
   review,
+  blockGroups,
   blockTemplates,
   draftBlocks,
   chainHistory,
@@ -3337,6 +3339,7 @@ const ResultStage = ({
   selectedSpace: SpaceDefinition | undefined;
   workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
+  blockGroups: BlockGroup[];
   blockTemplates: BlockTemplate[];
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
@@ -3362,6 +3365,8 @@ const ResultStage = ({
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateIds, setSelectedChainTemplateIds] = useState<string[]>([]);
   const [chainSearchTerm, setChainSearchTerm] = useState("");
+  const [chainGroup1Filter, setChainGroup1Filter] = useState("");
+  const [chainGroup2Filter, setChainGroup2Filter] = useState("");
   const [chainMultiPreview, setChainMultiPreview] = useState<MultiChainSimulationOutput | null>(null);
   const [selectedChainVariantId, setSelectedChainVariantId] = useState<string | null>(null);
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
@@ -3375,9 +3380,24 @@ const ResultStage = ({
   const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const chainBlockOptions = useMemo(() => blockTemplates, [blockTemplates]);
-  const filteredChainBlockOptions = useMemo(
+  const chainGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const chainGroup2Options = useMemo(
+    () => createChildBlockGroups(blockGroups, chainGroup1Filter),
+    [blockGroups, chainGroup1Filter]
+  );
+  const searchedChainBlockOptions = useMemo(
     () => searchBlockTemplates(chainBlockOptions, chainSearchTerm),
     [chainBlockOptions, chainSearchTerm]
+  );
+  const filteredChainBlockOptions = useMemo(
+    () =>
+      searchedChainBlockOptions.filter((template) => {
+        const matchesGroup1 = !chainGroup1Filter || template.group1 === chainGroup1Filter;
+        const matchesGroup2 = !chainGroup2Filter || template.group2 === chainGroup2Filter;
+
+        return matchesGroup1 && matchesGroup2;
+      }),
+    [chainGroup1Filter, chainGroup2Filter, searchedChainBlockOptions]
   );
   const selectedChainTemplates = useMemo(
     () =>
@@ -3505,6 +3525,8 @@ const ResultStage = ({
     setSelectedBlockTemplateId(null);
     setSelectedChainTemplateIds([]);
     setChainSearchTerm("");
+    setChainGroup1Filter("");
+    setChainGroup2Filter("");
     setChainMultiPreview(null);
     setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
@@ -3513,6 +3535,15 @@ const ResultStage = ({
     setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
+
+  useEffect(() => {
+    if (
+      chainGroup2Filter &&
+      !chainGroup2Options.some((group) => group.name === chainGroup2Filter)
+    ) {
+      setChainGroup2Filter("");
+    }
+  }, [chainGroup2Filter, chainGroup2Options]);
 
   useEffect(() => {
     const policyKey = `${workspacePolicy.partialSupportEnabled}:${workspacePolicy.minimumSupportRatio}`;
@@ -4387,9 +4418,14 @@ const ResultStage = ({
       <ChainSimulationPanel
         latestResult={latestResult}
         blockOptions={filteredChainBlockOptions}
+        blockGroups={blockGroups}
         selectedTemplateIds={selectedChainTemplateIds}
         selectedTemplateNames={selectedChainTemplates.map((template) => template.name)}
         searchTerm={chainSearchTerm}
+        group1Filter={chainGroup1Filter}
+        group2Filter={chainGroup2Filter}
+        group1Options={chainGroup1Options}
+        group2Options={chainGroup2Options}
         partialSupportEnabled={workspacePolicy.partialSupportEnabled}
         minimumSupportRatio={workspacePolicy.minimumSupportRatio}
         chainStatus={chainStatus}
@@ -4403,6 +4439,11 @@ const ResultStage = ({
         resultCreating={resultCreating}
         resultCalculationProgress={resultCalculationProgress}
         onSearchTermChange={setChainSearchTerm}
+        onGroup1FilterChange={(groupName) => {
+          setChainGroup1Filter(groupName);
+          setChainGroup2Filter("");
+        }}
+        onGroup2FilterChange={setChainGroup2Filter}
         onToggleTemplate={toggleChainTemplateSelection}
         onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
@@ -4985,9 +5026,14 @@ function ExpandedThreeViewDialog({
 function ChainSimulationPanel({
   latestResult,
   blockOptions,
+  blockGroups,
   selectedTemplateIds,
   selectedTemplateNames,
   searchTerm,
+  group1Filter,
+  group2Filter,
+  group1Options,
+  group2Options,
   partialSupportEnabled,
   minimumSupportRatio,
   chainStatus,
@@ -5001,6 +5047,8 @@ function ChainSimulationPanel({
   resultCreating,
   resultCalculationProgress,
   onSearchTermChange,
+  onGroup1FilterChange,
+  onGroup2FilterChange,
   onToggleTemplate,
   onSelectVariant,
   onCalculate,
@@ -5013,9 +5061,14 @@ function ChainSimulationPanel({
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   blockOptions: BlockTemplate[];
+  blockGroups: BlockGroup[];
   selectedTemplateIds: string[];
   selectedTemplateNames: string[];
   searchTerm: string;
+  group1Filter: string;
+  group2Filter: string;
+  group1Options: BlockGroup[];
+  group2Options: BlockGroup[];
   partialSupportEnabled: boolean;
   minimumSupportRatio: number;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
@@ -5029,6 +5082,8 @@ function ChainSimulationPanel({
   resultCreating: boolean;
   resultCalculationProgress: ResultCalculationProgressCopy;
   onSearchTermChange: (searchTerm: string) => void;
+  onGroup1FilterChange: (groupName: string) => void;
+  onGroup2FilterChange: (groupName: string) => void;
   onToggleTemplate: (blockTemplateId: string) => void;
   onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
@@ -5047,6 +5102,8 @@ function ChainSimulationPanel({
   const visibleBlockOptions = blockOptions.slice(0, 12);
   const hiddenBlockOptionCount = Math.max(0, blockOptions.length - visibleBlockOptions.length);
   const selectedVariant = variants.find((variant) => variant.variantId === selectedVariantId) ?? null;
+  const hasNarrowingCondition = Boolean(searchTerm.trim() || group1Filter || group2Filter);
+  const blockGroupCount = blockGroups.length;
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -5088,6 +5145,42 @@ function ChainSimulationPanel({
                 onChange={(event) => onSearchTermChange(event.target.value)}
               />
             </label>
+            <div className="chain-filter-row" aria-label="추가 시뮬레이션 그룹 필터">
+              <label>
+                상위그룹
+                <select
+                  aria-label="추가 시뮬레이션 상위그룹 필터"
+                  value={group1Filter}
+                  onChange={(event) => onGroup1FilterChange(event.target.value)}
+                >
+                  <option value="">전체 상위그룹</option>
+                  {group1Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                하위그룹
+                <select
+                  aria-label="추가 시뮬레이션 하위그룹 필터"
+                  value={group2Filter}
+                  onChange={(event) => onGroup2FilterChange(event.target.value)}
+                  disabled={!group1Filter}
+                >
+                  <option value="">전체 하위그룹</option>
+                  {group2Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {blockGroupCount > 0 ? (
+              <p className="fine-print">등록된 그룹 {blockGroupCount}개 기준으로 좁혀 찾을 수 있습니다.</p>
+            ) : null}
             <div className="chain-selection-summary" aria-label="추가 시뮬레이션 선택 상태">
               <span className="badge" data-tone={selectedTemplateIds.length ? "green" : undefined}>
                 선택 {selectedTemplateIds.length}/3
@@ -5105,7 +5198,7 @@ function ChainSimulationPanel({
             <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
               {visibleBlockOptions.length === 0 ? (
                 <p className="fine-print">
-                  {searchTerm.trim() ? "검색 결과가 없습니다." : "저장된 박스가 없습니다."}
+                  {hasNarrowingCondition ? "조건에 맞는 박스가 없습니다." : "저장된 박스가 없습니다."}
                 </p>
               ) : (
                 visibleBlockOptions.map((template) => (
@@ -5178,6 +5271,28 @@ function ChainSimulationPanel({
                     <strong>계산 안내</strong>
                     <span>{selectedVariant.warnings[0]}</span>
                   </div>
+                ) : null}
+                {selectedVariant ? (
+                  <table className="chain-variant-quantity-table" aria-label={`${selectedVariant.label} 박스별 추가 수량`}>
+                    <thead>
+                      <tr>
+                        <th>박스</th>
+                        <th>추가 수량</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedVariant.addedQuantities.map((item) => (
+                        <tr key={item.blockTemplateId}>
+                          <td>{item.blockName}</td>
+                          <td>{item.addedQuantity}개</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <th scope="row">총 추가</th>
+                        <td>{selectedVariant.totalAddedQuantity}개</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 ) : null}
               </div>
             ) : null}

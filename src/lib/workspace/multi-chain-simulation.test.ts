@@ -179,4 +179,78 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(recommended?.totalAddedQuantity, MAX_MULTI_CHAIN_ADDED_BLOCKS);
     assert.equal(recommended?.warnings.includes("계산량을 줄이기 위해 결과별 최대 300개까지만 계산했습니다."), true);
   });
+
+  it("부분 지지 허용 ON이면 추가 시뮬레이션도 55% 이상 받침면에 박스를 더 쌓는다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "support-block",
+        widthMm: 600,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+    const template = createTemplate({
+      blockTemplateId: "template-partial",
+      name: "부분 지지 박스",
+      dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 500 }
+    });
+
+    // When
+    const offOutput = runMultiChainSimulationV0({
+      result,
+      blockTemplates: [template],
+      runId: "multi-run-partial-off",
+      policy: DEFAULT_POLICY
+    });
+    const onOutput = runMultiChainSimulationV0({
+      result,
+      blockTemplates: [template],
+      runId: "multi-run-partial-on",
+      policy: {
+        ...DEFAULT_POLICY,
+        partialSupportEnabled: true,
+        minimumSupportRatio: 0.55
+      }
+    });
+    const offRecommended = offOutput.variants.find((variant) => variant.mode === "recommended");
+    const onRecommended = onOutput.variants.find((variant) => variant.mode === "recommended");
+
+    // Then
+    assert.equal(offRecommended?.totalAddedQuantity, 0);
+    assert.equal(onRecommended?.totalAddedQuantity, 1);
+    assert.equal(onRecommended?.spaces[0]?.blocks.at(-1)?.zMm, 500);
+  });
+
+  it("깨짐주의 받침 정책은 추가 시뮬레이션 variant 계산에서도 유지된다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "fragile-support",
+        fragile: true,
+        widthMm: 1000,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+    const template = createTemplate({
+      blockTemplateId: "template-heavy",
+      name: "일반 추가 박스",
+      dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 500 },
+      fragile: false
+    });
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result,
+      blockTemplates: [template],
+      runId: "multi-run-fragile-policy",
+      policy: DEFAULT_POLICY
+    });
+    const recommended = output.variants.find((variant) => variant.mode === "recommended");
+
+    // Then
+    assert.equal(recommended?.totalAddedQuantity, 0);
+    assert.equal(recommended?.spaces[0]?.blocks.length, 1);
+  });
 });

@@ -2403,6 +2403,26 @@ select:focus-visible {
   min-height: 48px;
 }
 
+.chain-filter-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chain-filter-row label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chain-filter-row select {
+  width: 100%;
+  min-height: 48px;
+}
+
 .chain-selection-summary {
   display: flex;
   flex-wrap: wrap;
@@ -2559,6 +2579,36 @@ select:focus-visible {
 .chain-variant-button span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.chain-variant-quantity-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  overflow: hidden;
+}
+
+.chain-variant-quantity-table th,
+.chain-variant-quantity-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.chain-variant-quantity-table th:last-child,
+.chain-variant-quantity-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chain-variant-quantity-table tbody tr:last-child th,
+.chain-variant-quantity-table tbody tr:last-child td {
+  border-bottom: 0;
+  background: #f8fafc;
 }
 
 .chain-actions {
@@ -3265,6 +3315,10 @@ select:focus-visible {
   }
 
   .chain-option-list {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-filter-row {
     grid-template-columns: 1fr;
   }
 
