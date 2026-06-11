@@ -200,6 +200,8 @@ import {
   ImportConflict,
   ImportConflictOption,
   PackedBlock,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
+  PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
@@ -1059,6 +1061,19 @@ export function TetrisWorkspaceApp() {
     );
   }
 
+  function updatePartialSupportPolicy(enabled: boolean) {
+    updateWorkspace((current, now) => ({
+      ...current,
+      revision: current.revision + 1,
+      updatedAt: now,
+      policy: {
+        ...current.policy,
+        partialSupportEnabled: enabled,
+        minimumSupportRatio: enabled ? PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO : DEFAULT_MINIMUM_SUPPORT_RATIO
+      }
+    }));
+  }
+
   function deleteCurrentBlockItem(draftBlockItemId: string) {
     updateWorkspace((current, now) =>
       removeDraftBlockItem(current, {
@@ -1730,11 +1745,13 @@ export function TetrisWorkspaceApp() {
             <ReviewCompactCard
               selectedSpace={selectedSpace}
               review={review}
+              partialSupportEnabled={workspace.policy.partialSupportEnabled}
               needsExport={needsExport}
               storageHealth={storageHealth}
               saveConflict={saveConflict}
               otherTabCount={otherTabCount}
               persistenceRequesting={persistenceRequesting}
+              onPartialSupportChange={updatePartialSupportPolicy}
               onExportJson={exportJson}
               onReloadLatestWorkspace={reloadLatestWorkspace}
               onRequestStorageProtection={requestBrowserStorageProtection}
@@ -3137,11 +3154,13 @@ function DraftUndoToast({
 function ReviewCompactCard({
   selectedSpace,
   review,
+  partialSupportEnabled,
   needsExport,
   storageHealth,
   saveConflict,
   otherTabCount,
   persistenceRequesting,
+  onPartialSupportChange,
   onExportJson,
   onReloadLatestWorkspace,
   onRequestStorageProtection,
@@ -3151,11 +3170,13 @@ function ReviewCompactCard({
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
+  partialSupportEnabled: boolean;
   needsExport: boolean;
   storageHealth: StorageHealthSnapshot | null;
   saveConflict: WorkspaceSaveConflictNotice | null;
   otherTabCount: number;
   persistenceRequesting: boolean;
+  onPartialSupportChange: (enabled: boolean) => void;
   onExportJson: () => void;
   onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
@@ -3193,6 +3214,25 @@ function ReviewCompactCard({
         <p className="fine-print">
                   깨짐주의끼리 쌓기 허용, 깨짐주의 위 일반 박스 쌓기 금지, 90도 회전 기준으로 입력을 확인합니다. 부피 기준 최소 공간 수는 참고 최소값이며, 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다.
         </p>
+      </div>
+      <div className="partial-support-policy-card">
+        <div className="partial-support-copy">
+          <strong>부분 지지 허용</strong>
+          <p className="fine-print">
+            받침면 55% 이상이면 적재 가능으로 계산합니다. 실제 현장에서는 흔들림, 박스 강도, 작업자 안전을
+            현장 책임자 판단으로 확인하세요.
+          </p>
+        </div>
+        <label className="partial-support-toggle">
+          <input
+            type="checkbox"
+            aria-label="부분 지지 허용"
+            checked={partialSupportEnabled}
+            disabled={Boolean(saveConflict)}
+            onChange={(event) => onPartialSupportChange(event.target.checked)}
+          />
+          <span>{partialSupportEnabled ? "허용 중" : "꺼짐"}</span>
+        </label>
       </div>
       <div className="summary-grid compact-summary">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
@@ -3345,6 +3385,7 @@ const ResultStage = ({
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
   const displayedSpaces = useMemo(
@@ -3523,6 +3564,28 @@ const ResultStage = ({
     setInstructionDownloadStatus("idle");
     setInstructionDownloadFilename(null);
   }, [stackingInstructionText]);
+
+  useEffect(() => {
+    const policyKey = `${workspacePolicy.partialSupportEnabled}:${workspacePolicy.minimumSupportRatio}`;
+
+    if (previousChainPolicyKeyRef.current === null) {
+      previousChainPolicyKeyRef.current = policyKey;
+      return;
+    }
+
+    if (previousChainPolicyKeyRef.current === policyKey) {
+      return;
+    }
+
+    previousChainPolicyKeyRef.current = policyKey;
+    setChainPreview(null);
+    setChainComparisonMode("preview");
+    setChainStatus("idle");
+    setChainStatusMessage("부분 지지 정책이 바뀌었습니다. 추가 박스는 다시 계산하세요.");
+  }, [
+    workspacePolicy.partialSupportEnabled,
+    workspacePolicy.minimumSupportRatio
+  ]);
 
   useEffect(() => {
     if (!offsetRecommendation) {
@@ -4416,6 +4479,8 @@ const ResultStage = ({
         latestResult={latestResult}
         blockOptions={chainBlockOptions}
         selectedTemplateId={selectedChainTemplateId}
+        partialSupportEnabled={workspacePolicy.partialSupportEnabled}
+        minimumSupportRatio={workspacePolicy.minimumSupportRatio}
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
         requestedQuantity={chainRequestedQuantity}
@@ -5275,6 +5340,8 @@ function ChainSimulationPanel({
   latestResult,
   blockOptions,
   selectedTemplateId,
+  partialSupportEnabled,
+  minimumSupportRatio,
   chainStatus,
   statusMessage,
   requestedQuantity,
@@ -5295,6 +5362,8 @@ function ChainSimulationPanel({
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   blockOptions: BlockTemplate[];
   selectedTemplateId: string | null;
+  partialSupportEnabled: boolean;
+  minimumSupportRatio: number;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
   requestedQuantity: number;
@@ -5316,6 +5385,7 @@ function ChainSimulationPanel({
   const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
   const canCalculateRequested = canCalculate && requestedQuantity >= 1;
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
+  const partialSupportPercent = Math.round(minimumSupportRatio * 100);
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -5371,6 +5441,15 @@ function ChainSimulationPanel({
           </div>
 
           <div className="chain-result-panel">
+            <div className="chain-policy-notice" data-enabled={partialSupportEnabled}>
+              <strong>{partialSupportEnabled ? "부분 지지 허용 적용 중" : "부분 지지 허용 꺼짐"}</strong>
+              <span>
+                추가 박스도 현재 실행 전 확인 정책과 같은 기준으로 계산합니다.
+                {partialSupportEnabled
+                  ? ` 받침면 ${partialSupportPercent}% 이상을 허용합니다.`
+                  : " 받침면 전체가 안전하게 받쳐지는 경우만 계산합니다."}
+              </span>
+            </div>
             <div className="chain-status-box" data-tone={chainStatus} role="status">
               <strong>
                 {chainStatus === "preview"
