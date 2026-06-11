@@ -22,6 +22,12 @@ export function PwaServiceWorkerRegistrar({ onStatusChange }: PwaServiceWorkerRe
       }
     };
 
+    if (process.env.NODE_ENV !== "production") {
+      void cleanupDevelopmentServiceWorker();
+      onStatusChange("unsupported");
+      return;
+    }
+
     const registerServiceWorker = async () => {
       setStatus("registering");
 
@@ -70,4 +76,26 @@ export function PwaServiceWorkerRegistrar({ onStatusChange }: PwaServiceWorkerRe
   }, [onStatusChange]);
 
   return null;
+}
+
+async function cleanupDevelopmentServiceWorker() {
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations
+        .filter((registration) => registration.scope === `${window.location.origin}/`)
+        .map((registration) => registration.unregister())
+    );
+
+    if ("caches" in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName.startsWith("package-tetris-"))
+          .map((cacheName) => caches.delete(cacheName))
+      );
+    }
+  } catch {
+    // Development cleanup is best-effort; production registration still handles real errors.
+  }
 }

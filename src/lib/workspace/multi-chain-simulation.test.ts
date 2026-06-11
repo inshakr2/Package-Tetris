@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MAX_MULTI_CHAIN_ADDED_BLOCKS, runMultiChainSimulationV0 } from "./multi-chain-simulation";
-import { BlockTemplate, PackedBlock, ResultSummary, SpaceDefinition } from "./types";
+import { runPackingEngineV0 } from "./packing-engine";
+import { validatePackedResult } from "./packed-result-validation";
+import { DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "./presets";
+import { BlockDefinition, BlockTemplate, PackedBlock, ResultSummary, SpaceDefinition } from "./types";
 
 const TIMESTAMP = "2026-06-11T00:00:00.000Z";
 const DEFAULT_POLICY = {
   fragileStackOnFragileAllowed: true,
-  nonFragileOnFragileAllowed: false,
+  nonFragileOnFragileAllowed: false as const,
   partialSupportEnabled: false,
   minimumSupportRatio: 1
 };
@@ -387,4 +390,177 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(recommended?.totalAddedQuantity, 0);
     assert.equal(recommended?.spaces[0]?.blocks.length, 1);
   });
+
+  it("현장 피드백 혼합 파레트 결과에 선택 순서와 지정 수량으로 추가 적재를 계산한다", () => {
+    // Given
+    const space = findPresetSpace(DEFAULT_PALLET_SPACE_ID);
+    const inputBlocks = [
+      createBlockDefinition("field-small", "소형 박스", { widthMm: 200, depthMm: 150, heightMm: 200 }, 60),
+      createBlockDefinition("field-large", "대형 박스", { widthMm: 1000, depthMm: 800, heightMm: 400 }, 5),
+      createBlockDefinition("field-long", "장척 박스", { widthMm: 965, depthMm: 300, heightMm: 200 }, 10),
+      createBlockDefinition("field-mid", "중형 박스", { widthMm: 600, depthMm: 250, heightMm: 150 }, 10)
+    ];
+    const policy = DEFAULT_POLICY;
+    const baseOutput = runPackingEngineV0({
+      runId: "field-feedback-base",
+      space,
+      blocks: inputBlocks,
+      policy: {
+        fragileStackOnFragileAllowed: policy.fragileStackOnFragileAllowed,
+        nonFragileOnFragileAllowed: policy.nonFragileOnFragileAllowed,
+        partialSupportEnabled: policy.partialSupportEnabled,
+        minimumSupportRatio: policy.minimumSupportRatio,
+        rotation: "orthogonal-90deg"
+      }
+    });
+    const result: ResultSummary = {
+      resultId: "field-feedback-result",
+      runId: baseOutput.runId,
+      createdAt: TIMESTAMP,
+      spaceSnapshot: space,
+      usedSpaceCount: baseOutput.usedSpaceCount,
+      averageUtilizationRate: baseOutput.averageUtilizationRate,
+      unloadedBlockCount: baseOutput.unloadedBlockCount,
+      spaces: baseOutput.spaces,
+      warnings: baseOutput.warnings
+    };
+    const largeTemplate = createTemplate({
+      blockTemplateId: "template-field-large",
+      name: "대형 추가 박스",
+      dimensions: { widthMm: 1000, depthMm: 800, heightMm: 400 }
+    });
+    const longTemplate = createTemplate({
+      blockTemplateId: "template-field-long",
+      name: "장척 추가 박스",
+      dimensions: { widthMm: 965, depthMm: 300, heightMm: 200 }
+    });
+    const midTemplate = createTemplate({
+      blockTemplateId: "template-field-mid",
+      name: "중형 추가 박스",
+      dimensions: { widthMm: 600, depthMm: 250, heightMm: 150 }
+    });
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result,
+      blockTemplates: [largeTemplate, longTemplate, midTemplate],
+      runId: "field-feedback-chain",
+      policy,
+      requestedQuantitiesByTemplateId: {
+        [largeTemplate.blockTemplateId]: 6
+      },
+      priorityByTemplateId: {
+        [largeTemplate.blockTemplateId]: 3,
+        [longTemplate.blockTemplateId]: 2,
+        [midTemplate.blockTemplateId]: 1
+      }
+    });
+    const customPriority = output.variants.find((variant) => variant.mode === "custom-priority");
+
+    // Then
+    assert.equal(baseOutput.usedSpaceCount, 3);
+    assert.equal(baseOutput.unloadedBlockCount, 0);
+    assert.equal(validatePackedResult(result, policy).isValid, true);
+    assert.deepEqual(
+      customPriority?.addedQuantities.map((item) => item.blockTemplateId),
+      ["template-field-large", "template-field-long", "template-field-mid"]
+    );
+    assert.ok(
+      (customPriority?.remainingVolumeM3 ?? Number.POSITIVE_INFINITY) <= 1.084,
+      "field feedback chain simulation should not regress below the current remaining-volume result"
+    );
+    assert.ok(
+      (customPriority?.addedQuantities.find((item) => item.blockTemplateId === largeTemplate.blockTemplateId)
+        ?.addedQuantity ?? 0) >= 2,
+      "large-box priority should keep at least the currently observed 2 additional boxes"
+    );
+    assert.equal(
+      validatePackedResult(
+        {
+          ...result,
+          spaces: customPriority?.spaces ?? []
+        },
+        policy
+      ).isValid,
+      true
+    );
+  });
+
+  it("선택 순서와 박스 우선 variant는 이미 계산한 순열 결과를 재사용한다", () => {
+    // Given
+    const templates = ["a", "b", "c"].map((suffix) =>
+      createTemplate({
+        blockTemplateId: `template-${suffix}`,
+        name: `${suffix.toUpperCase()} 박스`,
+        dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+      })
+    );
+    const chainRunIds: string[] = [];
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result: createResult([
+        createPackedBlock({
+          widthMm: 1000,
+          depthMm: 1000,
+          heightMm: 1000
+        })
+      ]),
+      blockTemplates: templates,
+      runId: "multi-run-reuse-orders",
+      policy: DEFAULT_POLICY,
+      priorityByTemplateId: {
+        [templates[0]?.blockTemplateId ?? ""]: 3,
+        [templates[1]?.blockTemplateId ?? ""]: 2,
+        [templates[2]?.blockTemplateId ?? ""]: 1
+      },
+      chainRunner: (input) => {
+        chainRunIds.push(input.runId);
+
+        return {
+          runId: input.runId,
+          blockTemplateId: input.blockTemplate.blockTemplateId,
+          blockName: input.blockTemplate.name,
+          addedQuantity: 0,
+          spaces: input.result.spaces ?? [],
+          averageUtilizationRate: input.result.averageUtilizationRate,
+          warnings: []
+        };
+      }
+    });
+
+    // Then
+    assert.equal(output.variants.length, 5);
+    assert.equal(chainRunIds.length, 18);
+  });
 });
+
+function createBlockDefinition(
+  blockId: string,
+  name: string,
+  dimensions: BlockDefinition["dimensions"],
+  quantity: number
+): BlockDefinition {
+  return {
+    blockId,
+    blockTemplateId: `template-${blockId}`,
+    draftBlockItemId: `draft-${blockId}`,
+    entityVersion: 1,
+    name,
+    dimensions,
+    quantity,
+    fragile: false,
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP
+  };
+}
+
+function findPresetSpace(spaceId: string) {
+  const space = PRESET_SPACES.find((candidate) => candidate.spaceId === spaceId);
+
+  if (!space) {
+    throw new Error(`테스트 preset 공간을 찾을 수 없습니다: ${spaceId}`);
+  }
+
+  return space;
+}

@@ -5,6 +5,12 @@ import {
   isSupportedBlockTemplateImportFile
 } from "./block-template-xlsx-import";
 import { normalizeLoadPriorityScore, type LoadPriorityValue } from "./load-priority";
+import {
+  createXlsxHeaderMapping,
+  createXlsxRowByColumn,
+  isEmptyXlsxRow,
+  normalizeXlsxText
+} from "./xlsx-header-row";
 
 export const DRAFT_BLOCK_XLSX_COLUMNS = [
   "박스명",
@@ -18,8 +24,6 @@ export const DRAFT_BLOCK_IMPORT_SAMPLE_ROWS = [
 ] as const;
 
 export const DRAFT_BLOCK_IMPORT_SAMPLE_FILE_NAME = "package-tetris-current-work-sample.xlsx";
-
-const UNSAFE_COLUMN_NAMES = new Set(["__proto__", "prototype", "constructor"]);
 
 type DraftBlockXlsxColumn = (typeof DRAFT_BLOCK_XLSX_COLUMNS)[number];
 type ImportRowByColumn = Record<DraftBlockXlsxColumn, unknown>;
@@ -114,10 +118,10 @@ export function createDraftBlockImportPreview(
   }
 
   const [headerRow, ...bodyRows] = rawRows;
-  const headerValidation = validateHeaderRow(headerRow ?? []);
+  const headerMapping = createXlsxHeaderMapping(headerRow ?? [], DRAFT_BLOCK_XLSX_COLUMNS);
 
-  if (headerValidation) {
-    return createRejectedPreview(headerValidation);
+  if (!headerMapping.ok) {
+    return createRejectedPreview(headerMapping.message);
   }
 
   const existingTemplateByName = new Map(
@@ -129,11 +133,15 @@ export function createDraftBlockImportPreview(
   for (const [bodyIndex, rawRow] of bodyRows.entries()) {
     const rowNumber = bodyIndex + 2;
 
-    if (isEmptyRow(rawRow)) {
+    if (isEmptyXlsxRow(rawRow)) {
       continue;
     }
 
-    const parsed = parseImportRow(createRowByColumn(rawRow), rowNumber, existingTemplateByName);
+    const parsed = parseImportRow(
+      createXlsxRowByColumn(rawRow, DRAFT_BLOCK_XLSX_COLUMNS, headerMapping.mapping),
+      rowNumber,
+      existingTemplateByName
+    );
 
     if (parsed.errors.length > 0) {
       errors.push(...parsed.errors);
@@ -154,34 +162,6 @@ export function createDraftBlockImportPreview(
     errors,
     canImport: rows.length > 0 && errors.length === 0
   };
-}
-
-function validateHeaderRow(headerRow: readonly unknown[]) {
-  if (isEmptyRow(headerRow)) {
-    return "첫 번째 sheet가 비어 있습니다.";
-  }
-
-  const headers = headerRow.map((cell) => normalizeText(cell));
-  const unsafeColumns = headers.filter((header) => UNSAFE_COLUMN_NAMES.has(header));
-
-  if (unsafeColumns.length > 0) {
-    return `허용되지 않는 컬럼명이 있습니다: ${unsafeColumns.join(", ")}`;
-  }
-
-  const expectedColumns = new Set<string>(DRAFT_BLOCK_XLSX_COLUMNS);
-  const unknownColumns = headers.filter((header) => header && !expectedColumns.has(header));
-
-  if (unknownColumns.length > 0) {
-    return `알 수 없는 컬럼이 있습니다: ${unknownColumns.join(", ")}`;
-  }
-
-  const missingColumns = DRAFT_BLOCK_XLSX_COLUMNS.filter((column) => !headers.includes(column));
-
-  if (missingColumns.length > 0) {
-    return `필수 컬럼이 없습니다: ${missingColumns.join(", ")}`;
-  }
-
-  return null;
 }
 
 function parseImportRow(
@@ -274,13 +254,6 @@ function createLoadPriorityError(rowNumber: number) {
   };
 }
 
-function createRowByColumn(rawRow: readonly unknown[]) {
-  return DRAFT_BLOCK_XLSX_COLUMNS.reduce((row, column, index) => {
-    row[column] = rawRow[index];
-    return row;
-  }, {} as ImportRowByColumn);
-}
-
 function createRejectedPreview(message: string): DraftBlockImportPreview {
   return {
     rows: [],
@@ -289,16 +262,8 @@ function createRejectedPreview(message: string): DraftBlockImportPreview {
   };
 }
 
-function isEmptyRow(row: readonly unknown[]) {
-  return row.every((cell) => isBlank(cell));
-}
-
-function isBlank(value: unknown) {
-  return value === null || value === undefined || normalizeText(value) === "";
-}
-
 function normalizeText(value: unknown) {
-  return String(value ?? "").trim();
+  return normalizeXlsxText(value);
 }
 
 function normalizeDuplicateKey(value: string) {

@@ -261,6 +261,29 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasAccessibleDisabledCalculation, true);
   });
 
+  it("추가 가능 0개 안내 warning은 계산 실패가 아니라 결과 안내로 유지한다", () => {
+    // Given
+    const importsFatalWarningClassifier =
+      workspaceSource.includes("isFatalChainSimulationWarning") &&
+      workspaceSource.includes('from "@/lib/workspace/chain-simulation"');
+    const guardsOnlyFatalWarnings =
+      workspaceSource.includes("const selectedVariantFatalWarnings = selectedVariant.warnings.filter(isFatalChainSimulationWarning);") &&
+      workspaceSource.includes("selectedVariantFatalWarnings.length > 0 && selectedVariant.totalAddedQuantity === 0") &&
+      workspaceSource.includes('setChainStatus("error");') &&
+      workspaceSource.includes('setChainStatus("empty");');
+    const keepsAdvisoryAsEmptyMessage =
+      workspaceSource.includes("const selectedVariantNotice = selectedVariant.warnings[0] ?? null;") &&
+      workspaceSource.includes("selectedVariantNotice ??") &&
+      workspaceSource.includes("selectedVariantFatalWarnings[0] ??");
+
+    // When
+    const keepsNoPlacementGuidanceVisible =
+      importsFatalWarningClassifier && guardsOnlyFatalWarnings && keepsAdvisoryAsEmptyMessage;
+
+    // Then
+    assert.equal(keepsNoPlacementGuidanceVisible, true);
+  });
+
   it("추가 시뮬레이션 보조 액션은 비활성 사유를 버튼 속성으로 제공한다", () => {
     // Given
     const hasConfirmDisabledReason =

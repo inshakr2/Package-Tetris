@@ -77,6 +77,39 @@ describe("draft-block-xlsx-import", () => {
     );
   });
 
+  it("컬럼 순서가 달라도 헤더 이름을 기준으로 현재 작업 값을 해석한다", () => {
+    // Given
+    const rows = [
+      ["아래층우선타입", "박스명", "작업수량"],
+      [3, "EG-AMP 조합 박스", 7]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.deepEqual(
+      preview.rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        blockTemplateId: row.blockTemplateId,
+        name: row.name,
+        quantity: row.quantity,
+        loadPriority: row.loadPriority
+      })),
+      [
+        {
+          rowNumber: 2,
+          blockTemplateId: "template-amp",
+          name: "EG-AMP 조합 박스",
+          quantity: 7,
+          loadPriority: 10
+        }
+      ]
+    );
+  });
+
   it("수량 오류, 아래층 우선 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {
     // Given
     const rows = [
@@ -100,6 +133,30 @@ describe("draft-block-xlsx-import", () => {
       ]
     );
     assert.equal(preview.rows.length, 0);
+  });
+
+  it("빈 sheet, 알 수 없는 컬럼, 중복 컬럼, prototype pollution 컬럼은 workbook 오류로 거부한다", () => {
+    // Given
+    const emptyRows: unknown[][] = [];
+    const unknownColumnRows = [["박스명", "작업수량", "아래층우선타입", "비고"]];
+    const duplicateColumnRows = [["박스명", "박스명", "작업수량", "아래층우선타입"]];
+    const unsafeColumnRows = [["박스명", "작업수량", "__proto__"]];
+
+    // When
+    const emptyPreview = createDraftBlockImportPreview(emptyRows, { existingTemplates });
+    const unknownColumnPreview = createDraftBlockImportPreview(unknownColumnRows, { existingTemplates });
+    const duplicateColumnPreview = createDraftBlockImportPreview(duplicateColumnRows, { existingTemplates });
+    const unsafeColumnPreview = createDraftBlockImportPreview(unsafeColumnRows, { existingTemplates });
+
+    // Then
+    assert.deepEqual(emptyPreview.errors.map((error) => error.message), ["첫 번째 sheet가 비어 있습니다."]);
+    assert.deepEqual(unknownColumnPreview.errors.map((error) => error.message), ["알 수 없는 컬럼이 있습니다: 비고"]);
+    assert.deepEqual(duplicateColumnPreview.errors.map((error) => error.message), ["중복된 컬럼이 있습니다: 박스명"]);
+    assert.deepEqual(unsafeColumnPreview.errors.map((error) => error.message), ["허용되지 않는 컬럼명이 있습니다: __proto__"]);
+    assert.equal(emptyPreview.canImport, false);
+    assert.equal(unknownColumnPreview.canImport, false);
+    assert.equal(duplicateColumnPreview.canImport, false);
+    assert.equal(unsafeColumnPreview.canImport, false);
   });
 
   it("현장 사용자가 내려받는 현재 작업 샘플 .xlsx는 미리보기에서 그대로 읽힌다", async () => {

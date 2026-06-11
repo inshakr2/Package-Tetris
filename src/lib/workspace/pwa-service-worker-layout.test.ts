@@ -18,7 +18,8 @@ describe("pwa-service-worker-layout", () => {
       appSource.includes("const [pwaOfflineStatus, setPwaOfflineStatus] = useState<PwaOfflineReadinessStatus>(\"checking\")") &&
       appSource.includes("onStatusChange={setPwaOfflineStatus}") &&
       appSource.includes("pwaOfflineStatus={pwaOfflineStatus}") &&
-      appSource.includes("getPwaOfflineReadinessCopy(pwaOfflineStatus)") &&
+      appSource.includes("getPwaOfflineReadinessCopy(pwaOfflineStatus, {") &&
+      appSource.includes("isDevelopmentMode: process.env.NODE_ENV !== \"production\"") &&
       appSource.includes('label="오프라인 준비"');
 
     // Then
@@ -41,6 +42,24 @@ describe("pwa-service-worker-layout", () => {
 
     // Then
     assert.equal(hasRegistrarContract, true);
+  });
+
+  it("서비스워커 등록 컴포넌트는 개발 모드에서 HMR 요청을 가로채지 않도록 등록하지 않고 기존 등록을 정리한다", () => {
+    // Given / When
+    const hasDevelopmentGuard =
+      registrarSource.includes('process.env.NODE_ENV !== "production"') &&
+      registrarSource.includes("cleanupDevelopmentServiceWorker()") &&
+      registrarSource.includes("navigator.serviceWorker.getRegistrations()") &&
+      registrarSource.includes("registration.unregister()") &&
+      registrarSource.includes("caches.keys()") &&
+      registrarSource.includes('cacheName.startsWith("package-tetris-")') &&
+      registrarSource.includes('onStatusChange("unsupported")');
+    const avoidsDevRegistration =
+      registrarSource.indexOf('process.env.NODE_ENV !== "production"') <
+      registrarSource.indexOf('navigator.serviceWorker.register("/sw.js", {');
+
+    // Then
+    assert.equal(hasDevelopmentGuard && avoidsDevRegistration, true);
   });
 
   it("서비스워커는 앱 셸을 캐시하고 navigation 요청을 캐시된 루트로 되돌린다", () => {

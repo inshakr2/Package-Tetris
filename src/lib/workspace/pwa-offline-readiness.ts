@@ -7,7 +7,14 @@ export interface PwaOfflineReadinessCopy {
   detail: string;
 }
 
-export function getPwaOfflineReadinessCopy(status: PwaOfflineReadinessStatus): PwaOfflineReadinessCopy {
+interface PwaOfflineReadinessCopyOptions {
+  isDevelopmentMode?: boolean;
+}
+
+export function getPwaOfflineReadinessCopy(
+  status: PwaOfflineReadinessStatus,
+  options: PwaOfflineReadinessCopyOptions = {}
+): PwaOfflineReadinessCopy {
   switch (status) {
     case "ready":
       return {
@@ -24,6 +31,15 @@ export function getPwaOfflineReadinessCopy(status: PwaOfflineReadinessStatus): P
         detail: "처음 한 번은 인터넷 연결이 필요합니다."
       };
     case "unsupported":
+      if (options.isDevelopmentMode) {
+        return {
+          tone: "neutral",
+          value: "개발 실행 중",
+          description: "자동 새로고침이 끊기지 않도록 개발 실행 중에는 오프라인 준비를 꺼두었습니다.",
+          detail: "오류가 아닙니다. npm run dev 터미널을 계속 켜 두고, 중요한 작업은 백업 파일로 보관하세요."
+        };
+      }
+
       return {
         tone: "neutral",
         value: "지원되지 않음",

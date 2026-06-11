@@ -1,4 +1,11 @@
 import type { Dimensions } from "./types";
+import {
+  createXlsxHeaderMapping,
+  createXlsxRowByColumn,
+  isBlankXlsxCell,
+  isEmptyXlsxRow,
+  normalizeXlsxText
+} from "./xlsx-header-row";
 
 export const BLOCK_TEMPLATE_XLSX_COLUMNS = [
   "상위그룹",
@@ -19,7 +26,6 @@ export const BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS = [
 export const BLOCK_TEMPLATE_IMPORT_SAMPLE_FILE_NAME = "package-tetris-box-import-sample.xlsx";
 
 const REQUIRED_DIMENSION_COLUMNS = ["가로mm", "세로mm", "높이mm"] as const;
-const UNSAFE_COLUMN_NAMES = new Set(["__proto__", "prototype", "constructor"]);
 export const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 type BlockTemplateXlsxColumn = (typeof BLOCK_TEMPLATE_XLSX_COLUMNS)[number];
@@ -116,10 +122,10 @@ export function createBlockTemplateImportPreview(
   }
 
   const [headerRow, ...bodyRows] = rawRows;
-  const headerValidation = validateHeaderRow(headerRow ?? []);
+  const headerMapping = createXlsxHeaderMapping(headerRow ?? [], BLOCK_TEMPLATE_XLSX_COLUMNS);
 
-  if (headerValidation) {
-    return createRejectedPreview(headerValidation);
+  if (!headerMapping.ok) {
+    return createRejectedPreview(headerMapping.message);
   }
 
   const existingNames = new Set(
@@ -132,11 +138,16 @@ export function createBlockTemplateImportPreview(
   for (const [bodyIndex, rawRow] of bodyRows.entries()) {
     const rowNumber = bodyIndex + 2;
 
-    if (isEmptyRow(rawRow)) {
+    if (isEmptyXlsxRow(rawRow)) {
       continue;
     }
 
-    const parsed = parseImportRow(createRowByColumn(rawRow), rowNumber, existingNames, namesInFile);
+    const parsed = parseImportRow(
+      createXlsxRowByColumn(rawRow, BLOCK_TEMPLATE_XLSX_COLUMNS, headerMapping.mapping),
+      rowNumber,
+      existingNames,
+      namesInFile
+    );
 
     if (parsed.errors.length > 0) {
       errors.push(...parsed.errors);
@@ -157,34 +168,6 @@ export function createBlockTemplateImportPreview(
     errors,
     canImport: rows.length > 0 && errors.length === 0
   };
-}
-
-function validateHeaderRow(headerRow: readonly unknown[]) {
-  if (isEmptyRow(headerRow)) {
-    return "첫 번째 sheet가 비어 있습니다.";
-  }
-
-  const headers = headerRow.map((cell) => normalizeText(cell));
-  const unsafeColumns = headers.filter((header) => UNSAFE_COLUMN_NAMES.has(header));
-
-  if (unsafeColumns.length > 0) {
-    return `허용되지 않는 컬럼명이 있습니다: ${unsafeColumns.join(", ")}`;
-  }
-
-  const expectedColumns = new Set<string>(BLOCK_TEMPLATE_XLSX_COLUMNS);
-  const unknownColumns = headers.filter((header) => header && !expectedColumns.has(header));
-
-  if (unknownColumns.length > 0) {
-    return `알 수 없는 컬럼이 있습니다: ${unknownColumns.join(", ")}`;
-  }
-
-  const missingColumns = BLOCK_TEMPLATE_XLSX_COLUMNS.filter((column) => !headers.includes(column));
-
-  if (missingColumns.length > 0) {
-    return `필수 컬럼이 없습니다: ${missingColumns.join(", ")}`;
-  }
-
-  return null;
 }
 
 function parseImportRow(
@@ -273,7 +256,7 @@ function parseDimensions(
 }
 
 function parseWeight(value: unknown, rowNumber: number, errors: BlockTemplateImportError[]) {
-  if (isBlank(value)) {
+  if (isBlankXlsxCell(value)) {
     return null;
   }
 
@@ -292,7 +275,7 @@ function parseWeight(value: unknown, rowNumber: number, errors: BlockTemplateImp
 }
 
 function parseFragile(value: unknown, rowNumber: number, errors: BlockTemplateImportError[]) {
-  if (isBlank(value)) {
+  if (isBlankXlsxCell(value)) {
     return false;
   }
 
@@ -316,13 +299,6 @@ function parseFragile(value: unknown, rowNumber: number, errors: BlockTemplateIm
   return null;
 }
 
-function createRowByColumn(rawRow: readonly unknown[]) {
-  return BLOCK_TEMPLATE_XLSX_COLUMNS.reduce((row, column, index) => {
-    row[column] = rawRow[index];
-    return row;
-  }, {} as ImportRowByColumn);
-}
-
 function createRejectedPreview(message: string): BlockTemplateImportPreview {
   return {
     rows: [],
@@ -331,16 +307,8 @@ function createRejectedPreview(message: string): BlockTemplateImportPreview {
   };
 }
 
-function isEmptyRow(row: readonly unknown[]) {
-  return row.every((cell) => isBlank(cell));
-}
-
-function isBlank(value: unknown) {
-  return value === null || value === undefined || normalizeText(value) === "";
-}
-
 function normalizeText(value: unknown) {
-  return String(value ?? "").trim();
+  return normalizeXlsxText(value);
 }
 
 function normalizeDuplicateKey(value: string) {

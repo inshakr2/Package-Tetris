@@ -18,6 +18,9 @@ describe("field-audit-report", () => {
     assert.match(report.text, /시나리오 3개/);
     assert.match(report.text, /총 적재 90개/);
     assert.match(report.text, /총 계산 시간 310ms/);
+    assert.match(report.text, /기능 검증 2개/);
+    assert.match(report.text, /부분 지지 허용 55% 현장 검증: 통과/);
+    assert.match(report.text, /추가 박스 시뮬레이션 현장 검증: 통과/);
   });
 
   it("안전 실패나 지연 시나리오가 있으면 실패 코드와 확인 대상을 함께 보여준다", () => {
@@ -37,6 +40,35 @@ describe("field-audit-report", () => {
     assert.match(report.text, /안전 확인 필요: 2.5톤반 낮은 짐칸 혼합/);
     assert.match(report.text, /계산 지연: 20ft GP 장척 박스 혼합/);
   });
+
+  it("V2 기능 검증이 실패하면 실패 코드와 확인 대상을 함께 보여준다", () => {
+    // Given
+    const audit = createAudit({
+      failedFeatureCheckNames: ["추가 박스 시뮬레이션 현장 검증"],
+      featureCheckResults: [
+        {
+          name: "부분 지지 허용 55% 현장 검증",
+          detail: "OFF/ON 정책 차이 확인",
+          isSafe: true,
+          isExpected: true
+        },
+        {
+          name: "추가 박스 시뮬레이션 현장 검증",
+          detail: "추가 결과가 안전 검증을 통과하지 못함",
+          isSafe: false,
+          isExpected: false
+        }
+      ]
+    });
+
+    // When
+    const report = createFieldAuditReport(audit);
+
+    // Then
+    assert.equal(report.exitCode, 1);
+    assert.equal(report.ok, false);
+    assert.match(report.text, /기능 확인 필요: 추가 박스 시뮬레이션 현장 검증/);
+  });
 });
 
 function createAudit(overrides: Partial<FieldPackingScenarioPerformanceAudit> = {}): FieldPackingScenarioPerformanceAudit {
@@ -47,6 +79,21 @@ function createAudit(overrides: Partial<FieldPackingScenarioPerformanceAudit> = 
     totalElapsedMs: 310,
     failedScenarioNames: [],
     slowScenarioNames: [],
+    failedFeatureCheckNames: [],
+    featureCheckResults: [
+      {
+        name: "부분 지지 허용 55% 현장 검증",
+        detail: "OFF/ON 정책 차이 확인",
+        isSafe: true,
+        isExpected: true
+      },
+      {
+        name: "추가 박스 시뮬레이션 현장 검증",
+        detail: "추가 결과 안전 검증 통과",
+        isSafe: true,
+        isExpected: true
+      }
+    ],
     scenarioResults: [
       {
         name: "파레트 기본 대량 혼합 박스",

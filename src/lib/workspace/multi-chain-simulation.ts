@@ -1,4 +1,4 @@
-import { runChainSimulationV0, type ChainSimulationOutput } from "./chain-simulation";
+import { runChainSimulationV0, type ChainSimulationInput, type ChainSimulationOutput } from "./chain-simulation";
 import { type PlacementPolicy } from "./packing-placement";
 import { calculateUsableSize } from "./presets";
 import { BlockTemplate, PackedBlock, PackedSpace, ResultSummary } from "./types";
@@ -17,6 +17,7 @@ export interface MultiChainSimulationInput {
   requestedQuantity?: number;
   requestedQuantitiesByTemplateId?: Record<string, number | undefined>;
   priorityByTemplateId?: Record<string, number | undefined>;
+  chainRunner?: ChainSimulationRunner;
 }
 
 export interface MultiChainSimulationTemplateQuantity {
@@ -50,6 +51,8 @@ interface CandidateSimulation {
   order: BlockTemplate[];
   variant: Omit<MultiChainSimulationVariant, "variantId" | "label" | "mode" | "priorityBlockTemplateId">;
 }
+
+type ChainSimulationRunner = (input: ChainSimulationInput) => ChainSimulationOutput;
 
 export function runMultiChainSimulationV0(input: MultiChainSimulationInput): MultiChainSimulationOutput {
   const blockTemplates = dedupeTemplates(input.blockTemplates);
@@ -94,50 +97,41 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
     };
   }
 
-  const candidates = createTemplatePermutations(blockTemplates).map((order, index) =>
-    simulateTemplateOrder(input, order, `candidate-${index + 1}`, requestedQuantitiesByTemplateId)
+  const candidatesByOrderKey = new Map(
+    createTemplatePermutations(blockTemplates).map((order, index) => [
+      createOrderKey(order),
+      simulateTemplateOrder(input, order, `candidate-${index + 1}`, requestedQuantitiesByTemplateId)
+    ])
   );
+  const candidates = Array.from(candidatesByOrderKey.values());
   const recommendedCandidate = chooseRecommendedCandidate(candidates);
   const recommendedVariantId = `${input.runId}-recommended`;
   const customPriorityOrder = createCustomPriorityOrder(blockTemplates, priorityByTemplateId);
   const variants: MultiChainSimulationVariant[] = [
-    {
-      ...recommendedCandidate.variant,
+    createVariantFromCandidate(recommendedCandidate, {
       variantId: recommendedVariantId,
       label: "추천 결과",
       mode: "recommended"
-    },
+    }),
     ...(customPriorityOrder
       ? [
-          {
-            ...simulateTemplateOrder(
-              input,
-              customPriorityOrder,
-              "custom-priority",
-              requestedQuantitiesByTemplateId
-            ).variant,
+          createVariantFromCandidate(getCandidateByOrder(candidatesByOrderKey, customPriorityOrder), {
             variantId: `${input.runId}-custom-priority`,
             label: "선택 순서 결과",
             mode: "custom-priority" as const
-          }
+          })
         ]
       : []),
     ...blockTemplates.map((template) => {
       const priorityOrder = [template, ...blockTemplates.filter((item) => item.blockTemplateId !== template.blockTemplateId)];
-      const candidate = simulateTemplateOrder(
-        input,
-        priorityOrder,
-        `priority-${template.blockTemplateId}`,
-        requestedQuantitiesByTemplateId
-      );
+      const candidate = getCandidateByOrder(candidatesByOrderKey, priorityOrder);
 
-      return {
-        ...candidate.variant,
+      return createVariantFromCandidate(candidate, {
         variantId: `${input.runId}-priority-${template.blockTemplateId}`,
         label: `${template.name} 우선`,
         mode: "template-priority" as const,
         priorityBlockTemplateId: template.blockTemplateId
-      };
+      });
     })
   ];
 
@@ -174,7 +168,7 @@ function simulateTemplateOrder(
         ? remainingCalculationLimit
         : Math.min(templateRequestedQuantity, remainingCalculationLimit);
 
-    const output = runChainSimulationV0({
+    const output = (input.chainRunner ?? runChainSimulationV0)({
       result: currentResult,
       blockTemplate: template,
       runId: `${input.runId}-${runSuffix}-${index + 1}`,
@@ -209,6 +203,30 @@ function simulateTemplateOrder(
       remainingVolumeM3: calculateRemainingVolumeM3(input.result, spaces),
       warnings: collectVariantWarnings(outputs, input.requestedQuantity === undefined && remainingCalculationLimit <= 0)
     }
+  };
+}
+
+function getCandidateByOrder(candidatesByOrderKey: Map<string, CandidateSimulation>, order: BlockTemplate[]) {
+  const candidate = candidatesByOrderKey.get(createOrderKey(order));
+
+  if (!candidate) {
+    throw new Error(`multi-chain candidate not found for order: ${createOrderKey(order)}`);
+  }
+
+  return candidate;
+}
+
+function createVariantFromCandidate(
+  candidate: CandidateSimulation,
+  metadata: Pick<MultiChainSimulationVariant, "variantId" | "label" | "mode" | "priorityBlockTemplateId">
+): MultiChainSimulationVariant {
+  return {
+    ...candidate.variant,
+    ...metadata,
+    orderBlockTemplateIds: [...candidate.variant.orderBlockTemplateIds],
+    addedQuantities: candidate.variant.addedQuantities.map((item) => ({ ...item })),
+    spaces: clonePackedSpaces(candidate.variant.spaces),
+    warnings: [...candidate.variant.warnings]
   };
 }
 
@@ -346,6 +364,10 @@ function createTemplatePermutations(blockTemplates: BlockTemplate[]): BlockTempl
 
     return createTemplatePermutations(rest).map((tail) => [template, ...tail]);
   });
+}
+
+function createOrderKey(order: BlockTemplate[]) {
+  return order.map((template) => template.blockTemplateId).join(">");
 }
 
 function calculateRemainingVolumeM3(result: ResultSummary, spaces: PackedSpace[]) {

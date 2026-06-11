@@ -53,6 +53,30 @@ describe("block-library-search-layout", () => {
     assert.ok(dimensionsBeforeGroups, "block dimensions should appear before group selects");
   });
 
+  it("박스명/무게 행은 좁은 데스크톱 컬럼에서도 박스명 입력이 눌리지 않게 전용 그리드를 사용한다", () => {
+    // Given
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const labelCanShrink =
+      /\.form-grid label,[\s\S]*?\.form-row label,[\s\S]*?\.field-row label\s*{[\s\S]*?min-width:\s*0;[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?}/.test(
+        css
+      );
+    const nameRowUsesDedicatedColumns =
+      /\.block-template-name-row\s*{[\s\S]*?grid-template-columns:\s*minmax\(220px,\s*1\.6fr\)\s+minmax\(150px,\s*0\.7fr\);[\s\S]*?align-items:\s*start;[\s\S]*?}/.test(
+        css
+      );
+    const mobileNameRowStacks =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.block-template-name-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(labelCanShrink, "form labels should not force their grid columns wider than the parent");
+    assert.ok(nameRowUsesDedicatedColumns, "box name should get more room than optional weight in narrow desktop columns");
+    assert.ok(mobileNameRowStacks, "box name and weight should stack on mobile");
+  });
+
   it("저장된 박스 영역은 현장 사용자가 이름, 치수, 무게, 그룹으로 필터링할 수 있는 검색 입력을 제공한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
@@ -102,6 +126,25 @@ describe("block-library-search-layout", () => {
     assert.ok(hasRemovedDefaultQuantity, "template form should not ask for a default quantity");
     assert.ok(hasOptionalMetadataFields, "template form should collect optional weight and select registered groups");
     assert.ok(hasPlaceholderName, "box name should use an example placeholder instead of prefilled text");
+  });
+
+  it("무게 입력은 하단 보조문구 없이 선택 입력으로만 표시한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const keepsWeightInput =
+      source.includes("무게(kg)") &&
+      source.includes('aria-label="박스 무게 kg"') &&
+      source.includes('placeholder="선택 입력"');
+    const removesInlineHelp =
+      !source.includes('aria-describedby="block-weight-help"') &&
+      !source.includes('id="block-weight-help"') &&
+      !source.includes("검색과 엑셀/백업용 정보입니다. 현재 적재 계산에는 반영하지 않습니다.");
+
+    // Then
+    assert.ok(keepsWeightInput, "weight should remain as an optional input");
+    assert.ok(removesInlineHelp, "weight input should not add a fine-print line under the field");
   });
 
   it("저장된 박스는 대량 목록을 본문에 펼치지 않고 dialog에서 검색하고 선택한다", () => {
