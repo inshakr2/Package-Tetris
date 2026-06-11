@@ -114,6 +114,12 @@ V1 통합 검증:
 npm run v1:verify
 ```
 
+V2 브랜치 마감 검증:
+
+```bash
+npm run v2:verify
+```
+
 위 명령은 아래 작업을 순서대로 실행한다.
 
 - `npm test`: Node test runner 기반 단위/문서/레이아웃 테스트
