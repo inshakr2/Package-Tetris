@@ -5946,6 +5946,9 @@ function ChainSimulationPanel({
   const chainUndoDisabledReason = latestChainItem
     ? null
     : "반영된 추가 결과가 있을 때 직전 추가를 취소할 수 있습니다.";
+  const chainRecreateResultTitle = resultCreating
+    ? "기준 결과를 다시 계산하고 있습니다."
+    : "기준 결과를 다시 계산해 추가 시뮬레이션을 이어갑니다.";
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -6355,7 +6358,13 @@ function ChainSimulationPanel({
                 </button>
               ) : null}
               {chainStatus === "error" ? (
-                <button className="secondary-button" onClick={onCreateResult} disabled={resultCreating}>
+                <button
+                  className="secondary-button"
+                  onClick={onCreateResult}
+                  disabled={resultCreating}
+                  title={chainRecreateResultTitle}
+                  aria-label={resultCreating ? "기준 결과를 다시 계산하고 있습니다" : "기준 결과 다시 생성"}
+                >
                   {resultCreating ? resultCalculationProgress.buttonLabel : "결과 다시 생성"}
                 </button>
               ) : null}
@@ -6373,7 +6382,12 @@ function ChainSimulationPanel({
                 직전 추가 취소
               </button>
               {chainStatus === "empty" ? (
-                <button className="secondary-button" onClick={onClearSelection}>
+                <button
+                  className="secondary-button"
+                  onClick={onClearSelection}
+                  title="선택한 박스를 비우고 다른 박스로 다시 시험합니다."
+                  aria-label="추가 가능한 다른 박스를 선택하기 위해 선택 초기화"
+                >
                   다른 박스 선택
                 </button>
               ) : null}

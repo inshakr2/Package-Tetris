@@ -287,6 +287,28 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasDisabledReasonForSecondaryActions, true);
   });
 
+  it("추가 시뮬레이션 실패와 0개 가능 상태의 복구 액션은 다음 행동을 버튼 속성으로 제공한다", () => {
+    // Given
+    const hasRecoveryCopy =
+      workspaceSource.includes("const chainRecreateResultTitle =") &&
+      workspaceSource.includes("기준 결과를 다시 계산해 추가 시뮬레이션을 이어갑니다.") &&
+      workspaceSource.includes("기준 결과를 다시 계산하고 있습니다.");
+    const exposesRecoveryAction =
+      /title={chainRecreateResultTitle}/.test(workspaceSource) &&
+      /aria-label={[\s\S]*?resultCreating[\s\S]*?"기준 결과를 다시 계산하고 있습니다"[\s\S]*?"기준 결과 다시 생성"[\s\S]*?}/.test(
+        workspaceSource
+      );
+    const exposesEmptyAction =
+      workspaceSource.includes('title="선택한 박스를 비우고 다른 박스로 다시 시험합니다."') &&
+      workspaceSource.includes('aria-label="추가 가능한 다른 박스를 선택하기 위해 선택 초기화"');
+
+    // When
+    const hasRecoveryActionGuidance = hasRecoveryCopy && exposesRecoveryAction && exposesEmptyAction;
+
+    // Then
+    assert.equal(hasRecoveryActionGuidance, true);
+  });
+
   it("결과 변경 또는 선택 초기화 시 추가 박스별 수량 조건과 선택 순서를 함께 비운다", () => {
     // Given
     const latestResultEffect = workspaceSource.match(
