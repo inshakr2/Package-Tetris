@@ -661,6 +661,9 @@ export function TetrisWorkspaceApp() {
 
   const selectedSpace = allSpaces.find((space) => space.spaceId === workspace?.draft.selectedSpaceId);
   const draftBlocks = useMemo(() => (workspace ? resolveDraftBlocks(workspace) : []), [workspace]);
+  const priorityBlockCount = draftBlocks.filter(
+    (block) => normalizeDraftLoadPriorityOptionValue(block.loadPriority) > 0
+  ).length;
   const review = workspace
     ? reviewExecutionReadiness({
         selectedSpace,
@@ -1768,6 +1771,7 @@ export function TetrisWorkspaceApp() {
             <ReviewCompactCard
               selectedSpace={selectedSpace}
               review={review}
+              priorityBlockCount={priorityBlockCount}
               partialSupportEnabled={workspace.policy.partialSupportEnabled}
               needsExport={needsExport}
               storageHealth={storageHealth}
@@ -3346,6 +3350,7 @@ function DraftUndoToast({
 function ReviewCompactCard({
   selectedSpace,
   review,
+  priorityBlockCount,
   partialSupportEnabled,
   needsExport,
   storageHealth,
@@ -3362,6 +3367,7 @@ function ReviewCompactCard({
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
+  priorityBlockCount: number;
   partialSupportEnabled: boolean;
   needsExport: boolean;
   storageHealth: StorageHealthSnapshot | null;
@@ -3429,6 +3435,7 @@ function ReviewCompactCard({
       <div className="summary-grid compact-summary">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
         <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
+        <SummaryTile label="하단 우선" value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"} />
         <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
                 <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
         <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />

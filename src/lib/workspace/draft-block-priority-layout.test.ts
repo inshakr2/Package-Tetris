@@ -33,6 +33,27 @@ describe("draft-block-priority-layout", () => {
     assert.ok(hasAccessibleGroup, "priority controls should be grouped with a block-specific label");
   });
 
+  it("실행 전 확인은 하단 우선으로 지정한 현재 작업 항목 수를 요약한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const hasPriorityCount =
+      source.includes("const priorityBlockCount = draftBlocks.filter") &&
+      source.includes("normalizeDraftLoadPriorityOptionValue(block.loadPriority) > 0");
+    const passesSummaryToReview =
+      source.includes("priorityBlockCount={priorityBlockCount}") &&
+      source.includes("priorityBlockCount: number;");
+    const hasReviewSummaryTile =
+      source.includes('label="하단 우선"') &&
+      source.includes('value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"}');
+
+    // Then
+    assert.ok(hasPriorityCount, "workspace should count only draft items with explicit floor-priority settings");
+    assert.ok(passesSummaryToReview, "review card should receive the priority summary count");
+    assert.ok(hasReviewSummaryTile, "review card should summarize priority settings without adding more inputs");
+  });
+
   it("하단 우선 설정은 모바일에서도 48px 터치 타깃과 줄바꿈 가능한 버튼을 유지한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
