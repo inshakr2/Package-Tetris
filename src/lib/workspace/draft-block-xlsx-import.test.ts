@@ -77,6 +77,39 @@ describe("draft-block-xlsx-import", () => {
     );
   });
 
+  it("컬럼 순서가 달라도 헤더 이름을 기준으로 현재 작업 값을 해석한다", () => {
+    // Given
+    const rows = [
+      ["아래층우선타입", "박스명", "작업수량"],
+      [3, "EG-AMP 조합 박스", 7]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.deepEqual(
+      preview.rows.map((row) => ({
+        rowNumber: row.rowNumber,
+        blockTemplateId: row.blockTemplateId,
+        name: row.name,
+        quantity: row.quantity,
+        loadPriority: row.loadPriority
+      })),
+      [
+        {
+          rowNumber: 2,
+          blockTemplateId: "template-amp",
+          name: "EG-AMP 조합 박스",
+          quantity: 7,
+          loadPriority: 10
+        }
+      ]
+    );
+  });
+
   it("수량 오류, 아래층 우선 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {
     // Given
     const rows = [

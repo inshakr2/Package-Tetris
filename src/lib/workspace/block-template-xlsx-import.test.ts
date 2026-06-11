@@ -45,6 +45,30 @@ describe("block-template-xlsx-import", () => {
     });
   });
 
+  it("컬럼 순서가 달라도 헤더 이름을 기준으로 저장 박스 값을 해석한다", () => {
+    // Given
+    const rows = [
+      ["박스명", "깨짐주의", "가로mm", "높이mm", "세로mm", "무게kg", "하위그룹", "상위그룹"],
+      ["순서 변경 박스", "예", 610, 330, 420, 8.75, "스피커", "금영"]
+    ];
+
+    // When
+    const preview = createBlockTemplateImportPreview(rows);
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.deepEqual(preview.rows[0], {
+      rowNumber: 2,
+      group1: "금영",
+      group2: "스피커",
+      name: "순서 변경 박스",
+      dimensions: { widthMm: 610, depthMm: 420, heightMm: 330 },
+      weightKg: 8.75,
+      fragile: true
+    });
+  });
+
   it("필수값 누락, 숫자 오류, 중복 박스명은 행 번호와 사유로 반환하고 저장 후보에서 제외한다", () => {
     // Given
     const rows = [

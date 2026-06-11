@@ -30,6 +30,7 @@ describe("development deliverables document", () => {
     assert.match(document, /오버행 파레트/);
     assert.match(document, /부분 지지 허용/);
     assert.match(document, /\.xlsx 일괄등록/);
+    assert.match(document, /컬럼명 기준으로 값을 읽어 열 순서가 바뀌어도 동작/);
     assert.match(document, /선택 순서 기반 우선순위/);
     assert.match(document, /부분 지지 허용 55% 현장 검증/);
     assert.match(document, /추가 박스 시뮬레이션 현장 검증/);

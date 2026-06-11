@@ -120,6 +120,7 @@ export function createDraftBlockImportPreview(
     return createRejectedPreview(headerValidation);
   }
 
+  const columnIndexByHeader = createColumnIndexByHeader(headerRow ?? []);
   const existingTemplateByName = new Map(
     (options.existingTemplates ?? []).map((template) => [normalizeDuplicateKey(template.name), template])
   );
@@ -133,7 +134,7 @@ export function createDraftBlockImportPreview(
       continue;
     }
 
-    const parsed = parseImportRow(createRowByColumn(rawRow), rowNumber, existingTemplateByName);
+    const parsed = parseImportRow(createRowByColumn(rawRow, columnIndexByHeader), rowNumber, existingTemplateByName);
 
     if (parsed.errors.length > 0) {
       errors.push(...parsed.errors);
@@ -208,6 +209,20 @@ function findDuplicateHeaders(headers: string[]) {
   });
 
   return Array.from(duplicates);
+}
+
+function createColumnIndexByHeader(headerRow: readonly unknown[]) {
+  const indexByHeader = new Map<string, number>();
+
+  headerRow.forEach((cell, index) => {
+    const header = normalizeText(cell);
+
+    if (header) {
+      indexByHeader.set(header, index);
+    }
+  });
+
+  return indexByHeader;
 }
 
 function parseImportRow(
@@ -300,9 +315,10 @@ function createLoadPriorityError(rowNumber: number) {
   };
 }
 
-function createRowByColumn(rawRow: readonly unknown[]) {
+function createRowByColumn(rawRow: readonly unknown[], columnIndexByHeader: Map<string, number>) {
   return DRAFT_BLOCK_XLSX_COLUMNS.reduce((row, column, index) => {
-    row[column] = rawRow[index];
+    const columnIndex = columnIndexByHeader.get(column) ?? index;
+    row[column] = rawRow[columnIndex];
     return row;
   }, {} as ImportRowByColumn);
 }
