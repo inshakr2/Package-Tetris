@@ -27,6 +27,30 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasMultiSelectContract, true);
   });
 
+  it("추가 박스가 6개를 넘으면 본문에 펼치지 않고 모달에서 페이지 단위로 선택한다", () => {
+    // Given
+    const hasInlineLimit =
+      workspaceSource.includes("const CHAIN_INLINE_OPTION_LIMIT = 6") &&
+      workspaceSource.includes("const CHAIN_PICKER_PAGE_SIZE = 10") &&
+      workspaceSource.includes("const usePickerDialog = blockOptions.length > CHAIN_INLINE_OPTION_LIMIT");
+    const hasPickerAction =
+      workspaceSource.includes("저장된 박스 찾아 선택") &&
+      workspaceSource.includes('aria-controls="chain-block-picker-dialog"') &&
+      workspaceSource.includes("setChainPickerOpen(true)");
+    const hasPickerDialog =
+      workspaceSource.includes("function ChainBlockPickerDialog") &&
+      workspaceSource.includes('id="chain-block-picker-dialog"') &&
+      workspaceSource.includes("추가 시뮬레이션 박스 찾기") &&
+      workspaceSource.includes("currentChainPickerPage") &&
+      workspaceSource.includes("pagedTemplates.map");
+
+    // When
+    const hasScalablePickerContract = hasInlineLimit && hasPickerAction && hasPickerDialog;
+
+    // Then
+    assert.equal(hasScalablePickerContract, true);
+  });
+
   it("추가 박스 시뮬레이션은 상위/하위 그룹 필터로 저장 박스를 좁혀 찾는다", () => {
     // Given
     const hasGroupFilterState =
@@ -76,19 +100,26 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasVariantContract, true);
   });
 
-  it("선택한 추가 결과는 박스별 추가 수량을 비교 표로 보여준다", () => {
+  it("선택한 추가 결과는 박스별 조건, 추가 가능 수량, 상태를 비교 표로 보여준다", () => {
     // Given
     const hasQuantityTable =
       workspaceSource.includes('className="chain-variant-quantity-table"') &&
       workspaceSource.includes("selectedVariant.addedQuantities.map") &&
       workspaceSource.includes("<th>박스</th>") &&
-      workspaceSource.includes("<th>추가 수량</th>") &&
-      workspaceSource.includes("총 추가");
+      workspaceSource.includes("<th>추가 조건</th>") &&
+      workspaceSource.includes("<th>추가 가능</th>") &&
+      workspaceSource.includes("<th>상태</th>") &&
+      workspaceSource.includes("createChainQuantityStatusCopy") &&
+      workspaceSource.includes("총 추가") &&
+      workspaceSource.includes("남은 부피");
     const hasTableStyles =
       /\.chain-variant-quantity-table\s*{[\s\S]*?width:\s*100%;[\s\S]*?border-collapse:\s*collapse;[\s\S]*?}/.test(
         styles
       ) &&
       /\.chain-variant-quantity-table\s+th,[\s\S]*?\.chain-variant-quantity-table\s+td\s*{[\s\S]*?padding:\s*8px;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-variant-quantity-table\s+tfoot\s+th,[\s\S]*?\.chain-variant-quantity-table\s+tfoot\s+td\s*{[\s\S]*?font-weight:\s*800;[\s\S]*?}/.test(
         styles
       );
 
@@ -133,6 +164,11 @@ describe("multi-chain-simulation-layout", () => {
     const hasVariantTouchTarget =
       /\.chain-variant-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
       /\.chain-variant-button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(styles);
+    const hasPickerDialogTouchTarget =
+      /\.chain-picker-dialog\s*{[\s\S]*?width:\s*min\(820px,[\s\S]*?background:\s*var\(--surface\);[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-picker-dialog-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?overflow:\s*auto;[\s\S]*?}/.test(styles);
     const hasFilterTouchTarget =
       /\.chain-filter-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
       /\.chain-filter-row\s+select\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(styles);
@@ -142,11 +178,19 @@ describe("multi-chain-simulation-layout", () => {
       ) &&
       /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-filter-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
+      ) &&
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-picker-dialog\s*{[\s\S]*?width:\s*100vw;[\s\S]*?height:\s*100dvh;[\s\S]*?}/.test(
+        styles
       );
 
     // When
     const hasResponsiveContract =
-      hasSelectionSummary && hasSearchField && hasVariantTouchTarget && hasFilterTouchTarget && hasMobileLayout;
+      hasSelectionSummary &&
+      hasSearchField &&
+      hasVariantTouchTarget &&
+      hasPickerDialogTouchTarget &&
+      hasFilterTouchTarget &&
+      hasMobileLayout;
 
     // Then
     assert.equal(hasResponsiveContract, true);

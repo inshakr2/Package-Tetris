@@ -30,10 +30,10 @@ describe("field-number-input-layout", () => {
     // Given / When
     const hasVisibleQuantityUnits =
       source.includes("이번 작업 수량(개)") &&
-      source.includes("원하는 추가 수량(개)");
+      source.includes("지정 수량(개)");
     const hasA11yQuantityUnits =
       source.includes('aria-label="이번 작업 수량 개"') &&
-      source.includes('aria-label="추가할 수량"');
+      source.includes("지정 수량");
     const hasRemovedTemplateDefaultQuantity =
       !source.includes("기본 수량(개)") && !source.includes('aria-label="박스 기본 수량 개"');
     const hasIntegerSteps = source.includes('step="1"');

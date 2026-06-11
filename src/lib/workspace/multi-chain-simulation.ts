@@ -15,6 +15,7 @@ export interface MultiChainSimulationInput {
   runId: string;
   policy: PlacementPolicy;
   requestedQuantity?: number;
+  requestedQuantitiesByTemplateId?: Record<string, number | undefined>;
 }
 
 export interface MultiChainSimulationTemplateQuantity {
@@ -51,6 +52,9 @@ interface CandidateSimulation {
 
 export function runMultiChainSimulationV0(input: MultiChainSimulationInput): MultiChainSimulationOutput {
   const blockTemplates = dedupeTemplates(input.blockTemplates);
+  const requestedQuantitiesByTemplateId = normalizeRequestedQuantitiesByTemplateId(
+    input.requestedQuantitiesByTemplateId
+  );
 
   if (blockTemplates.length === 0) {
     return {
@@ -79,8 +83,17 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
     };
   }
 
+  if (requestedQuantitiesByTemplateId === "invalid") {
+    return {
+      runId: input.runId,
+      recommendedVariantId: null,
+      variants: [],
+      warnings: ["박스별 지정 수량은 1개 이상 정수로 입력하세요."]
+    };
+  }
+
   const candidates = createTemplatePermutations(blockTemplates).map((order, index) =>
-    simulateTemplateOrder(input, order, `candidate-${index + 1}`)
+    simulateTemplateOrder(input, order, `candidate-${index + 1}`, requestedQuantitiesByTemplateId)
   );
   const recommendedCandidate = chooseRecommendedCandidate(candidates);
   const recommendedVariantId = `${input.runId}-recommended`;
@@ -93,7 +106,12 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
     },
     ...blockTemplates.map((template) => {
       const priorityOrder = [template, ...blockTemplates.filter((item) => item.blockTemplateId !== template.blockTemplateId)];
-      const candidate = simulateTemplateOrder(input, priorityOrder, `priority-${template.blockTemplateId}`);
+      const candidate = simulateTemplateOrder(
+        input,
+        priorityOrder,
+        `priority-${template.blockTemplateId}`,
+        requestedQuantitiesByTemplateId
+      );
 
       return {
         ...candidate.variant,
@@ -116,7 +134,8 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
 function simulateTemplateOrder(
   input: MultiChainSimulationInput,
   order: BlockTemplate[],
-  runSuffix: string
+  runSuffix: string,
+  requestedQuantitiesByTemplateId: Map<string, number>
 ): CandidateSimulation {
   let currentResult: ResultSummary = {
     ...input.result,
@@ -131,12 +150,18 @@ function simulateTemplateOrder(
       return;
     }
 
+    const templateRequestedQuantity = requestedQuantitiesByTemplateId.get(template.blockTemplateId);
+    const templateCalculationLimit =
+      templateRequestedQuantity === undefined
+        ? remainingCalculationLimit
+        : Math.min(templateRequestedQuantity, remainingCalculationLimit);
+
     const output = runChainSimulationV0({
       result: currentResult,
       blockTemplate: template,
       runId: `${input.runId}-${runSuffix}-${index + 1}`,
       policy: input.policy,
-      requestedQuantity: remainingCalculationLimit
+      requestedQuantity: templateCalculationLimit
     });
 
     outputs.push(output);
@@ -167,6 +192,30 @@ function simulateTemplateOrder(
       warnings: collectVariantWarnings(outputs, input.requestedQuantity === undefined && remainingCalculationLimit <= 0)
     }
   };
+}
+
+function normalizeRequestedQuantitiesByTemplateId(
+  requestedQuantitiesByTemplateId: Record<string, number | undefined> | undefined
+) {
+  const quantityMap = new Map<string, number>();
+
+  if (!requestedQuantitiesByTemplateId) {
+    return quantityMap;
+  }
+
+  for (const [blockTemplateId, requestedQuantity] of Object.entries(requestedQuantitiesByTemplateId)) {
+    if (requestedQuantity === undefined) {
+      continue;
+    }
+
+    if (!Number.isSafeInteger(requestedQuantity) || requestedQuantity < 1) {
+      return "invalid";
+    }
+
+    quantityMap.set(blockTemplateId, requestedQuantity);
+  }
+
+  return quantityMap;
 }
 
 function createSkippedChainOutput(

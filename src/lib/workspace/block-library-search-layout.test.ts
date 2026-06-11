@@ -169,6 +169,38 @@ describe("block-library-search-layout", () => {
     assert.ok(hasRowLevelFeedback, "xlsx import should show row-level errors and candidate summaries");
   });
 
+  it("엑셀 일괄등록은 파일 선택 전 포맷 안내 dialog를 제공한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const hasFormatAction =
+      source.includes("엑셀 포맷 보기") &&
+      source.includes('aria-controls="block-template-import-format-dialog"') &&
+      source.includes("setBlockImportFormatDialogOpen(true)");
+    const hasFormatDialog =
+      source.includes("function BlockTemplateImportFormatDialog") &&
+      source.includes('id="block-template-import-format-dialog"') &&
+      source.includes("엑셀 박스 일괄등록 포맷") &&
+      source.includes("BLOCK_TEMPLATE_XLSX_COLUMNS.join") &&
+      source.includes("BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS");
+    const hasAutomationCopy =
+      source.includes("업무 자동화 기준") &&
+      source.includes("첫 행은 아래 열 이름과 동일해야 하며 .xlsx 파일만 지원합니다.") &&
+      source.includes("이 포맷으로 파일 선택");
+    const hasFormatStyles =
+      /\.block-template-format-callout\s*{[\s\S]*?display:\s*grid;[\s\S]*?background:\s*#f7fbff;[\s\S]*?}/.test(css) &&
+      /\.block-template-format-table-wrap\s*{[\s\S]*?overflow:\s*auto;[\s\S]*?background:\s*white;[\s\S]*?}/.test(css) &&
+      /\.block-template-format-table\s*{[\s\S]*?min-width:\s*680px;[\s\S]*?border-collapse:\s*collapse;[\s\S]*?}/.test(css);
+
+    // Then
+    assert.ok(hasFormatAction, "xlsx import should expose a format guide before picking a file");
+    assert.ok(hasFormatDialog, "format guide should render required headers and sample rows");
+    assert.ok(hasAutomationCopy, "format guide should explain automation-friendly .xlsx requirements");
+    assert.ok(hasFormatStyles, "format guide should stay readable with wide Excel columns");
+  });
+
   it("저장된 박스 dialog는 불투명 배경, pagination, 모바일 48px 터치 타깃을 유지한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");

@@ -180,6 +180,67 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(recommended?.warnings.includes("계산량을 줄이기 위해 결과별 최대 300개까지만 계산했습니다."), true);
   });
 
+  it("박스별 지정 수량은 해당 박스만 상한으로 제한하고 나머지 박스는 최대 수량으로 계산한다", () => {
+    // Given
+    const fixedTemplate = createTemplate({
+      blockTemplateId: "template-fixed",
+      name: "고정 수량 박스",
+      dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+    });
+    const maxTemplate = createTemplate({
+      blockTemplateId: "template-max",
+      name: "최대 계산 박스",
+      dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+    });
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result: createResult(),
+      blockTemplates: [fixedTemplate, maxTemplate],
+      runId: "multi-run-template-limits",
+      policy: DEFAULT_POLICY,
+      requestedQuantitiesByTemplateId: {
+        [fixedTemplate.blockTemplateId]: 10
+      }
+    });
+    const recommended = output.variants.find((variant) => variant.mode === "recommended");
+    const fixedQuantity = recommended?.addedQuantities.find(
+      (item) => item.blockTemplateId === fixedTemplate.blockTemplateId
+    );
+    const maxQuantity = recommended?.addedQuantities.find(
+      (item) => item.blockTemplateId === maxTemplate.blockTemplateId
+    );
+
+    // Then
+    assert.equal(output.warnings.length, 0);
+    assert.equal(fixedQuantity?.addedQuantity, 10);
+    assert.ok((maxQuantity?.addedQuantity ?? 0) > 10, "unlimited template should keep filling the remaining capacity");
+    assert.equal(recommended?.totalAddedQuantity, MAX_MULTI_CHAIN_ADDED_BLOCKS);
+  });
+
+  it("박스별 지정 수량이 1개 미만이면 계산하지 않고 현장 안내를 반환한다", () => {
+    // Given
+    const template = createTemplate({
+      blockTemplateId: "template-invalid",
+      name: "잘못된 수량 박스"
+    });
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result: createResult(),
+      blockTemplates: [template],
+      runId: "multi-run-invalid-template-limit",
+      policy: DEFAULT_POLICY,
+      requestedQuantitiesByTemplateId: {
+        [template.blockTemplateId]: 0
+      }
+    });
+
+    // Then
+    assert.deepEqual(output.variants, []);
+    assert.deepEqual(output.warnings, ["박스별 지정 수량은 1개 이상 정수로 입력하세요."]);
+  });
+
   it("부분 지지 허용 ON이면 추가 시뮬레이션도 55% 이상 받침면에 박스를 더 쌓는다", () => {
     // Given
     const result = createResult([

@@ -73,6 +73,7 @@ import {
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
+  BLOCK_TEMPLATE_XLSX_COLUMNS,
   readBlockTemplateXlsxFile,
   type BlockTemplateImportCandidate,
   type BlockTemplateImportPreview
@@ -263,6 +264,24 @@ const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
 const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
 const BLOCK_LIBRARY_PAGE_SIZE = 12;
 const BLOCK_GROUP_PAGE_SIZE = 10;
+const CHAIN_INLINE_OPTION_LIMIT = 6;
+const CHAIN_PICKER_PAGE_SIZE = 10;
+
+const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
+  { name: "상위그룹", requirement: "선택", description: "예: 금영, 엔터그레인. 비워도 되지만 자동화 파일에서는 같은 표기를 유지하세요." },
+  { name: "하위그룹", requirement: "선택", description: "예: 스피커, 앰프. 상위그룹이 있을 때 함께 묶어 검색할 수 있습니다." },
+  { name: "박스명", requirement: "필수", description: "저장된 박스명과 중복되지 않아야 합니다." },
+  { name: "가로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "세로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "무게kg", requirement: "선택", description: "소수 입력이 가능하며 비워둘 수 있습니다." },
+  { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." }
+] as const;
+
+const BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS = [
+  ["금영", "스피커", "KMS-210 스피커 박스", "420", "360", "520", "18.5", "아니오"],
+  ["엔터그레인", "앰프", "EG-AMP 조합 박스", "500", "410", "220", "", "예"]
+] as const;
 
 const Result3DCanvas = dynamic(
   () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
@@ -1992,6 +2011,7 @@ function BlockLibraryPanel({
   const [blockLibraryDialogOpen, setBlockLibraryDialogOpen] = useState(false);
   const blockImportInputRef = useRef<HTMLInputElement>(null);
   const [blockImportDialogOpen, setBlockImportDialogOpen] = useState(false);
+  const [blockImportFormatDialogOpen, setBlockImportFormatDialogOpen] = useState(false);
   const [blockImportPreview, setBlockImportPreview] = useState<BlockTemplateImportPreview | null>(null);
   const [blockImportFileName, setBlockImportFileName] = useState("");
   const [blockImportLoading, setBlockImportLoading] = useState(false);
@@ -2059,6 +2079,13 @@ function BlockLibraryPanel({
     closeBlockImportDialog();
   };
 
+  const openBlockImportFilePicker = () => {
+    setBlockImportFormatDialogOpen(false);
+    window.setTimeout(() => {
+      blockImportInputRef.current?.click();
+    }, 0);
+  };
+
   return (
     <section className="rail-section block-template-library">
       <h3>저장된 박스</h3>
@@ -2078,6 +2105,15 @@ function BlockLibraryPanel({
           >
             <PackagePlus size={16} />
             저장된 박스 찾아 추가
+          </button>
+          <button
+            className="secondary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-template-import-format-dialog"
+            onClick={() => setBlockImportFormatDialogOpen(true)}
+          >
+            <Eye size={16} />
+            엑셀 포맷 보기
           </button>
           <button
             className="secondary-button"
@@ -2115,6 +2151,11 @@ function BlockLibraryPanel({
         preview={blockImportPreview}
         onClose={closeBlockImportDialog}
         onConfirm={applyBlockTemplateImport}
+      />
+      <BlockTemplateImportFormatDialog
+        open={blockImportFormatDialogOpen}
+        onClose={() => setBlockImportFormatDialogOpen(false)}
+        onPickFile={openBlockImportFilePicker}
       />
     </section>
   );
@@ -2460,6 +2501,133 @@ function BlockTemplateImportDialog({
             </button>
             <button className="primary-button" onClick={onConfirm} disabled={!preview || !preview.canImport}>
               일괄등록 적용
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function BlockTemplateImportFormatDialog({
+  open,
+  onClose,
+  onPickFile
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPickFile: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-block-template-format-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="block-template-import-format-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog block-template-import-format-dialog"
+      aria-modal="true"
+      aria-labelledby="block-template-import-format-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-template-import-format-dialog-title">엑셀 박스 일괄등록 포맷</h2>
+            <p className="fine-print">첫 행은 아래 열 이름과 동일해야 하며 .xlsx 파일만 지원합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-block-template-format-close="true"
+            onClick={onClose}
+            aria-label="엑셀 박스 일괄등록 포맷 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-format-callout">
+            <strong>업무 자동화 기준</strong>
+            <span>
+              자동으로 엑셀을 만들 때는 열 순서를 바꾸지 말고 {BLOCK_TEMPLATE_XLSX_COLUMNS.join(" / ")} 순서로
+              내보내면 바로 등록할 수 있습니다.
+            </span>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="엑셀 열 설명">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  <th>열 이름</th>
+                  <th>구분</th>
+                  <th>입력 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS.map((column) => (
+                  <tr key={column.name}>
+                    <th scope="row">{column.name}</th>
+                    <td>{column.requirement}</td>
+                    <td>{column.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="엑셀 샘플 행">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  {BLOCK_TEMPLATE_XLSX_COLUMNS.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => (
+                  <tr key={row.join("-")}>
+                    {row.map((cell, index) => (
+                      <td key={`${row[2]}-${BLOCK_TEMPLATE_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button className="primary-button" onClick={onPickFile}>
+              이 포맷으로 파일 선택
             </button>
           </div>
         </div>
@@ -3372,7 +3540,9 @@ const ResultStage = ({
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스를 최대 3개까지 선택하세요.");
-  const [chainRequestedQuantity, setChainRequestedQuantity] = useState(1);
+  const [chainRequestedQuantitiesByTemplateId, setChainRequestedQuantitiesByTemplateId] = useState<
+    Record<string, number | null>
+  >({});
   const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -3533,6 +3703,7 @@ const ResultStage = ({
     setThreeDialogOpen(false);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
+    setChainRequestedQuantitiesByTemplateId({});
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
@@ -3780,6 +3951,17 @@ const ResultStage = ({
       : [...selectedChainTemplateIds, blockTemplateId];
 
     setSelectedChainTemplateIds(nextSelectedTemplateIds);
+    setChainRequestedQuantitiesByTemplateId((current) => {
+      const next = { ...current };
+
+      if (isSelected) {
+        delete next[blockTemplateId];
+      } else if (!(blockTemplateId in next)) {
+        next[blockTemplateId] = null;
+      }
+
+      return next;
+    });
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage(
@@ -3790,11 +3972,7 @@ const ResultStage = ({
   }
 
   function calculateChainPreview() {
-    calculateChainPreviewWithQuantity();
-  }
-
-  function calculateRequestedChainPreview() {
-    calculateChainPreviewWithQuantity(chainRequestedQuantity);
+    calculateChainPreviewWithQuantity(createSelectedChainQuantityLimitMap());
   }
 
   function selectChainVariant(variantId: string) {
@@ -3811,8 +3989,11 @@ const ResultStage = ({
     setChainStatusMessage(`${variant.label}: 총 ${variant.totalAddedQuantity}개 추가 가능`);
   }
 
-  function changeChainRequestedQuantity(quantity: number) {
-    setChainRequestedQuantity(quantity);
+  function changeChainTemplateQuantityLimit(blockTemplateId: string, quantity: number | null) {
+    setChainRequestedQuantitiesByTemplateId((current) => ({
+      ...current,
+      [blockTemplateId]: quantity
+    }));
 
     if (!chainPreview) {
       return;
@@ -3820,26 +4001,34 @@ const ResultStage = ({
 
     clearChainPreviewState();
     setChainStatus("idle");
-    setChainStatusMessage("수량이 바뀌었습니다. 다시 계산하세요.");
+    setChainStatusMessage("추가 조건이 바뀌었습니다. 다시 계산하세요.");
   }
 
-  function calculateChainPreviewWithQuantity(requestedQuantity?: number) {
+  function createSelectedChainQuantityLimitMap() {
+    return Object.fromEntries(
+      selectedChainTemplates.flatMap((template) => {
+        const requestedQuantity = chainRequestedQuantitiesByTemplateId[template.blockTemplateId];
+
+        return requestedQuantity && requestedQuantity >= 1
+          ? [[template.blockTemplateId, requestedQuantity] as const]
+          : [];
+      })
+    );
+  }
+
+  function calculateChainPreviewWithQuantity(requestedQuantitiesByTemplateId: Record<string, number> = {}) {
     if (!latestResult || selectedChainTemplates.length === 0) {
       setChainStatus("idle");
       setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
       return;
     }
 
-    if (requestedQuantity && selectedChainTemplates.length !== 1) {
-      setChainStatus("error");
-      setChainStatusMessage("지정 수량 계산은 박스 1개를 선택했을 때만 사용할 수 있습니다.");
-      return;
-    }
+    const hasQuantityLimits = Object.keys(requestedQuantitiesByTemplateId).length > 0;
 
     setChainStatus("calculating");
     setChainStatusMessage(
-      requestedQuantity
-        ? `${requestedQuantity}개 추가 기준으로 계산하고 있습니다.`
+      hasQuantityLimits
+        ? "박스별 지정 수량 조건으로 추천 결과를 계산하고 있습니다."
         : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
@@ -3855,7 +4044,7 @@ const ResultStage = ({
             partialSupportEnabled: workspacePolicy.partialSupportEnabled,
             minimumSupportRatio: workspacePolicy.minimumSupportRatio
           },
-          requestedQuantity
+          requestedQuantitiesByTemplateId
         });
         const selectedVariant =
           output.variants.find((variant) => variant.variantId === output.recommendedVariantId) ??
@@ -3884,8 +4073,8 @@ const ResultStage = ({
         if (selectedVariant.totalAddedQuantity > 0) {
           setChainStatus("preview");
           setChainStatusMessage(
-            requestedQuantity
-              ? `${selectedVariant.label}: 요청 ${requestedQuantity}개 중 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+            hasQuantityLimits
+              ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
               : `${selectedVariant.label}: 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
           );
           return;
@@ -3893,8 +4082,8 @@ const ResultStage = ({
 
         setChainStatus("empty");
         setChainStatusMessage(
-          requestedQuantity
-            ? `${selectedVariant.label}은 요청한 ${requestedQuantity}개를 더 넣을 수 없습니다.`
+          hasQuantityLimits
+            ? `${selectedVariant.label}은 지정 조건의 박스를 더 넣을 수 없습니다.`
             : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
         );
       } catch {
@@ -4420,7 +4609,7 @@ const ResultStage = ({
         blockOptions={filteredChainBlockOptions}
         blockGroups={blockGroups}
         selectedTemplateIds={selectedChainTemplateIds}
-        selectedTemplateNames={selectedChainTemplates.map((template) => template.name)}
+        selectedTemplates={selectedChainTemplates}
         searchTerm={chainSearchTerm}
         group1Filter={chainGroup1Filter}
         group2Filter={chainGroup2Filter}
@@ -4430,7 +4619,7 @@ const ResultStage = ({
         minimumSupportRatio={workspacePolicy.minimumSupportRatio}
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
-        requestedQuantity={chainRequestedQuantity}
+        requestedQuantitiesByTemplateId={chainRequestedQuantitiesByTemplateId}
         preview={chainPreview}
         variants={chainMultiPreview?.variants ?? []}
         selectedVariantId={selectedChainVariantId}
@@ -4447,8 +4636,7 @@ const ResultStage = ({
         onToggleTemplate={toggleChainTemplateSelection}
         onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
-        onCalculateRequested={calculateRequestedChainPreview}
-        onRequestedQuantityChange={changeChainRequestedQuantity}
+        onTemplateQuantityLimitChange={changeChainTemplateQuantityLimit}
         onConfirm={confirmChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
@@ -5023,12 +5211,24 @@ function ExpandedThreeViewDialog({
   );
 }
 
+interface ChainBlockPickerDialogProps {
+  open: boolean;
+  templates: BlockTemplate[];
+  selectedTemplateIds: string[];
+  onToggleTemplate: (blockTemplateId: string) => void;
+  onClose: () => void;
+}
+
+function ChainBlockPickerDialog(props: ChainBlockPickerDialogProps) {
+  return <ChainBlockPickerDialogBody {...props} />;
+}
+
 function ChainSimulationPanel({
   latestResult,
   blockOptions,
   blockGroups,
   selectedTemplateIds,
-  selectedTemplateNames,
+  selectedTemplates,
   searchTerm,
   group1Filter,
   group2Filter,
@@ -5038,7 +5238,7 @@ function ChainSimulationPanel({
   minimumSupportRatio,
   chainStatus,
   statusMessage,
-  requestedQuantity,
+  requestedQuantitiesByTemplateId,
   preview,
   variants,
   selectedVariantId,
@@ -5052,8 +5252,7 @@ function ChainSimulationPanel({
   onToggleTemplate,
   onSelectVariant,
   onCalculate,
-  onCalculateRequested,
-  onRequestedQuantityChange,
+  onTemplateQuantityLimitChange,
   onConfirm,
   onCreateResult,
   onClearSelection,
@@ -5063,7 +5262,7 @@ function ChainSimulationPanel({
   blockOptions: BlockTemplate[];
   blockGroups: BlockGroup[];
   selectedTemplateIds: string[];
-  selectedTemplateNames: string[];
+  selectedTemplates: BlockTemplate[];
   searchTerm: string;
   group1Filter: string;
   group2Filter: string;
@@ -5073,7 +5272,7 @@ function ChainSimulationPanel({
   minimumSupportRatio: number;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
-  requestedQuantity: number;
+  requestedQuantitiesByTemplateId: Record<string, number | null>;
   preview: ChainSimulationOutput | null;
   variants: MultiChainSimulationVariant[];
   selectedVariantId: string | null;
@@ -5087,23 +5286,26 @@ function ChainSimulationPanel({
   onToggleTemplate: (blockTemplateId: string) => void;
   onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
-  onCalculateRequested: () => void;
-  onRequestedQuantityChange: (quantity: number) => void;
+  onTemplateQuantityLimitChange: (blockTemplateId: string, quantity: number | null) => void;
   onConfirm: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
   onUndo: () => void;
 }) {
+  const [chainPickerOpen, setChainPickerOpen] = useState(false);
   const hasResult = Boolean(latestResult);
   const canCalculate = hasResult && selectedTemplateIds.length > 0 && chainStatus !== "calculating";
-  const canCalculateRequested = canCalculate && selectedTemplateIds.length === 1 && requestedQuantity >= 1;
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
   const partialSupportPercent = Math.round(minimumSupportRatio * 100);
-  const visibleBlockOptions = blockOptions.slice(0, 12);
+  const usePickerDialog = blockOptions.length > CHAIN_INLINE_OPTION_LIMIT;
+  const visibleBlockOptions = blockOptions.slice(0, CHAIN_INLINE_OPTION_LIMIT);
   const hiddenBlockOptionCount = Math.max(0, blockOptions.length - visibleBlockOptions.length);
   const selectedVariant = variants.find((variant) => variant.variantId === selectedVariantId) ?? null;
   const hasNarrowingCondition = Boolean(searchTerm.trim() || group1Filter || group2Filter);
   const blockGroupCount = blockGroups.length;
+  const hasQuantityLimits = selectedTemplates.some(
+    (template) => requestedQuantitiesByTemplateId[template.blockTemplateId]
+  );
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -5185,23 +5387,40 @@ function ChainSimulationPanel({
               <span className="badge" data-tone={selectedTemplateIds.length ? "green" : undefined}>
                 선택 {selectedTemplateIds.length}/3
               </span>
-              {selectedTemplateNames.length ? (
-                selectedTemplateNames.map((name) => (
-                  <span key={name} className="badge" data-tone="green">
-                    {name}
+              {selectedTemplates.length ? (
+                selectedTemplates.map((template) => (
+                  <span key={template.blockTemplateId} className="badge" data-tone="green">
+                    {template.name}
                   </span>
                 ))
               ) : (
                 <span className="fine-print">비슷하게 남는 공간을 시험할 박스를 선택하세요.</span>
               )}
             </div>
-            <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
-              {visibleBlockOptions.length === 0 ? (
+            {blockOptions.length === 0 ? (
+              <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
                 <p className="fine-print">
                   {hasNarrowingCondition ? "조건에 맞는 박스가 없습니다." : "저장된 박스가 없습니다."}
                 </p>
-              ) : (
-                visibleBlockOptions.map((template) => (
+              </div>
+            ) : usePickerDialog ? (
+              <div className="chain-picker-compact">
+                <button
+                  className="secondary-button"
+                  aria-haspopup="dialog"
+                  aria-controls="chain-block-picker-dialog"
+                  onClick={() => setChainPickerOpen(true)}
+                >
+                  <PackagePlus size={16} />
+                  저장된 박스 찾아 선택
+                </button>
+                <span className="fine-print">
+                  현재 조건 결과 {blockOptions.length}개 중 최대 3개를 선택합니다.
+                </span>
+              </div>
+            ) : (
+              <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
+                {visibleBlockOptions.map((template) => (
                   <button
                     key={template.blockTemplateId}
                     className="chain-option-button"
@@ -5211,16 +5430,25 @@ function ChainSimulationPanel({
                   >
                     <strong>{template.name}</strong>
                     <span>
-                            {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
-                            {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
+                      {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                      {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
                     </span>
                   </button>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
             {hiddenBlockOptionCount > 0 ? (
-              <p className="fine-print">검색 결과가 많습니다. 더 좁혀 찾으면 {hiddenBlockOptionCount}개를 더 볼 수 있습니다.</p>
+              <p className="fine-print">
+                검색 결과가 많습니다. 버튼을 눌러 전체 결과를 확인하거나 검색 조건을 좁혀보세요.
+              </p>
             ) : null}
+            <ChainBlockPickerDialog
+              open={chainPickerOpen}
+              templates={blockOptions}
+              selectedTemplateIds={selectedTemplateIds}
+              onToggleTemplate={onToggleTemplate}
+              onClose={() => setChainPickerOpen(false)}
+            />
           </div>
 
           <div className="chain-result-panel">
@@ -5277,21 +5505,34 @@ function ChainSimulationPanel({
                     <thead>
                       <tr>
                         <th>박스</th>
-                        <th>추가 수량</th>
+                        <th>추가 조건</th>
+                        <th>추가 가능</th>
+                        <th>상태</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedVariant.addedQuantities.map((item) => (
-                        <tr key={item.blockTemplateId}>
-                          <td>{item.blockName}</td>
-                          <td>{item.addedQuantity}개</td>
-                        </tr>
-                      ))}
+                      {selectedVariant.addedQuantities.map((item) => {
+                        const requestedQuantity = requestedQuantitiesByTemplateId[item.blockTemplateId] ?? null;
+                        const quantityStatus = createChainQuantityStatusCopy(item.addedQuantity, requestedQuantity);
+
+                        return (
+                          <tr key={item.blockTemplateId}>
+                            <td>{item.blockName}</td>
+                            <td>{requestedQuantity ? `${requestedQuantity}개까지` : "최대"}</td>
+                            <td>{item.addedQuantity}개</td>
+                            <td>{quantityStatus}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
                       <tr>
                         <th scope="row">총 추가</th>
+                        <td>{hasQuantityLimits ? "지정 조건 포함" : "최대 계산"}</td>
                         <td>{selectedVariant.totalAddedQuantity}개</td>
+                        <td>남은 부피 {formatVolumeM3(selectedVariant.remainingVolumeM3)}</td>
                       </tr>
-                    </tbody>
+                    </tfoot>
                   </table>
                 ) : null}
               </div>
@@ -5319,19 +5560,55 @@ function ChainSimulationPanel({
               </div>
             ) : null}
 
-            <div className="chain-quantity-control">
-              <label className="chain-quantity-field">
-                원하는 추가 수량(개) 단일 박스
-                <NumberFieldInput
-                  aria-label="추가할 수량"
-                  min={1}
-                  value={requestedQuantity}
-                  onValidValueChange={onRequestedQuantityChange}
-                />
-              </label>
-              <button className="secondary-button" onClick={onCalculateRequested} disabled={!canCalculateRequested}>
-                지정 수량 계산
-              </button>
+            <div className="chain-template-quantity-list" aria-label="추가 박스별 수량 조건">
+              <div>
+                <strong className="chain-field-title">박스별 추가 조건</strong>
+                <p className="fine-print">최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.</p>
+              </div>
+              {selectedTemplates.length === 0 ? (
+                <p className="fine-print">박스를 선택하면 박스별 수량 조건을 조정할 수 있습니다.</p>
+              ) : (
+                selectedTemplates.map((template) => {
+                  const requestedQuantity = requestedQuantitiesByTemplateId[template.blockTemplateId] ?? null;
+
+                  return (
+                    <div className="chain-template-quantity-row" key={template.blockTemplateId}>
+                      <div>
+                        <strong>{template.name}</strong>
+                        <span className="fine-print">{formatDimensions(template.dimensions)}</span>
+                      </div>
+                      <div className="chain-template-quantity-mode" role="group" aria-label={`${template.name} 수량 조건`}>
+                        <button
+                          className="secondary-button"
+                          aria-pressed={requestedQuantity === null}
+                          onClick={() => onTemplateQuantityLimitChange(template.blockTemplateId, null)}
+                        >
+                          최대
+                        </button>
+                        <button
+                          className="secondary-button"
+                          aria-pressed={requestedQuantity !== null}
+                          onClick={() => onTemplateQuantityLimitChange(template.blockTemplateId, requestedQuantity ?? 1)}
+                        >
+                          수량 지정
+                        </button>
+                      </div>
+                      <label className="chain-quantity-field">
+                        지정 수량(개)
+                        <NumberFieldInput
+                          aria-label={`${template.name} 지정 수량`}
+                          min={1}
+                          value={requestedQuantity ?? 1}
+                          disabled={requestedQuantity === null}
+                          onValidValueChange={(quantity) =>
+                            onTemplateQuantityLimitChange(template.blockTemplateId, quantity)
+                          }
+                        />
+                      </label>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="form-actions chain-actions">
@@ -5361,13 +5638,140 @@ function ChainSimulationPanel({
             </div>
             {selectedTemplateIds.length === 0 ? (
               <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
-            ) : selectedTemplateIds.length > 1 ? (
-              <p className="fine-print review-cta-hint">지정 수량 계산은 박스 1개 선택 시에만 사용할 수 있습니다.</p>
             ) : null}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function ChainBlockPickerDialogBody({
+  open,
+  templates,
+  selectedTemplateIds,
+  onToggleTemplate,
+  onClose
+}: ChainBlockPickerDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [chainPickerPage, setChainPickerPage] = useState(1);
+  const chainPickerPageCount = Math.max(1, Math.ceil(templates.length / CHAIN_PICKER_PAGE_SIZE));
+  const currentChainPickerPage = Math.min(chainPickerPage, chainPickerPageCount);
+  const chainPickerPageStart = (currentChainPickerPage - 1) * CHAIN_PICKER_PAGE_SIZE;
+  const pagedTemplates = templates.slice(chainPickerPageStart, chainPickerPageStart + CHAIN_PICKER_PAGE_SIZE);
+
+  useEffect(() => {
+    setChainPickerPage(1);
+  }, [templates]);
+
+  useEffect(() => {
+    if (chainPickerPage > chainPickerPageCount) {
+      setChainPickerPage(chainPickerPageCount);
+    }
+  }, [chainPickerPage, chainPickerPageCount]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-chain-picker-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="chain-block-picker-dialog"
+      ref={dialogRef}
+      className="chain-picker-dialog"
+      aria-modal="true"
+      aria-labelledby="chain-block-picker-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="chain-picker-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="chain-block-picker-dialog-title">추가 시뮬레이션 박스 찾기</h2>
+            <p className="fine-print">현재 검색/그룹 조건에 맞는 박스 중 최대 3개를 선택합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-chain-picker-close="true"
+            onClick={onClose}
+            aria-label="추가 시뮬레이션 박스 찾기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="chain-picker-dialog-body">
+          <p className="fine-print">
+            검색 결과 {templates.length}개 · 선택 {selectedTemplateIds.length}/3 · {currentChainPickerPage}/
+            {chainPickerPageCount} 페이지
+          </p>
+          <div className="chain-picker-dialog-list" role="group" aria-label="추가 시뮬레이션 박스 선택">
+            {templates.length === 0 ? (
+              <p className="fine-print">조건에 맞는 박스가 없습니다. 검색어나 그룹 필터를 바꿔보세요.</p>
+            ) : (
+              pagedTemplates.map((template) => (
+                <button
+                  key={template.blockTemplateId}
+                  className="chain-option-button"
+                  role="checkbox"
+                  aria-checked={selectedTemplateIds.includes(template.blockTemplateId)}
+                  onClick={() => onToggleTemplate(template.blockTemplateId)}
+                >
+                  <strong>{template.name}</strong>
+                  <span>
+                    {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                    {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="block-library-pagination" aria-label="추가 시뮬레이션 박스 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setChainPickerPage((page) => Math.max(1, page - 1))}
+              disabled={currentChainPickerPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentChainPickerPage} / {chainPickerPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setChainPickerPage((page) => Math.min(chainPickerPageCount, page + 1))}
+              disabled={currentChainPickerPage >= chainPickerPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
@@ -6046,12 +6450,14 @@ function NumberFieldInput({
   value,
   min,
   onValidValueChange,
-  "aria-label": ariaLabel
+  "aria-label": ariaLabel,
+  disabled = false
 }: {
   value: number;
   min: number;
   onValidValueChange: (value: number) => void;
   "aria-label": string;
+  disabled?: boolean;
 }) {
   const errorId = useId();
   const [draftValue, setDraftValue] = useState(() => formatNumberFieldDraftValue(value));
@@ -6102,6 +6508,7 @@ function NumberFieldInput({
         min={min}
         step="1"
         value={draftValue}
+        disabled={disabled}
         onBlur={handleBlur}
         onClick={selectNumberFieldValue}
         onFocus={selectNumberFieldValue}
@@ -6224,6 +6631,18 @@ function createImportCandidateMeta(row: BlockTemplateImportCandidate) {
     row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
     row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
   ].join(" · ");
+}
+
+function createChainQuantityStatusCopy(addedQuantity: number, requestedQuantity: number | null) {
+  if (requestedQuantity === null) {
+    return addedQuantity > 0 ? "추가 가능" : "추가 없음";
+  }
+
+  if (addedQuantity >= requestedQuantity) {
+    return "요청 충족";
+  }
+
+  return addedQuantity > 0 ? "일부 가능" : "추가 없음";
 }
 
 function parseOptionalWeightKg(value: string) {
