@@ -261,6 +261,32 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasAccessibleDisabledCalculation, true);
   });
 
+  it("추가 시뮬레이션 보조 액션은 비활성 사유를 버튼 속성으로 제공한다", () => {
+    // Given
+    const hasConfirmDisabledReason =
+      workspaceSource.includes("const chainConfirmDisabledReason =") &&
+      workspaceSource.includes("추천 결과를 계산한 뒤 반영할 수 있습니다.") &&
+      workspaceSource.includes("추가 가능한 결과가 있을 때 반영할 수 있습니다.");
+    const hasUndoDisabledReason =
+      workspaceSource.includes("const chainUndoDisabledReason =") &&
+      workspaceSource.includes("반영된 추가 결과가 있을 때 직전 추가를 취소할 수 있습니다.");
+    const exposesConfirmReason =
+      /aria-label={[\s\S]*?chainConfirmDisabledReason[\s\S]*?`추가 결과 반영 비활성: \$\{chainConfirmDisabledReason\}`[\s\S]*?"선택한 추가 결과 반영"[\s\S]*?}/.test(
+        workspaceSource
+      ) && workspaceSource.includes("title={chainConfirmDisabledReason ?? undefined}");
+    const exposesUndoReason =
+      /aria-label={[\s\S]*?chainUndoDisabledReason[\s\S]*?`직전 추가 취소 비활성: \$\{chainUndoDisabledReason\}`[\s\S]*?"직전 추가 결과 취소"[\s\S]*?}/.test(
+        workspaceSource
+      ) && workspaceSource.includes("title={chainUndoDisabledReason ?? undefined}");
+
+    // When
+    const hasDisabledReasonForSecondaryActions =
+      hasConfirmDisabledReason && hasUndoDisabledReason && exposesConfirmReason && exposesUndoReason;
+
+    // Then
+    assert.equal(hasDisabledReasonForSecondaryActions, true);
+  });
+
   it("결과 변경 또는 선택 초기화 시 추가 박스별 수량 조건과 선택 순서를 함께 비운다", () => {
     // Given
     const latestResultEffect = workspaceSource.match(

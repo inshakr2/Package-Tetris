@@ -5936,6 +5936,16 @@ function ChainSimulationPanel({
       : chainStatus === "calculating"
         ? "추가 가능 수량을 계산하고 있습니다."
         : null;
+  const chainConfirmDisabledReason = !hasResult
+    ? "결과를 먼저 생성하면 추가 결과를 반영할 수 있습니다."
+    : chainStatus === "empty"
+      ? "추가 가능한 결과가 있을 때 반영할 수 있습니다."
+      : !canConfirm
+        ? "추천 결과를 계산한 뒤 반영할 수 있습니다."
+        : null;
+  const chainUndoDisabledReason = latestChainItem
+    ? null
+    : "반영된 추가 결과가 있을 때 직전 추가를 취소할 수 있습니다.";
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -6326,7 +6336,17 @@ function ChainSimulationPanel({
                     ? "다시 계산"
                     : createChainCalculateButtonLabel(hasQuantityLimits, hasPrioritySettings)}
               </button>
-              <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
+              <button
+                className="primary-button"
+                onClick={onConfirm}
+                disabled={!canConfirm}
+                title={chainConfirmDisabledReason ?? undefined}
+                aria-label={
+                  chainConfirmDisabledReason
+                    ? `추가 결과 반영 비활성: ${chainConfirmDisabledReason}`
+                    : "선택한 추가 결과 반영"
+                }
+              >
                 이 결과 반영
               </button>
               {canConfirm ? (
@@ -6339,7 +6359,17 @@ function ChainSimulationPanel({
                   {resultCreating ? resultCalculationProgress.buttonLabel : "결과 다시 생성"}
                 </button>
               ) : null}
-              <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>
+              <button
+                className="secondary-button"
+                onClick={onUndo}
+                disabled={!latestChainItem}
+                title={chainUndoDisabledReason ?? undefined}
+                aria-label={
+                  chainUndoDisabledReason
+                    ? `직전 추가 취소 비활성: ${chainUndoDisabledReason}`
+                    : "직전 추가 결과 취소"
+                }
+              >
                 직전 추가 취소
               </button>
               {chainStatus === "empty" ? (
