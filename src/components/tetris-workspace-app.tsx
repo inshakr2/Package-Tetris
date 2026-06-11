@@ -82,6 +82,12 @@ import {
   type BlockTemplateImportPreview
 } from "@/lib/workspace/block-template-xlsx-import";
 import {
+  createDraftBlockImportSampleWorkbook,
+  readDraftBlockXlsxFile,
+  type DraftBlockImportCandidate,
+  type DraftBlockImportPreview
+} from "@/lib/workspace/draft-block-xlsx-import";
+import {
   calculateBlockVolumeM3,
   hasPositiveDimensions,
   isValidBlockMeasurementInput
@@ -273,13 +279,13 @@ const CHAIN_PICKER_PAGE_SIZE = 10;
 const DRAFT_LOAD_PRIORITY_OPTIONS = [
   { value: 0, label: "기본" },
   { value: 5, label: "먼저 바닥에" },
-  { value: 10, label: "가장 먼저" }
+  { value: 10, label: "맨 아래 우선" }
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
 const CHAIN_TEMPLATE_PRIORITY_OPTIONS = [
   { value: 0, label: "기본" },
   { value: 5, label: "먼저 추가" },
-  { value: 10, label: "가장 먼저" }
+  { value: 10, label: "최우선 추가" }
 ] as const;
 
 const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
@@ -1064,6 +1070,67 @@ export function TetrisWorkspaceApp() {
     );
   }
 
+  function importDraftBlocks(rows: DraftBlockImportCandidate[]) {
+    if (rows.length === 0) {
+      return;
+    }
+
+    updateWorkspace((current, now) => {
+      let nextWorkspace = current;
+      const templateByName = new Map(
+        current.blockTemplates.map((template) => [normalizeTemplateLookupKey(template.name), template])
+      );
+
+      for (const row of rows) {
+        const templateKey = normalizeTemplateLookupKey(row.name);
+        let template = templateByName.get(templateKey);
+
+        if (!template) {
+          const blockTemplateId = createClientId("template");
+
+          nextWorkspace = createBlockTemplate(nextWorkspace, {
+            blockTemplateId,
+            name: row.name,
+            dimensions: row.dimensions,
+            fragile: row.fragile,
+            weightKg: row.weightKg,
+            group1: row.group1,
+            group2: row.group2,
+            addToDraft: false,
+            now
+          });
+
+          template = nextWorkspace.blockTemplates.find((candidate) => candidate.blockTemplateId === blockTemplateId);
+
+          if (!template) {
+            continue;
+          }
+
+          templateByName.set(templateKey, template);
+        }
+
+        const draftBlockItemId = createClientId("item");
+
+        nextWorkspace = addBlockTemplateToDraft(nextWorkspace, {
+          draftBlockItemId,
+          blockTemplateId: template.blockTemplateId,
+          quantity: row.quantity,
+          now
+        });
+
+        if (row.loadPriority > 0) {
+          nextWorkspace = updateDraftBlockItemLoadPriority(nextWorkspace, {
+            draftBlockItemId,
+            loadPriority: row.loadPriority,
+            now
+          });
+        }
+      }
+
+      return nextWorkspace;
+    });
+  }
+
   function deleteBlockTemplate(templateId: string) {
     setPendingDraftUndo((current) => (current?.item.blockTemplateId === templateId ? null : current));
     updateWorkspace((current, now) =>
@@ -1759,6 +1826,7 @@ export function TetrisWorkspaceApp() {
           <div className="section-layout current-work-layout">
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
+              templates={workspace.blockTemplates}
               canResetCurrentWork={canResetCurrentWork}
               resetDisabled={isWorkspaceLocked || !canResetCurrentWork}
               resetDisabledReason={
@@ -1768,6 +1836,8 @@ export function TetrisWorkspaceApp() {
                     ? null
                     : "비울 현재 작업이 없습니다."
               }
+              importDisabled={isWorkspaceLocked}
+              importDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 현재 작업 엑셀을 등록할 수 있습니다." : null}
               demoDisabled={isWorkspaceLocked}
               demoDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다." : null}
               onQuantityChange={updateCurrentQuantity}
@@ -1775,6 +1845,7 @@ export function TetrisWorkspaceApp() {
               onDeleteRequest={requestDelete}
               onRequestResetCurrentWork={requestResetCurrentWork}
               onLoadFieldDemo={loadFieldDemoCurrentWorkIntoDraft}
+              onImportDraftBlocks={importDraftBlocks}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
@@ -2556,6 +2627,140 @@ function BlockTemplateImportDialog({
   );
 }
 
+function DraftBlockImportDialog({
+  open,
+  fileName,
+  preview,
+  confirmDisabled,
+  onClose,
+  onConfirm
+}: {
+  open: boolean;
+  fileName: string;
+  preview: DraftBlockImportPreview | null;
+  confirmDisabled: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previewRows = preview?.rows ?? [];
+  const previewErrors = preview?.errors ?? [];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-draft-block-import-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="draft-block-import-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog"
+      aria-modal="true"
+      aria-labelledby="draft-block-import-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="draft-block-import-dialog-title">현재 작업 엑셀 미리보기</h2>
+            <p className="fine-print">{fileName || "선택한 파일"} 내용을 이번 작업에 추가하기 전에 확인합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-draft-block-import-close="true"
+            onClick={onClose}
+            aria-label="현재 작업 엑셀 미리보기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-import-summary">
+            <div>
+              <strong>추가할 박스 {previewRows.length}개</strong>
+              <span className="fine-print">기존 저장 박스와 같은 이름이면 같은 박스로 연결됩니다.</span>
+            </div>
+            <div>
+              <strong>오류 행 {previewErrors.length}개</strong>
+              <span className="fine-print">오류가 없을 때만 현재 작업에 추가할 수 있습니다.</span>
+            </div>
+          </div>
+          {previewErrors.length > 0 ? (
+            <div className="block-template-import-error-list" role="alert">
+              {previewErrors.map((error, index) => (
+                <p key={`${error.rowNumber ?? "workbook"}-${error.field ?? "file"}-${index}`}>
+                  {error.rowNumber ? `${error.rowNumber}행 · ` : ""}
+                  {error.field ? `${error.field}: ` : ""}
+                  {error.message}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          <div className="block-template-import-list" aria-label="현재 작업에 추가할 박스 미리보기">
+            {previewRows.length === 0 ? (
+              <p className="fine-print">현재 작업에 추가할 수 있는 박스가 없습니다.</p>
+            ) : (
+              previewRows.map((row) => (
+                <article className="library-card" key={`${row.rowNumber}-${row.name}`}>
+                  <div className="card-heading">
+                    <strong>{row.name}</strong>
+                    {row.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createDraftImportCandidateMeta(row)}</p>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button
+              className="primary-button"
+              onClick={onConfirm}
+              disabled={!preview || !preview.canImport || confirmDisabled}
+            >
+              현재 작업에 추가
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 function BlockTemplateImportFormatDialog({
   open,
   onClose,
@@ -3131,21 +3336,28 @@ function BlockGroupManagementDialog({
 
 function CurrentWorkBlocksPanel({
   blocks,
+  templates,
   canResetCurrentWork,
   resetDisabled,
   resetDisabledReason,
+  importDisabled,
+  importDisabledReason,
   demoDisabled,
   demoDisabledReason,
   onQuantityChange,
   onLoadPriorityChange,
   onDeleteRequest,
   onRequestResetCurrentWork,
-  onLoadFieldDemo
+  onLoadFieldDemo,
+  onImportDraftBlocks
 }: {
   blocks: BlockDefinition[];
+  templates: BlockTemplate[];
   canResetCurrentWork: boolean;
   resetDisabled: boolean;
   resetDisabledReason: string | null;
+  importDisabled: boolean;
+  importDisabledReason: string | null;
   demoDisabled: boolean;
   demoDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
@@ -3158,7 +3370,81 @@ function CurrentWorkBlocksPanel({
   ) => void;
   onRequestResetCurrentWork: () => void;
   onLoadFieldDemo: () => void;
+  onImportDraftBlocks: (rows: DraftBlockImportCandidate[]) => void;
 }) {
+  const draftImportInputRef = useRef<HTMLInputElement>(null);
+  const [draftImportDialogOpen, setDraftImportDialogOpen] = useState(false);
+  const [draftImportPreview, setDraftImportPreview] = useState<DraftBlockImportPreview | null>(null);
+  const [draftImportFileName, setDraftImportFileName] = useState("");
+  const [draftImportLoading, setDraftImportLoading] = useState(false);
+  const [draftImportNotice, setDraftImportNotice] = useState<string | null>(null);
+
+  const closeDraftBlockImportDialog = () => {
+    setDraftImportDialogOpen(false);
+    setDraftImportPreview(null);
+    setDraftImportFileName("");
+  };
+
+  const handleDraftImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setDraftImportLoading(true);
+    setDraftImportNotice(null);
+    setDraftImportFileName(file.name);
+
+    try {
+      const preview = await readDraftBlockXlsxFile(file, {
+        existingTemplates: templates.map((template) => ({
+          name: template.name,
+          dimensions: template.dimensions,
+          fragile: template.fragile
+        }))
+      });
+      setDraftImportPreview(preview);
+    } catch (error) {
+      setDraftImportPreview({
+        rows: [],
+        errors: [{ message: toErrorMessage(error) }],
+        canImport: false
+      });
+    } finally {
+      setDraftImportLoading(false);
+      setDraftImportDialogOpen(true);
+    }
+  };
+
+  const applyDraftBlockImport = () => {
+    const preview = draftImportPreview;
+
+    if (!preview || !preview.canImport || importDisabled) {
+      return;
+    }
+
+    onImportDraftBlocks(preview.rows);
+    setDraftImportNotice(`${preview.rows.length}개 박스를 현재 작업에 추가했습니다.`);
+    closeDraftBlockImportDialog();
+  };
+
+  const downloadDraftBlockImportSample = () => {
+    const sample = createDraftBlockImportSampleWorkbook();
+    const blob = new Blob([sample.bytes], { type: sample.mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = sample.fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 수량과 아래층 우선 값을 바꿔 등록하세요.");
+  };
+
   return (
     <section className="current-block-panel">
       <div className="current-work-head">
@@ -3172,6 +3458,35 @@ function CurrentWorkBlocksPanel({
           </div>
         </div>
         <div className="current-work-actions">
+          <button
+            className="secondary-button current-work-sample-action"
+            onClick={downloadDraftBlockImportSample}
+          >
+            <Download size={16} />
+            현재 작업 샘플
+          </button>
+          <button
+            className="secondary-button current-work-import-action"
+            onClick={() => draftImportInputRef.current?.click()}
+            disabled={draftImportLoading || importDisabled}
+            title={importDisabledReason ?? undefined}
+            aria-describedby={importDisabled ? "current-work-import-disabled-reason" : undefined}
+          >
+            <FileUp size={16} />
+            {draftImportLoading ? "파일 확인 중" : "현재 작업 엑셀 등록"}
+          </button>
+          {importDisabled ? (
+            <span id="current-work-import-disabled-reason" className="sr-only">
+              최신본을 불러온 뒤 현재 작업 엑셀을 등록할 수 있습니다.
+            </span>
+          ) : null}
+          <input
+            ref={draftImportInputRef}
+            className="file-input"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleDraftImportFileChange}
+          />
           <button
             className="secondary-button current-work-demo-action"
             onClick={onLoadFieldDemo}
@@ -3204,6 +3519,7 @@ function CurrentWorkBlocksPanel({
           ) : null}
         </div>
       </div>
+      {draftImportNotice ? <p className="fine-print" role="status">{draftImportNotice}</p> : null}
       <div className="block-list">
         {blocks.length === 0 ? (
                   <p className="fine-print">박스를 추가하거나 새 박스를 저장 후 이번 작업에 추가하세요.</p>
@@ -3245,7 +3561,7 @@ function CurrentWorkBlocksPanel({
                     ))}
                   </div>
                 </div>
-                <div className="summary-tile compact">
+                <div className="summary-tile compact draft-block-volume-tile">
                   <span>총 부피</span>
                   <strong>{formatBlockVolumeM3(block)}</strong>
                 </div>
@@ -3263,6 +3579,14 @@ function CurrentWorkBlocksPanel({
           ))
         )}
       </div>
+      <DraftBlockImportDialog
+        open={draftImportDialogOpen}
+        fileName={draftImportFileName}
+        preview={draftImportPreview}
+        confirmDisabled={importDisabled}
+        onClose={closeDraftBlockImportDialog}
+        onConfirm={applyDraftBlockImport}
+      />
     </section>
   );
 }
@@ -6836,6 +7160,18 @@ function createImportCandidateMeta(row: BlockTemplateImportCandidate) {
   ].join(" · ");
 }
 
+function createDraftImportCandidateMeta(row: DraftBlockImportCandidate) {
+  return [
+    `${row.rowNumber}행`,
+    `${row.quantity}개`,
+    getDraftLoadPriorityLabel(row.loadPriority),
+    formatDimensions(row.dimensions),
+    formatOptionalWeightDisplay(row.weightKg),
+    row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
+    row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
+  ].join(" · ");
+}
+
 function createChainQuantityStatusCopy(addedQuantity: number, requestedQuantity: number | null) {
   if (requestedQuantity === null) {
     return addedQuantity > 0 ? "추가 가능" : "추가 없음";
@@ -6989,6 +7325,10 @@ function createClientId(prefix: string) {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeTemplateLookupKey(name: string) {
+  return name.trim().toLocaleLowerCase("ko-KR");
 }
 
 function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace {

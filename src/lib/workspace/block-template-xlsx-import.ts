@@ -20,7 +20,7 @@ export const BLOCK_TEMPLATE_IMPORT_SAMPLE_FILE_NAME = "package-tetris-box-import
 
 const REQUIRED_DIMENSION_COLUMNS = ["가로mm", "세로mm", "높이mm"] as const;
 const UNSAFE_COLUMN_NAMES = new Set(["__proto__", "prototype", "constructor"]);
-const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export const XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 type BlockTemplateXlsxColumn = (typeof BLOCK_TEMPLATE_XLSX_COLUMNS)[number];
 type ImportRowByColumn = Record<BlockTemplateXlsxColumn, unknown>;
@@ -95,12 +95,15 @@ export async function readBlockTemplateXlsxFile(
 }
 
 export function createBlockTemplateImportSampleWorkbook(): BlockTemplateImportSampleWorkbook {
-  const rows = [Array.from(BLOCK_TEMPLATE_XLSX_COLUMNS), ...BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => Array.from(row))];
+  const rows = [
+    Array.from(BLOCK_TEMPLATE_XLSX_COLUMNS),
+    ...BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => Array.from(row))
+  ];
 
   return {
     fileName: BLOCK_TEMPLATE_IMPORT_SAMPLE_FILE_NAME,
     mimeType: XLSX_MIME_TYPE,
-    bytes: createMinimalXlsxWorkbook(rows)
+    bytes: createXlsxWorkbookFromRows(rows)
   };
 }
 
@@ -371,7 +374,7 @@ function parseNumber(value: unknown) {
 }
 
 // 샘플 다운로드만 필요하므로 압축 없는 최소 OOXML workbook을 직접 만든다.
-function createMinimalXlsxWorkbook(rows: readonly (readonly string[])[]): Uint8Array<ArrayBuffer> {
+export function createXlsxWorkbookFromRows(rows: readonly (readonly string[])[]): Uint8Array<ArrayBuffer> {
   const sharedStrings = createSharedStringTable(rows);
   const files = [
     {

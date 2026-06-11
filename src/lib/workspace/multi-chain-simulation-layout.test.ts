@@ -167,7 +167,7 @@ describe("multi-chain-simulation-layout", () => {
       workspaceSource.includes('className="chain-template-priority-mode"') &&
       workspaceSource.includes('aria-label={`${template.name} 추가 우선순위`}') &&
       workspaceSource.includes("먼저 추가") &&
-      workspaceSource.includes("가장 먼저");
+      workspaceSource.includes("최우선 추가");
     const hasPriorityStyles =
       /\.chain-template-priority-mode\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
       /\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
