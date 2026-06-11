@@ -485,6 +485,54 @@ describe("multi-chain-simulation v0", () => {
       true
     );
   });
+
+  it("선택 순서와 박스 우선 variant는 이미 계산한 순열 결과를 재사용한다", () => {
+    // Given
+    const templates = ["a", "b", "c"].map((suffix) =>
+      createTemplate({
+        blockTemplateId: `template-${suffix}`,
+        name: `${suffix.toUpperCase()} 박스`,
+        dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+      })
+    );
+    const chainRunIds: string[] = [];
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result: createResult([
+        createPackedBlock({
+          widthMm: 1000,
+          depthMm: 1000,
+          heightMm: 1000
+        })
+      ]),
+      blockTemplates: templates,
+      runId: "multi-run-reuse-orders",
+      policy: DEFAULT_POLICY,
+      priorityByTemplateId: {
+        [templates[0]?.blockTemplateId ?? ""]: 3,
+        [templates[1]?.blockTemplateId ?? ""]: 2,
+        [templates[2]?.blockTemplateId ?? ""]: 1
+      },
+      chainRunner: (input) => {
+        chainRunIds.push(input.runId);
+
+        return {
+          runId: input.runId,
+          blockTemplateId: input.blockTemplate.blockTemplateId,
+          blockName: input.blockTemplate.name,
+          addedQuantity: 0,
+          spaces: input.result.spaces ?? [],
+          averageUtilizationRate: input.result.averageUtilizationRate,
+          warnings: []
+        };
+      }
+    });
+
+    // Then
+    assert.equal(output.variants.length, 5);
+    assert.equal(chainRunIds.length, 18);
+  });
 });
 
 function createBlockDefinition(
