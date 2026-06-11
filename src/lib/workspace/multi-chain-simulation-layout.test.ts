@@ -130,6 +130,34 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasQuantityComparisonContract, true);
   });
 
+  it("추가 박스 시뮬레이션은 선택 박스별 사용자 지정 우선순위를 제공한다", () => {
+    // Given
+    const hasPriorityState =
+      workspaceSource.includes("chainTemplatePrioritiesByTemplateId") &&
+      workspaceSource.includes("changeChainTemplatePriority") &&
+      workspaceSource.includes("createSelectedChainPriorityMap()");
+    const passesPriorityToEngine =
+      workspaceSource.includes("const priorityByTemplateId = createSelectedChainPriorityMap();") &&
+      workspaceSource.includes("priorityByTemplateId") &&
+      workspaceSource.includes("지정 우선 결과");
+    const hasPriorityControls =
+      workspaceSource.includes('className="chain-template-priority-mode"') &&
+      workspaceSource.includes('aria-label={`${template.name} 추가 우선순위`}') &&
+      workspaceSource.includes("먼저 추가") &&
+      workspaceSource.includes("가장 먼저");
+    const hasPriorityStyles =
+      /\.chain-template-priority-mode\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
+      /\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
+        styles
+      );
+
+    // When
+    const hasPriorityContract = hasPriorityState && passesPriorityToEngine && hasPriorityControls && hasPriorityStyles;
+
+    // Then
+    assert.equal(hasPriorityContract, true);
+  });
+
   it("추가 결과는 반영 전 미리보기와 반영 후 취소 가능 상태를 같은 자리에서 안내한다", () => {
     // Given
     const hasApplyGuidance =

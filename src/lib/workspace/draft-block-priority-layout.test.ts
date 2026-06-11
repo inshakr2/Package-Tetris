@@ -45,6 +45,7 @@ describe("draft-block-priority-layout", () => {
       source.includes("priorityBlockCount={priorityBlockCount}") &&
       source.includes("priorityBlockCount: number;");
     const hasReviewSummaryTile =
+      source.includes('className="summary-grid compact-summary review-summary-grid"') &&
       source.includes('label="하단 우선"') &&
       source.includes('value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"}');
 
@@ -52,6 +53,30 @@ describe("draft-block-priority-layout", () => {
     assert.ok(hasPriorityCount, "workspace should count only draft items with explicit floor-priority settings");
     assert.ok(passesSummaryToReview, "review card should receive the priority summary count");
     assert.ok(hasReviewSummaryTile, "review card should summarize priority settings without adding more inputs");
+  });
+
+  it("실행 전 확인 요약은 6개 타일을 위한 전용 그리드로 부피 타일 압축을 피한다", () => {
+    // Given
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const hasReviewGrid =
+      /\.review-summary-grid\s*{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+        css
+      );
+    const hasTabletGrid =
+      /@media\s*\(max-width:\s*1279px\)\s*{[\s\S]*?\.review-summary-grid\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+        css
+      );
+    const hasMobileGrid =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.review-summary-grid\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(hasReviewGrid, "review summary should use a three-column grid on wide screens");
+    assert.ok(hasTabletGrid, "review summary should fall back to two columns on tablet widths");
+    assert.ok(hasMobileGrid, "review summary should stack to one column on mobile");
   });
 
   it("하단 우선 설정은 모바일에서도 48px 터치 타깃과 줄바꿈 가능한 버튼을 유지한다", () => {

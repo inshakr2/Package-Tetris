@@ -7,7 +7,7 @@ const MAX_MULTI_CHAIN_TEMPLATES = 3;
 export const MAX_MULTI_CHAIN_ADDED_BLOCKS = 300;
 const CALCULATION_LIMIT_WARNING = "계산량을 줄이기 위해 결과별 최대 300개까지만 계산했습니다.";
 
-export type MultiChainSimulationVariantMode = "recommended" | "template-priority";
+export type MultiChainSimulationVariantMode = "recommended" | "template-priority" | "custom-priority";
 
 export interface MultiChainSimulationInput {
   result: ResultSummary;
@@ -16,6 +16,7 @@ export interface MultiChainSimulationInput {
   policy: PlacementPolicy;
   requestedQuantity?: number;
   requestedQuantitiesByTemplateId?: Record<string, number | undefined>;
+  priorityByTemplateId?: Record<string, number | undefined>;
 }
 
 export interface MultiChainSimulationTemplateQuantity {
@@ -55,6 +56,7 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
   const requestedQuantitiesByTemplateId = normalizeRequestedQuantitiesByTemplateId(
     input.requestedQuantitiesByTemplateId
   );
+  const priorityByTemplateId = normalizePriorityByTemplateId(input.priorityByTemplateId);
 
   if (blockTemplates.length === 0) {
     return {
@@ -97,6 +99,7 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
   );
   const recommendedCandidate = chooseRecommendedCandidate(candidates);
   const recommendedVariantId = `${input.runId}-recommended`;
+  const customPriorityOrder = createCustomPriorityOrder(blockTemplates, priorityByTemplateId);
   const variants: MultiChainSimulationVariant[] = [
     {
       ...recommendedCandidate.variant,
@@ -104,6 +107,21 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
       label: "추천 결과",
       mode: "recommended"
     },
+    ...(customPriorityOrder
+      ? [
+          {
+            ...simulateTemplateOrder(
+              input,
+              customPriorityOrder,
+              "custom-priority",
+              requestedQuantitiesByTemplateId
+            ).variant,
+            variantId: `${input.runId}-custom-priority`,
+            label: "지정 우선 결과",
+            mode: "custom-priority" as const
+          }
+        ]
+      : []),
     ...blockTemplates.map((template) => {
       const priorityOrder = [template, ...blockTemplates.filter((item) => item.blockTemplateId !== template.blockTemplateId)];
       const candidate = simulateTemplateOrder(
@@ -216,6 +234,43 @@ function normalizeRequestedQuantitiesByTemplateId(
   }
 
   return quantityMap;
+}
+
+function normalizePriorityByTemplateId(priorityByTemplateId: Record<string, number | undefined> | undefined) {
+  const priorityMap = new Map<string, number>();
+
+  if (!priorityByTemplateId) {
+    return priorityMap;
+  }
+
+  for (const [blockTemplateId, priority] of Object.entries(priorityByTemplateId)) {
+    if (typeof priority !== "number" || !Number.isFinite(priority) || priority <= 0) {
+      continue;
+    }
+
+    priorityMap.set(blockTemplateId, Math.round(priority));
+  }
+
+  return priorityMap;
+}
+
+function createCustomPriorityOrder(blockTemplates: BlockTemplate[], priorityByTemplateId: Map<string, number>) {
+  if (!blockTemplates.some((template) => (priorityByTemplateId.get(template.blockTemplateId) ?? 0) > 0)) {
+    return null;
+  }
+
+  return blockTemplates
+    .map((template, index) => ({ template, index, priority: priorityByTemplateId.get(template.blockTemplateId) ?? 0 }))
+    .sort((left, right) => {
+      const priorityDiff = right.priority - left.priority;
+
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.template);
 }
 
 function createSkippedChainOutput(

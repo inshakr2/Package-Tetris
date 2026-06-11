@@ -158,6 +158,39 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(priority?.spaces[0]?.blocks.some((block) => block.blockId.startsWith("multi-run-locked")), true);
   });
 
+  it("사용자 지정 우선순위가 있으면 지정 우선 결과 variant를 추가한다", () => {
+    // Given
+    const firstTemplate = createTemplate({
+      blockTemplateId: "template-first",
+      name: "먼저 추가 박스",
+      dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+    });
+    const topTemplate = createTemplate({
+      blockTemplateId: "template-top",
+      name: "가장 먼저 박스",
+      dimensions: { widthMm: 200, depthMm: 200, heightMm: 200 }
+    });
+
+    // When
+    const output = runMultiChainSimulationV0({
+      result: createResult(),
+      blockTemplates: [firstTemplate, topTemplate],
+      runId: "multi-run-custom-priority",
+      policy: DEFAULT_POLICY,
+      priorityByTemplateId: {
+        [firstTemplate.blockTemplateId]: 5,
+        [topTemplate.blockTemplateId]: 10
+      }
+    });
+    const customPriority = output.variants.find((variant) => variant.mode === "custom-priority");
+
+    // Then
+    assert.equal(customPriority?.variantId, "multi-run-custom-priority-custom-priority");
+    assert.equal(customPriority?.label, "지정 우선 결과");
+    assert.deepEqual(customPriority?.orderBlockTemplateIds, ["template-top", "template-first"]);
+    assert.equal(output.variants.filter((variant) => variant.mode === "custom-priority").length, 1);
+  });
+
   it("variant별 추가 계산량은 상한을 넘지 않고 현장 안내 문구를 남긴다", () => {
     // Given
     const template = createTemplate({

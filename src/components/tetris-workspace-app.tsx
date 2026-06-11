@@ -273,6 +273,11 @@ const DRAFT_LOAD_PRIORITY_OPTIONS = [
   { value: 10, label: "가장 먼저" }
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
+const CHAIN_TEMPLATE_PRIORITY_OPTIONS = [
+  { value: 0, label: "기본" },
+  { value: 5, label: "먼저 추가" },
+  { value: 10, label: "가장 먼저" }
+] as const;
 
 const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
   { name: "상위그룹", requirement: "선택", description: "예: 금영, 엔터그레인. 비워도 되지만 자동화 파일에서는 같은 표기를 유지하세요." },
@@ -3432,7 +3437,7 @@ function ReviewCompactCard({
           <span>{partialSupportEnabled ? "허용 중" : "꺼짐"}</span>
         </label>
       </div>
-      <div className="summary-grid compact-summary">
+      <div className="summary-grid compact-summary review-summary-grid">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
         <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
         <SummaryTile label="하단 우선" value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"} />
@@ -3585,6 +3590,9 @@ const ResultStage = ({
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스를 최대 3개까지 선택하세요.");
   const [chainRequestedQuantitiesByTemplateId, setChainRequestedQuantitiesByTemplateId] = useState<
     Record<string, number | null>
+  >({});
+  const [chainTemplatePrioritiesByTemplateId, setChainTemplatePrioritiesByTemplateId] = useState<
+    Record<string, DraftLoadPriorityOptionValue>
   >({});
   const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
@@ -4005,6 +4013,17 @@ const ResultStage = ({
 
       return next;
     });
+    setChainTemplatePrioritiesByTemplateId((current) => {
+      const next = { ...current };
+
+      if (isSelected) {
+        delete next[blockTemplateId];
+      } else if (!(blockTemplateId in next)) {
+        next[blockTemplateId] = 0;
+      }
+
+      return next;
+    });
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage(
@@ -4047,6 +4066,21 @@ const ResultStage = ({
     setChainStatusMessage("추가 조건이 바뀌었습니다. 다시 계산하세요.");
   }
 
+  function changeChainTemplatePriority(blockTemplateId: string, priority: DraftLoadPriorityOptionValue) {
+    setChainTemplatePrioritiesByTemplateId((current) => ({
+      ...current,
+      [blockTemplateId]: priority
+    }));
+
+    if (!chainPreview) {
+      return;
+    }
+
+    clearChainPreviewState();
+    setChainStatus("idle");
+    setChainStatusMessage("추가 우선순위가 바뀌었습니다. 다시 계산하세요.");
+  }
+
   function createSelectedChainQuantityLimitMap() {
     return Object.fromEntries(
       selectedChainTemplates.flatMap((template) => {
@@ -4059,6 +4093,16 @@ const ResultStage = ({
     );
   }
 
+  function createSelectedChainPriorityMap() {
+    return Object.fromEntries(
+      selectedChainTemplates.flatMap((template) => {
+        const priority = chainTemplatePrioritiesByTemplateId[template.blockTemplateId] ?? 0;
+
+        return priority > 0 ? [[template.blockTemplateId, priority] as const] : [];
+      })
+    );
+  }
+
   function calculateChainPreviewWithQuantity(requestedQuantitiesByTemplateId: Record<string, number> = {}) {
     if (!latestResult || selectedChainTemplates.length === 0) {
       setChainStatus("idle");
@@ -4066,12 +4110,18 @@ const ResultStage = ({
       return;
     }
 
+    const priorityByTemplateId = createSelectedChainPriorityMap();
     const hasQuantityLimits = Object.keys(requestedQuantitiesByTemplateId).length > 0;
+    const hasPrioritySettings = Object.keys(priorityByTemplateId).length > 0;
 
     setChainStatus("calculating");
     setChainStatusMessage(
-      hasQuantityLimits
+      hasQuantityLimits && hasPrioritySettings
+        ? "박스별 지정 수량과 추가 우선순위로 결과를 계산하고 있습니다."
+        : hasQuantityLimits
         ? "박스별 지정 수량 조건으로 추천 결과를 계산하고 있습니다."
+        : hasPrioritySettings
+          ? "선택한 추가 우선순위로 결과를 계산하고 있습니다."
         : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
@@ -4087,9 +4137,11 @@ const ResultStage = ({
             partialSupportEnabled: workspacePolicy.partialSupportEnabled,
             minimumSupportRatio: workspacePolicy.minimumSupportRatio
           },
-          requestedQuantitiesByTemplateId
+          requestedQuantitiesByTemplateId,
+          priorityByTemplateId
         });
         const selectedVariant =
+          output.variants.find((variant) => variant.mode === "custom-priority") ??
           output.variants.find((variant) => variant.variantId === output.recommendedVariantId) ??
           output.variants[0] ??
           null;
@@ -4116,8 +4168,12 @@ const ResultStage = ({
         if (selectedVariant.totalAddedQuantity > 0) {
           setChainStatus("preview");
           setChainStatusMessage(
-            hasQuantityLimits
+            hasQuantityLimits && hasPrioritySettings
               ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : hasQuantityLimits
+              ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : hasPrioritySettings
+                ? `${selectedVariant.label}: 지정 우선순위 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
               : `${selectedVariant.label}: 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
           );
           return;
@@ -4663,6 +4719,7 @@ const ResultStage = ({
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
         requestedQuantitiesByTemplateId={chainRequestedQuantitiesByTemplateId}
+        templatePrioritiesByTemplateId={chainTemplatePrioritiesByTemplateId}
         preview={chainPreview}
         variants={chainMultiPreview?.variants ?? []}
         selectedVariantId={selectedChainVariantId}
@@ -4680,6 +4737,7 @@ const ResultStage = ({
         onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
         onTemplateQuantityLimitChange={changeChainTemplateQuantityLimit}
+        onTemplatePriorityChange={changeChainTemplatePriority}
         onConfirm={confirmChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
@@ -5282,6 +5340,7 @@ function ChainSimulationPanel({
   chainStatus,
   statusMessage,
   requestedQuantitiesByTemplateId,
+  templatePrioritiesByTemplateId,
   preview,
   variants,
   selectedVariantId,
@@ -5296,6 +5355,7 @@ function ChainSimulationPanel({
   onSelectVariant,
   onCalculate,
   onTemplateQuantityLimitChange,
+  onTemplatePriorityChange,
   onConfirm,
   onCreateResult,
   onClearSelection,
@@ -5316,6 +5376,7 @@ function ChainSimulationPanel({
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
   requestedQuantitiesByTemplateId: Record<string, number | null>;
+  templatePrioritiesByTemplateId: Record<string, DraftLoadPriorityOptionValue>;
   preview: ChainSimulationOutput | null;
   variants: MultiChainSimulationVariant[];
   selectedVariantId: string | null;
@@ -5330,6 +5391,7 @@ function ChainSimulationPanel({
   onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
   onTemplateQuantityLimitChange: (blockTemplateId: string, quantity: number | null) => void;
+  onTemplatePriorityChange: (blockTemplateId: string, priority: DraftLoadPriorityOptionValue) => void;
   onConfirm: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
@@ -5606,13 +5668,17 @@ function ChainSimulationPanel({
             <div className="chain-template-quantity-list" aria-label="추가 박스별 수량 조건">
               <div>
                 <strong className="chain-field-title">박스별 추가 조건</strong>
-                <p className="fine-print">최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.</p>
+                <p className="fine-print">
+                  최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.
+                  추가 우선순위를 지정하면 결과 비교에 지정 우선 결과가 함께 표시됩니다.
+                </p>
               </div>
               {selectedTemplates.length === 0 ? (
                 <p className="fine-print">박스를 선택하면 박스별 수량 조건을 조정할 수 있습니다.</p>
               ) : (
                 selectedTemplates.map((template) => {
                   const requestedQuantity = requestedQuantitiesByTemplateId[template.blockTemplateId] ?? null;
+                  const templatePriority = templatePrioritiesByTemplateId[template.blockTemplateId] ?? 0;
 
                   return (
                     <div className="chain-template-quantity-row" key={template.blockTemplateId}>
@@ -5648,6 +5714,25 @@ function ChainSimulationPanel({
                           }
                         />
                       </label>
+                      <div
+                        className="chain-template-priority-mode"
+                        role="group"
+                        aria-label={`${template.name} 추가 우선순위`}
+                      >
+                        <span>추가 우선순위</span>
+                        <div>
+                          {CHAIN_TEMPLATE_PRIORITY_OPTIONS.map((option) => (
+                            <button
+                              key={option.value}
+                              className="secondary-button"
+                              aria-pressed={templatePriority === option.value}
+                              onClick={() => onTemplatePriorityChange(template.blockTemplateId, option.value)}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   );
                 })
