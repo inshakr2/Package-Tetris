@@ -76,23 +76,27 @@ describe("block-template-xlsx-import", () => {
     assert.equal(preview.rows.length, 0);
   });
 
-  it("빈 sheet, 알 수 없는 컬럼, prototype pollution 컬럼은 workbook 오류로 거부한다", () => {
+  it("빈 sheet, 알 수 없는 컬럼, 중복 컬럼, prototype pollution 컬럼은 workbook 오류로 거부한다", () => {
     // Given
     const emptyRows: unknown[][] = [];
     const unknownColumnRows = [["상위그룹", "하위그룹", "박스명", "가로mm", "세로mm", "높이mm", "무게kg", "깨짐주의", "비고"]];
+    const duplicateColumnRows = [["상위그룹", "하위그룹", "박스명", "박스명", "가로mm", "세로mm", "높이mm", "무게kg", "깨짐주의"]];
     const unsafeColumnRows = [["상위그룹", "하위그룹", "박스명", "가로mm", "세로mm", "높이mm", "무게kg", "__proto__"]];
 
     // When
     const emptyPreview = createBlockTemplateImportPreview(emptyRows);
     const unknownColumnPreview = createBlockTemplateImportPreview(unknownColumnRows);
+    const duplicateColumnPreview = createBlockTemplateImportPreview(duplicateColumnRows);
     const unsafeColumnPreview = createBlockTemplateImportPreview(unsafeColumnRows);
 
     // Then
     assert.deepEqual(emptyPreview.errors.map((error) => error.message), ["첫 번째 sheet가 비어 있습니다."]);
     assert.deepEqual(unknownColumnPreview.errors.map((error) => error.message), ["알 수 없는 컬럼이 있습니다: 비고"]);
+    assert.deepEqual(duplicateColumnPreview.errors.map((error) => error.message), ["중복된 컬럼이 있습니다: 박스명"]);
     assert.deepEqual(unsafeColumnPreview.errors.map((error) => error.message), ["허용되지 않는 컬럼명이 있습니다: __proto__"]);
     assert.equal(emptyPreview.canImport, false);
     assert.equal(unknownColumnPreview.canImport, false);
+    assert.equal(duplicateColumnPreview.canImport, false);
     assert.equal(unsafeColumnPreview.canImport, false);
   });
 

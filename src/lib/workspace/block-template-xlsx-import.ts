@@ -178,6 +178,12 @@ function validateHeaderRow(headerRow: readonly unknown[]) {
     return `알 수 없는 컬럼이 있습니다: ${unknownColumns.join(", ")}`;
   }
 
+  const duplicateColumns = findDuplicateHeaders(headers);
+
+  if (duplicateColumns.length > 0) {
+    return `중복된 컬럼이 있습니다: ${duplicateColumns.join(", ")}`;
+  }
+
   const missingColumns = BLOCK_TEMPLATE_XLSX_COLUMNS.filter((column) => !headers.includes(column));
 
   if (missingColumns.length > 0) {
@@ -185,6 +191,26 @@ function validateHeaderRow(headerRow: readonly unknown[]) {
   }
 
   return null;
+}
+
+function findDuplicateHeaders(headers: string[]) {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  headers.forEach((header) => {
+    if (!header) {
+      return;
+    }
+
+    if (seen.has(header)) {
+      duplicates.add(header);
+      return;
+    }
+
+    seen.add(header);
+  });
+
+  return Array.from(duplicates);
 }
 
 function parseImportRow(
