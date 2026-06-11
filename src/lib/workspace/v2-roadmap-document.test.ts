@@ -17,4 +17,20 @@ describe("v2 roadmap document", () => {
     assert.doesNotMatch(roadmap, /`기본` \/ `먼저 추가` \/ `최우선 추가`/);
     assert.doesNotMatch(roadmap, /지정 우선 결과/);
   });
+
+  it("Open Risks는 구현 완료된 V2 결정을 재논의 상태로 남기지 않는다", () => {
+    // Given
+    const roadmap = readFileSync(ROADMAP_PATH, "utf8");
+
+    // When / Then
+    assert.match(roadmap, /9\.2 `\.xlsx` Library Decision/);
+    assert.match(roadmap, /read-excel-file@9\.1\.1/);
+    assert.match(roadmap, /9\.3 Partial Support Area Decision/);
+    assert.match(roadmap, /2D rectangle union-area/);
+    assert.match(roadmap, /9\.4 Additional Simulation Optimization Decision/);
+    assert.match(roadmap, /bounded priority permutations/);
+    assert.doesNotMatch(roadmap, /Decision needed during Phase 4/);
+    assert.doesNotMatch(roadmap, /Decision needed during Phase 5/);
+    assert.doesNotMatch(roadmap, /Decision needed during Phase 7/);
+  });
 });
