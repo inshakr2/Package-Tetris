@@ -191,6 +191,46 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(output.variants.filter((variant) => variant.mode === "custom-priority").length, 1);
   });
 
+  it("사용자 지정 우선순위가 같으면 선택 순서와 무관하게 박스명 기준의 고정 순서로 계산한다", () => {
+    // Given
+    const ampTemplate = createTemplate({
+      blockTemplateId: "template-b",
+      name: "A 우선 박스",
+      dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+    });
+    const speakerTemplate = createTemplate({
+      blockTemplateId: "template-a",
+      name: "B 우선 박스",
+      dimensions: { widthMm: 100, depthMm: 100, heightMm: 100 }
+    });
+    const priorityByTemplateId = {
+      [ampTemplate.blockTemplateId]: 5,
+      [speakerTemplate.blockTemplateId]: 5
+    };
+
+    // When
+    const firstOutput = runMultiChainSimulationV0({
+      result: createResult(),
+      blockTemplates: [speakerTemplate, ampTemplate],
+      runId: "multi-run-same-priority-a",
+      policy: DEFAULT_POLICY,
+      priorityByTemplateId
+    });
+    const secondOutput = runMultiChainSimulationV0({
+      result: createResult(),
+      blockTemplates: [ampTemplate, speakerTemplate],
+      runId: "multi-run-same-priority-b",
+      policy: DEFAULT_POLICY,
+      priorityByTemplateId
+    });
+    const firstCustomPriority = firstOutput.variants.find((variant) => variant.mode === "custom-priority");
+    const secondCustomPriority = secondOutput.variants.find((variant) => variant.mode === "custom-priority");
+
+    // Then
+    assert.deepEqual(firstCustomPriority?.orderBlockTemplateIds, ["template-b", "template-a"]);
+    assert.deepEqual(secondCustomPriority?.orderBlockTemplateIds, ["template-b", "template-a"]);
+  });
+
   it("variant별 추가 계산량은 상한을 넘지 않고 현장 안내 문구를 남긴다", () => {
     // Given
     const template = createTemplate({

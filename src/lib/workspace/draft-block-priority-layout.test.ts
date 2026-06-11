@@ -55,6 +55,29 @@ describe("draft-block-priority-layout", () => {
     assert.ok(hasReviewSummaryTile, "review card should summarize priority settings without adding more inputs");
   });
 
+  it("실행 전 확인은 하단 우선 박스명과 우선 단계를 함께 보여준다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const createsPrioritySummaries =
+      source.includes("const priorityBlockSummaries = draftBlocks.flatMap") &&
+      source.includes("createDraftLoadPrioritySummary(block)") &&
+      source.includes("`${block.name} ${block.quantity}개 · ${getDraftLoadPriorityLabel(priority)}`");
+    const passesPrioritySummaries =
+      source.includes("priorityBlockSummaries={priorityBlockSummaries}") &&
+      source.includes("priorityBlockSummaries: string[];");
+    const rendersPrioritySummaries =
+      source.includes('className="review-priority-summary"') &&
+      source.includes("priorityBlockSummaries.map") &&
+      source.includes("하단 우선 박스");
+
+    // Then
+    assert.ok(createsPrioritySummaries, "workspace should create readable priority summaries from draft blocks");
+    assert.ok(passesPrioritySummaries, "review card should receive the readable priority summaries");
+    assert.ok(rendersPrioritySummaries, "review card should render names and priority levels, not only a count");
+  });
+
   it("실행 전 확인 요약은 6개 타일을 위한 전용 그리드로 부피 타일 압축을 피한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
@@ -99,5 +122,19 @@ describe("draft-block-priority-layout", () => {
     assert.ok(controlRule, "priority control should use stable grid layout");
     assert.ok(buttonRule, "priority buttons should keep field-friendly touch targets");
     assert.ok(mobileRule, "priority buttons should stack on narrow screens");
+  });
+
+  it("현재 작업 영역은 1280px 현장 PC 폭에서 한 컬럼으로 접혀 입력 카드 압축을 피한다", () => {
+    // Given
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const hasFieldPcLayout =
+      /@media\s*\(max-width:\s*1360px\)\s*{[\s\S]*?\.current-work-layout\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(hasFieldPcLayout, "current work cards should remain readable around 1280px field PC widths");
   });
 });

@@ -45,16 +45,20 @@ describe("chain-simulation-requested-quantity-layout", () => {
       /\.chain-template-quantity-mode\s+button,[\s\S]*?\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
       );
-    const hasMobileLayout =
-      /@media\s*\(max-width:\s*1279px\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+    const hasTabletLayout =
+      /@media\s*\(max-width:\s*1360px\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
       ) &&
-      /@media\s*\(max-width:\s*1279px\)\s*{[\s\S]*?\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+      /@media\s*\(max-width:\s*1360px\)\s*{[\s\S]*?\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?}/.test(
+        styles
+      );
+    const hasMobileLayout =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-priority-mode\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
       );
 
     // When
-    const hasResponsiveQuantityControl = hasBaseLayout && hasTouchTarget && hasMobileLayout;
+    const hasResponsiveQuantityControl = hasBaseLayout && hasTouchTarget && hasTabletLayout && hasMobileLayout;
 
     // Then
     assert.equal(hasResponsiveQuantityControl, true);

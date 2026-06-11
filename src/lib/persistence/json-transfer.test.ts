@@ -145,6 +145,81 @@ describe("json-transfer", () => {
     assert.equal(workspace.draft.blockItems[0]?.loadPriority, null);
   });
 
+  it("가져온 draft의 loadPriority는 화면 선택지와 같은 0/5/10 단계로 보정한다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-11T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 3,
+      created_at: "2026-06-11T00:00:00.000Z",
+      updated_at: "2026-06-11T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: false,
+        minimum_support_ratio: 1,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      block_groups: [],
+      custom_blocks: [
+        {
+          blockTemplateId: "template-a",
+          entityVersion: 1,
+          name: "A 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          createdAt: "2026-06-11T00:00:00.000Z",
+          updatedAt: "2026-06-11T00:00:00.000Z"
+        }
+      ],
+      draft: {
+        selectedSpaceId: "preset-pallet-1100",
+        blockItems: [
+          {
+            draftBlockItemId: "item-low",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 4.2,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          },
+          {
+            draftBlockItemId: "item-mid",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 6,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          },
+          {
+            draftBlockItemId: "item-high",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 99,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          }
+        ],
+        currentStep: "blocks",
+        updatedAt: "2026-06-11T00:00:00.000Z"
+      },
+      recent_results: [],
+      chain_history: []
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+
+    // Then
+    assert.deepEqual(
+      workspace.draft.blockItems.map((item) => item.loadPriority),
+      [null, 5, 10]
+    );
+  });
+
   it("block_groups가 없는 백업도 저장된 박스의 문자열 그룹을 레지스트리로 보정한다", () => {
     // Given
     const payload = {

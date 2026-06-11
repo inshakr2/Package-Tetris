@@ -130,6 +130,29 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasQuantityComparisonContract, true);
   });
 
+  it("추가 결과 비교 표와 계산 버튼은 사용자 지정 우선순위 적용 여부를 현장 문구로 유지한다", () => {
+    // Given
+    const hasConditionCopyHelper =
+      workspaceSource.includes("createChainConditionCopy(") &&
+      workspaceSource.includes("createChainPriorityLabel(");
+    const hasPriorityAwareTable =
+      workspaceSource.includes("const priority = templatePrioritiesByTemplateId[item.blockTemplateId] ?? 0") &&
+      workspaceSource.includes("createChainConditionCopy(requestedQuantity, priority)") &&
+      workspaceSource.includes("수량+우선순위 조건 포함");
+    const hasPriorityAwareButton =
+      workspaceSource.includes("createChainCalculateButtonLabel(") &&
+      workspaceSource.includes("조건 반영 결과 계산") &&
+      workspaceSource.includes("우선순위 결과 계산");
+    const hasTieBreakCopy = workspaceSource.includes("같은 우선순위는 박스명 순서로 계산합니다.");
+
+    // When
+    const keepsPriorityContext =
+      hasConditionCopyHelper && hasPriorityAwareTable && hasPriorityAwareButton && hasTieBreakCopy;
+
+    // Then
+    assert.equal(keepsPriorityContext, true);
+  });
+
   it("추가 박스 시뮬레이션은 선택 박스별 사용자 지정 우선순위를 제공한다", () => {
     // Given
     const hasPriorityState =
@@ -156,6 +179,48 @@ describe("multi-chain-simulation-layout", () => {
 
     // Then
     assert.equal(hasPriorityContract, true);
+  });
+
+  it("결과 변경 또는 선택 초기화 시 추가 박스별 수량과 우선순위 조건을 함께 비운다", () => {
+    // Given
+    const latestResultEffect = workspaceSource.match(
+      /useEffect\(\(\)\s*=>\s*{[\s\S]*?},\s*\[latestResult\?\.resultId\]\);/
+    )?.[0] ?? "";
+    const resultResetEffect =
+      latestResultEffect.includes("previousLatestResultIdRef.current") &&
+      latestResultEffect.includes("setSelectedChainTemplateIds([]);") &&
+      latestResultEffect.includes("setChainRequestedQuantitiesByTemplateId({});") &&
+      latestResultEffect.includes("setChainTemplatePrioritiesByTemplateId({});") &&
+      latestResultEffect.includes("기준 결과가 바뀌어 추가 박스 선택과 조건을 초기화했습니다.");
+    const clearSelectionHandler =
+      /function\s+clearChainSelection\(\)\s*{[\s\S]*?setSelectedChainTemplateIds\(\[\]\);[\s\S]*?setChainRequestedQuantitiesByTemplateId\(\{\}\);[\s\S]*?setChainTemplatePrioritiesByTemplateId\(\{\}\);[\s\S]*?clearChainPreviewState\(\);[\s\S]*?추가 박스 선택과 조건을 모두 초기화했습니다\.[\s\S]*?}/.test(
+        workspaceSource
+      );
+
+    // When
+    const clearsStaleChainConditions = resultResetEffect && clearSelectionHandler;
+
+    // Then
+    assert.equal(clearsStaleChainConditions, true);
+  });
+
+  it("추가 박스 시뮬레이션 상태 문구는 조건 설정과 계산 모델을 일관되게 안내한다", () => {
+    // Given
+    const hasSelectionPrompt = workspaceSource.includes(
+      "필요한 수량/우선순위를 정한 뒤 결과를 계산하세요."
+    );
+    const hasQuantityCalculatingCopy = workspaceSource.includes(
+      "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
+    );
+    const hasPriorityEmptyCopy = workspaceSource.includes(
+      "지정 우선순위 조건의 박스를 더 넣을 수 없습니다."
+    );
+
+    // When
+    const hasConsistentConditionCopy = hasSelectionPrompt && hasQuantityCalculatingCopy && hasPriorityEmptyCopy;
+
+    // Then
+    assert.equal(hasConsistentConditionCopy, true);
   });
 
   it("추가 결과는 반영 전 미리보기와 반영 후 취소 가능 상태를 같은 자리에서 안내한다", () => {

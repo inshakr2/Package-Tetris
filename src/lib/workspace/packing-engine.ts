@@ -6,6 +6,7 @@ import {
   type PlacementPolicy,
   type PositionCandidate
 } from "./packing-placement";
+import { normalizeLoadPriorityScore } from "./load-priority";
 import { ensureSafeOptimizationOutput } from "./packing-output-safety";
 import { BlockDefinition, PackedBlock, PackedSpace } from "./types";
 import { OptimizationInput, OptimizationOutput } from "./engine-contract";
@@ -82,7 +83,7 @@ function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds
     )
     .map((block) => ({
       block,
-      loadPriority: normalizeLoadPriority(block.loadPriority),
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority),
       rotationCandidateCount: getRotationCandidateCount(block, usableSize),
       maxBaseAreaMm2: getMaxStableBaseArea(block, usableSize),
       volumeM3: dimensionsVolumeM3(block.dimensions)
@@ -121,10 +122,6 @@ function compareBlockUnits(left: SortableBlockUnit, right: SortableBlockUnit) {
   }
 
   return left.block.blockId.localeCompare(right.block.blockId);
-}
-
-function normalizeLoadPriority(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function getRotationCandidateCount(block: BlockDefinition, usableSize: PlacementBounds) {

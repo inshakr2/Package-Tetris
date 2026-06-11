@@ -4,6 +4,7 @@ import {
   PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
   SpaceDefinition
 } from "./types";
+import { normalizeLoadPriorityScore } from "./load-priority";
 
 export type ResultFreshnessStatus = "fresh" | "stale" | "unknown";
 
@@ -140,7 +141,7 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
       name: block.name,
       dimensions: block.dimensions,
       fragile: block.fragile,
-      loadPriority: normalizeLoadPriority(block.loadPriority)
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority)
     });
     const existing = blockMap.get(key);
 
@@ -155,7 +156,7 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
       name: block.name,
       dimensions: block.dimensions,
       fragile: block.fragile,
-      loadPriority: normalizeLoadPriority(block.loadPriority),
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority),
       quantity: block.quantity
     });
   });
@@ -166,8 +167,4 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
 
     return leftKey.localeCompare(rightKey);
   });
-}
-
-function normalizeLoadPriority(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

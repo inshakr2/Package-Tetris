@@ -268,7 +268,15 @@ function createCustomPriorityOrder(blockTemplates: BlockTemplate[], priorityByTe
         return priorityDiff;
       }
 
-      return left.index - right.index;
+      const nameDiff = left.template.name.localeCompare(right.template.name, "ko-KR");
+
+      if (nameDiff !== 0) {
+        return nameDiff;
+      }
+
+      const idDiff = left.template.blockTemplateId.localeCompare(right.template.blockTemplateId);
+
+      return idDiff !== 0 ? idDiff : left.index - right.index;
     })
     .map((item) => item.template);
 }

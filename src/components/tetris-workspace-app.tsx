@@ -182,6 +182,7 @@ import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/l
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import { normalizeWorkspace as normalizeWorkspaceForV2 } from "@/lib/workspace/workspace-migration";
+import { normalizeLoadPriorityScore } from "@/lib/workspace/load-priority";
 import {
   BlockGroup,
   BlockDefinition,
@@ -669,6 +670,11 @@ export function TetrisWorkspaceApp() {
   const priorityBlockCount = draftBlocks.filter(
     (block) => normalizeDraftLoadPriorityOptionValue(block.loadPriority) > 0
   ).length;
+  const priorityBlockSummaries = draftBlocks.flatMap((block) => {
+    const summary = createDraftLoadPrioritySummary(block);
+
+    return summary ? [summary] : [];
+  });
   const review = workspace
     ? reviewExecutionReadiness({
         selectedSpace,
@@ -1777,6 +1783,7 @@ export function TetrisWorkspaceApp() {
               selectedSpace={selectedSpace}
               review={review}
               priorityBlockCount={priorityBlockCount}
+              priorityBlockSummaries={priorityBlockSummaries}
               partialSupportEnabled={workspace.policy.partialSupportEnabled}
               needsExport={needsExport}
               storageHealth={storageHealth}
@@ -3356,6 +3363,7 @@ function ReviewCompactCard({
   selectedSpace,
   review,
   priorityBlockCount,
+  priorityBlockSummaries,
   partialSupportEnabled,
   needsExport,
   storageHealth,
@@ -3373,6 +3381,7 @@ function ReviewCompactCard({
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
   priorityBlockCount: number;
+  priorityBlockSummaries: string[];
   partialSupportEnabled: boolean;
   needsExport: boolean;
   storageHealth: StorageHealthSnapshot | null;
@@ -3445,6 +3454,16 @@ function ReviewCompactCard({
                 <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
         <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
+      {priorityBlockSummaries.length > 0 ? (
+        <div className="review-priority-summary" aria-label="하단 우선 박스">
+          <strong>하단 우선 박스</strong>
+          <ul>
+            {priorityBlockSummaries.map((summary) => (
+              <li key={summary}>{summary}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <ul className="checklist compact-checklist">
         {saveConflict ? (
           <li className="review-message" data-tone="red">
@@ -3598,6 +3617,7 @@ const ResultStage = ({
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previousLatestResultIdRef = useRef<string | null | undefined>(undefined);
   const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const chainBlockOptions = useMemo(() => blockTemplates, [blockTemplates]);
@@ -3738,6 +3758,12 @@ const ResultStage = ({
   const recommendationCopy = offsetRecommendation ? createResultSpaceRecommendationCopy(offsetRecommendation) : null;
 
   useEffect(() => {
+    const nextResultId = latestResult?.resultId ?? null;
+    const hadPreviousResult = typeof previousLatestResultIdRef.current === "string";
+    const resultChanged =
+      hadPreviousResult && previousLatestResultIdRef.current !== nextResultId;
+
+    previousLatestResultIdRef.current = nextResultId;
     setResultViewMode("three");
     setThreeCameraPreset("isometric");
     setThreeResetToken((value) => value + 1);
@@ -3753,8 +3779,13 @@ const ResultStage = ({
     setChainComparisonMode("preview");
     setThreeDialogOpen(false);
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
+    setChainStatusMessage(
+      resultChanged
+        ? "기준 결과가 바뀌어 추가 박스 선택과 조건을 초기화했습니다."
+        : "추가할 박스를 최대 3개까지 선택하세요."
+    );
     setChainRequestedQuantitiesByTemplateId({});
+    setChainTemplatePrioritiesByTemplateId({});
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
@@ -4028,7 +4059,7 @@ const ResultStage = ({
     setChainStatus("idle");
     setChainStatusMessage(
       nextSelectedTemplateIds.length
-        ? `${nextSelectedTemplateIds.length}개 박스를 선택했습니다. 추천 결과를 계산하세요.`
+        ? `${nextSelectedTemplateIds.length}개 박스를 선택했습니다. 필요한 수량/우선순위를 정한 뒤 결과를 계산하세요.`
         : "추가할 박스를 최대 3개까지 선택하세요."
     );
   }
@@ -4119,7 +4150,7 @@ const ResultStage = ({
       hasQuantityLimits && hasPrioritySettings
         ? "박스별 지정 수량과 추가 우선순위로 결과를 계산하고 있습니다."
         : hasQuantityLimits
-        ? "박스별 지정 수량 조건으로 추천 결과를 계산하고 있습니다."
+        ? "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
         : hasPrioritySettings
           ? "선택한 추가 우선순위로 결과를 계산하고 있습니다."
         : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
@@ -4181,8 +4212,12 @@ const ResultStage = ({
 
         setChainStatus("empty");
         setChainStatusMessage(
-          hasQuantityLimits
+          hasQuantityLimits && hasPrioritySettings
+            ? `${selectedVariant.label}은 지정 수량과 우선순위 조건의 박스를 더 넣을 수 없습니다.`
+            : hasQuantityLimits
             ? `${selectedVariant.label}은 지정 조건의 박스를 더 넣을 수 없습니다.`
+            : hasPrioritySettings
+              ? `${selectedVariant.label}은 지정 우선순위 조건의 박스를 더 넣을 수 없습니다.`
             : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
         );
       } catch {
@@ -4206,9 +4241,11 @@ const ResultStage = ({
 
   function clearChainSelection() {
     setSelectedChainTemplateIds([]);
+    setChainRequestedQuantitiesByTemplateId({});
+    setChainTemplatePrioritiesByTemplateId({});
     clearChainPreviewState();
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
+    setChainStatusMessage("추가 박스 선택과 조건을 모두 초기화했습니다.");
   }
 
   return (
@@ -5411,6 +5448,9 @@ function ChainSimulationPanel({
   const hasQuantityLimits = selectedTemplates.some(
     (template) => requestedQuantitiesByTemplateId[template.blockTemplateId]
   );
+  const hasPrioritySettings = selectedTemplates.some(
+    (template) => (templatePrioritiesByTemplateId[template.blockTemplateId] ?? 0) > 0
+  );
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -5618,12 +5658,13 @@ function ChainSimulationPanel({
                     <tbody>
                       {selectedVariant.addedQuantities.map((item) => {
                         const requestedQuantity = requestedQuantitiesByTemplateId[item.blockTemplateId] ?? null;
+                        const priority = templatePrioritiesByTemplateId[item.blockTemplateId] ?? 0;
                         const quantityStatus = createChainQuantityStatusCopy(item.addedQuantity, requestedQuantity);
 
                         return (
                           <tr key={item.blockTemplateId}>
                             <td>{item.blockName}</td>
-                            <td>{requestedQuantity ? `${requestedQuantity}개까지` : "최대"}</td>
+                            <td>{createChainConditionCopy(requestedQuantity, priority)}</td>
                             <td>{item.addedQuantity}개</td>
                             <td>{quantityStatus}</td>
                           </tr>
@@ -5633,7 +5674,15 @@ function ChainSimulationPanel({
                     <tfoot>
                       <tr>
                         <th scope="row">총 추가</th>
-                        <td>{hasQuantityLimits ? "지정 조건 포함" : "최대 계산"}</td>
+                        <td>
+                          {hasQuantityLimits && hasPrioritySettings
+                            ? "수량+우선순위 조건 포함"
+                            : hasQuantityLimits
+                              ? "지정 조건 포함"
+                              : hasPrioritySettings
+                                ? "우선순위 조건 포함"
+                                : "최대 계산"}
+                        </td>
                         <td>{selectedVariant.totalAddedQuantity}개</td>
                         <td>남은 부피 {formatVolumeM3(selectedVariant.remainingVolumeM3)}</td>
                       </tr>
@@ -5671,6 +5720,7 @@ function ChainSimulationPanel({
                 <p className="fine-print">
                   최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.
                   추가 우선순위를 지정하면 결과 비교에 지정 우선 결과가 함께 표시됩니다.
+                  같은 우선순위는 박스명 순서로 계산합니다.
                 </p>
               </div>
               {selectedTemplates.length === 0 ? (
@@ -5745,7 +5795,7 @@ function ChainSimulationPanel({
                   ? "추가 가능 수량 계산 중..."
                   : chainStatus === "error"
                     ? "다시 계산"
-                    : "추천 결과 계산"}
+                    : createChainCalculateButtonLabel(hasQuantityLimits, hasPrioritySettings)}
               </button>
               <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
                 이 결과 반영
@@ -6787,15 +6837,51 @@ function parseOptionalWeightKg(value: string) {
 function normalizeDraftLoadPriorityOptionValue(
   value: number | null | undefined
 ): DraftLoadPriorityOptionValue {
-  if (typeof value === "number" && value >= 10) {
-    return 10;
+  return normalizeLoadPriorityScore(value);
+}
+
+function createDraftLoadPrioritySummary(block: BlockDefinition) {
+  const priority = normalizeDraftLoadPriorityOptionValue(block.loadPriority);
+
+  if (priority <= 0) {
+    return null;
   }
 
-  if (typeof value === "number" && value >= 5) {
-    return 5;
+  return `${block.name} ${block.quantity}개 · ${getDraftLoadPriorityLabel(priority)}`;
+}
+
+function getDraftLoadPriorityLabel(priority: DraftLoadPriorityOptionValue) {
+  return DRAFT_LOAD_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? "기본";
+}
+
+function createChainConditionCopy(
+  requestedQuantity: number | null,
+  priority: DraftLoadPriorityOptionValue
+) {
+  const quantityCopy = requestedQuantity ? `${requestedQuantity}개까지` : "최대";
+  const priorityCopy = createChainPriorityLabel(priority);
+
+  return priorityCopy === "기본" ? quantityCopy : `${quantityCopy} · ${priorityCopy}`;
+}
+
+function createChainPriorityLabel(priority: DraftLoadPriorityOptionValue) {
+  return CHAIN_TEMPLATE_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? "기본";
+}
+
+function createChainCalculateButtonLabel(hasQuantityLimits: boolean, hasPrioritySettings: boolean) {
+  if (hasQuantityLimits && hasPrioritySettings) {
+    return "조건 반영 결과 계산";
   }
 
-  return 0;
+  if (hasPrioritySettings) {
+    return "우선순위 결과 계산";
+  }
+
+  if (hasQuantityLimits) {
+    return "조건 반영 결과 계산";
+  }
+
+  return "추천 결과 계산";
 }
 
 function formatOptionalWeightFormValue(weightKg: number | null | undefined) {

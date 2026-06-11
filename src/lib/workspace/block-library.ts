@@ -10,6 +10,7 @@ import {
   ensureBlockGroupsForNames,
   upsertBlockGroup
 } from "./block-groups";
+import { normalizeLoadPriority } from "./load-priority";
 
 interface CreateBlockTemplateOptions {
   blockTemplateId: string;
@@ -292,7 +293,7 @@ export function updateDraftBlockItemLoadPriority(
         item.draftBlockItemId === options.draftBlockItemId
           ? {
               ...item,
-              loadPriority: normalizeDraftLoadPriority(options.loadPriority),
+              loadPriority: normalizeLoadPriority(options.loadPriority),
               updatedAt: options.now
             }
           : item
@@ -434,14 +435,6 @@ function normalizeOptionalWeightKg(weightKg: number | null | undefined) {
 function normalizeOptionalTemplateText(value: string | undefined) {
   const normalizedValue = value?.trim();
   return normalizedValue ? normalizedValue : undefined;
-}
-
-function normalizeDraftLoadPriority(loadPriority: number | null) {
-  if (typeof loadPriority !== "number" || !Number.isFinite(loadPriority) || loadPriority <= 0) {
-    return null;
-  }
-
-  return Math.round(loadPriority);
 }
 
 function formatSearchableWeight(weightKg: number | null | undefined) {

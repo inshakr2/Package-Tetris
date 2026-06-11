@@ -10,6 +10,7 @@ import {
 } from "./types";
 import { normalizePresetSpaceId } from "./presets";
 import { normalizeBlockGroups } from "./block-groups";
+import { normalizeLoadPriority } from "./load-priority";
 
 type LegacyWorkspace = Partial<TetrisWorkspace> & {
   blocks?: Array<Partial<BlockTemplate> & { blockId?: string; quantity?: number }>;
@@ -142,7 +143,7 @@ function createLegacyDraftItems(
 function normalizeDraftBlockItem(item: DraftBlockItem): DraftBlockItem {
   return {
     ...item,
-    loadPriority: normalizeNullableNumber(item.loadPriority)
+    loadPriority: normalizeLoadPriority(item.loadPriority)
   };
 }
 
