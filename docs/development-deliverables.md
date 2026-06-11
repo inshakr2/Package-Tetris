@@ -79,7 +79,7 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 - `src/lib/workspace/packing-worker.ts`: Worker에서 실행할 계산 진입점
 - `src/lib/workspace/packing-worker-client.ts`: 앱에서 Worker 계산을 호출하는 클라이언트 래퍼
 - `src/lib/workspace/chain-simulation.ts`: 기존 결과 유지 기반 추가 적재 시뮬레이션
-- `src/lib/workspace/multi-chain-simulation.ts`: 최대 3개 추가 박스의 추천/사용자 지정 우선/박스별 우선 결과 비교
+- `src/lib/workspace/multi-chain-simulation.ts`: 최대 3개 추가 박스의 추천/선택 순서 우선/박스별 우선 결과 비교
 - `src/lib/workspace/result-offset-recommendation.ts`: 안전 여유 조정 추천
 
 엔진은 박스를 단위 수량으로 펼친 뒤, 작업별 하단 우선도, fragile 정책, 회전 가능성, 부분 지지 정책, 바닥 면적, 부피 기준으로 배치 우선순위를 정한다. 각 박스는 기존 공간에 먼저 배치하고, 불가능하면 새 공간을 연다.

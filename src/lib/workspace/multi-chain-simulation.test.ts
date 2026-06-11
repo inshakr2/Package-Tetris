@@ -158,7 +158,7 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(priority?.spaces[0]?.blocks.some((block) => block.blockId.startsWith("multi-run-locked")), true);
   });
 
-  it("사용자 지정 우선순위가 있으면 선택 순서 결과 variant를 추가한다", () => {
+  it("선택 순서 우선순위 점수가 있으면 선택 순서 결과 variant를 추가한다", () => {
     // Given
     const firstTemplate = createTemplate({
       blockTemplateId: "template-first",
@@ -191,7 +191,7 @@ describe("multi-chain-simulation v0", () => {
     assert.equal(output.variants.filter((variant) => variant.mode === "custom-priority").length, 1);
   });
 
-  it("사용자 지정 우선순위가 같으면 선택 순서와 무관하게 박스명 기준의 고정 순서로 계산한다", () => {
+  it("선택 순서 우선순위 점수가 같으면 박스명 정렬이 아니라 사용자가 선택한 순서를 유지한다", () => {
     // Given
     const ampTemplate = createTemplate({
       blockTemplateId: "template-b",
@@ -227,7 +227,7 @@ describe("multi-chain-simulation v0", () => {
     const secondCustomPriority = secondOutput.variants.find((variant) => variant.mode === "custom-priority");
 
     // Then
-    assert.deepEqual(firstCustomPriority?.orderBlockTemplateIds, ["template-b", "template-a"]);
+    assert.deepEqual(firstCustomPriority?.orderBlockTemplateIds, ["template-a", "template-b"]);
     assert.deepEqual(secondCustomPriority?.orderBlockTemplateIds, ["template-b", "template-a"]);
   });
 
