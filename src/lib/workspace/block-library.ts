@@ -37,6 +37,12 @@ interface UpdateDraftBlockItemQuantityOptions {
   now: string;
 }
 
+interface UpdateDraftBlockItemLoadPriorityOptions {
+  draftBlockItemId: string;
+  loadPriority: number | null;
+  now: string;
+}
+
 interface RemoveDraftBlockItemOptions {
   draftBlockItemId: string;
   now: string;
@@ -274,6 +280,28 @@ export function updateDraftBlockItemQuantity(
   };
 }
 
+export function updateDraftBlockItemLoadPriority(
+  workspace: TetrisWorkspace,
+  options: UpdateDraftBlockItemLoadPriorityOptions
+): TetrisWorkspace {
+  return {
+    ...touchDraft(workspace, options.now),
+    draft: {
+      ...workspace.draft,
+      blockItems: workspace.draft.blockItems.map((item) =>
+        item.draftBlockItemId === options.draftBlockItemId
+          ? {
+              ...item,
+              loadPriority: normalizeDraftLoadPriority(options.loadPriority),
+              updatedAt: options.now
+            }
+          : item
+      ),
+      updatedAt: options.now
+    }
+  };
+}
+
 export function removeDraftBlockItem(
   workspace: TetrisWorkspace,
   options: RemoveDraftBlockItemOptions
@@ -406,6 +434,14 @@ function normalizeOptionalWeightKg(weightKg: number | null | undefined) {
 function normalizeOptionalTemplateText(value: string | undefined) {
   const normalizedValue = value?.trim();
   return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizeDraftLoadPriority(loadPriority: number | null) {
+  if (typeof loadPriority !== "number" || !Number.isFinite(loadPriority) || loadPriority <= 0) {
+    return null;
+  }
+
+  return Math.round(loadPriority);
 }
 
 function formatSearchableWeight(weightKg: number | null | undefined) {

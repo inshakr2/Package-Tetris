@@ -10,6 +10,7 @@ import {
   restoreDraftBlockItem,
   searchBlockTemplates,
   updateBlockTemplate,
+  updateDraftBlockItemLoadPriority,
   updateDraftBlockItemQuantity
 } from "./block-library";
 
@@ -85,6 +86,50 @@ describe("block-library", () => {
     assert.equal(updated.draft.blockItems.length, 2);
     assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-a")?.quantity, 9);
     assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-b")?.quantity, 7);
+  });
+
+  it("현재 작업 박스의 하단 우선도는 저장된 박스 원본을 바꾸지 않고 작업 항목에만 저장된다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "무거운 앰프 박스",
+        dimensions: { widthMm: 450, depthMm: 360, heightMm: 260 },
+        fragile: false,
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+    const withDraftItem = addBlockTemplateToDraft(workspace, {
+      draftBlockItemId: "item-a",
+      blockTemplateId: "template-a",
+      quantity: 4,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // When
+    const prioritized = updateDraftBlockItemLoadPriority(withDraftItem, {
+      draftBlockItemId: "item-a",
+      loadPriority: 10,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+    const reset = updateDraftBlockItemLoadPriority(prioritized, {
+      draftBlockItemId: "item-a",
+      loadPriority: 0,
+      now: "2026-06-08T04:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(prioritized.draft.blockItems[0]?.loadPriority, 10);
+    assert.equal(prioritized.draft.blockItems[0]?.quantity, 4);
+    assert.equal((prioritized.blockTemplates[0] as { loadPriority?: unknown })?.loadPriority, undefined);
+    assert.equal(reset.draft.blockItems[0]?.loadPriority, null);
+    assert.equal(reset.draft.updatedAt, "2026-06-08T04:00:00.000Z");
   });
 
   it("저장된 박스는 선택 입력인 무게와 상위/하위 그룹을 저장하고 수정한다", () => {

@@ -70,6 +70,7 @@ import {
   resolveDraftBlocks,
   searchBlockTemplates,
   updateBlockTemplate,
+  updateDraftBlockItemLoadPriority,
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
@@ -266,6 +267,12 @@ const BLOCK_LIBRARY_PAGE_SIZE = 12;
 const BLOCK_GROUP_PAGE_SIZE = 10;
 const CHAIN_INLINE_OPTION_LIMIT = 6;
 const CHAIN_PICKER_PAGE_SIZE = 10;
+const DRAFT_LOAD_PRIORITY_OPTIONS = [
+  { value: 0, label: "기본" },
+  { value: 5, label: "먼저 바닥에" },
+  { value: 10, label: "가장 먼저" }
+] as const;
+type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
 
 const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
   { name: "상위그룹", requirement: "선택", description: "예: 금영, 엔터그레인. 비워도 되지만 자동화 파일에서는 같은 표기를 유지하세요." },
@@ -1066,6 +1073,16 @@ export function TetrisWorkspaceApp() {
     );
   }
 
+  function updateCurrentLoadPriority(draftBlockItemId: string, loadPriority: number) {
+    updateWorkspace((current, now) =>
+      updateDraftBlockItemLoadPriority(current, {
+        draftBlockItemId,
+        loadPriority,
+        now
+      })
+    );
+  }
+
   function updatePartialSupportPolicy(enabled: boolean) {
     updateWorkspace((current, now) => ({
       ...current,
@@ -1743,6 +1760,7 @@ export function TetrisWorkspaceApp() {
               demoDisabled={isWorkspaceLocked}
               demoDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다." : null}
               onQuantityChange={updateCurrentQuantity}
+              onLoadPriorityChange={updateCurrentLoadPriority}
               onDeleteRequest={requestDelete}
               onRequestResetCurrentWork={requestResetCurrentWork}
               onLoadFieldDemo={loadFieldDemoCurrentWorkIntoDraft}
@@ -3080,6 +3098,7 @@ function CurrentWorkBlocksPanel({
   demoDisabled,
   demoDisabledReason,
   onQuantityChange,
+  onLoadPriorityChange,
   onDeleteRequest,
   onRequestResetCurrentWork,
   onLoadFieldDemo
@@ -3091,6 +3110,7 @@ function CurrentWorkBlocksPanel({
   demoDisabled: boolean;
   demoDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
+  onLoadPriorityChange: (draftBlockItemId: string, loadPriority: DraftLoadPriorityOptionValue) => void;
   onDeleteRequest: (
     kind: DeleteConfirmationKind,
     entityId: string,
@@ -3170,6 +3190,22 @@ function CurrentWorkBlocksPanel({
                     onValidValueChange={(quantity) => onQuantityChange(block.draftBlockItemId, quantity)}
                   />
                 </label>
+                <div className="draft-priority-control" role="group" aria-label={`${block.name} 아래층 우선 설정`}>
+                  <span>아래층 우선</span>
+                  <div className="draft-priority-options">
+                    {DRAFT_LOAD_PRIORITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className="secondary-button"
+                        aria-pressed={normalizeDraftLoadPriorityOptionValue(block.loadPriority) === option.value}
+                        onClick={() => onLoadPriorityChange(block.draftBlockItemId, option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="summary-tile compact">
                   <span>총 부피</span>
                   <strong>{formatBlockVolumeM3(block)}</strong>
@@ -6654,6 +6690,20 @@ function parseOptionalWeightKg(value: string) {
 
   const parsedValue = Number(normalizedValue);
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function normalizeDraftLoadPriorityOptionValue(
+  value: number | null | undefined
+): DraftLoadPriorityOptionValue {
+  if (typeof value === "number" && value >= 10) {
+    return 10;
+  }
+
+  if (typeof value === "number" && value >= 5) {
+    return 5;
+  }
+
+  return 0;
 }
 
 function formatOptionalWeightFormValue(weightKg: number | null | undefined) {
