@@ -32,7 +32,7 @@ export function downloadTextFile(
   environment: TextFileDownloadEnvironment = getBrowserTextFileDownloadEnvironment()
 ): void {
   if (!environment.Blob || !environment.URL || !environment.document) {
-    throw new Error("작업 지시서 파일을 만들 수 없습니다.");
+    throw new Error("텍스트 파일을 만들 수 없습니다.");
   }
 
   const blob = new environment.Blob([text], { type: "text/plain;charset=utf-8" });

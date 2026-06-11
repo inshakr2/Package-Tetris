@@ -27,6 +27,9 @@ describe("development deliverables document", () => {
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);
     assert.match(document, /src\/lib\/workspace\/packing-engine\.ts/);
     assert.match(document, /V1 제외 범위/);
+    assert.doesNotMatch(document, /작업 지시서/);
+    assert.doesNotMatch(document, /배치 상세/);
+    assert.doesNotMatch(document, /쌓는 순서/);
   });
 
   it("비개발자 시작 가이드는 현장 시연 가이드와 Windows 자동 실행 가이드를 분리해서 안내한다", () => {
@@ -40,5 +43,6 @@ describe("development deliverables document", () => {
     assert.match(document, /docs\/field-demo-user-guide\.md/);
     assert.match(document, /docs\/windows-cmd-launch-guide\.md/);
     assert.match(document, /scripts\/windows-start-package-tetris\.cmd/);
+    assert.doesNotMatch(document, /작업 지시서/);
   });
 });

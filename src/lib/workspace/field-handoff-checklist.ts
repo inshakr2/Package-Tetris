@@ -2,7 +2,7 @@ import type { ResultFreshnessStatus } from "./result-freshness";
 
 export type FieldHandoffChecklistTone = "ready" | "attention" | "waiting";
 export type FieldHandoffChecklistItemStatus = "ready" | "attention" | "waiting";
-export type FieldHandoffChecklistAction = "create-result" | "recalculate" | "open-instructions" | "export-backup";
+export type FieldHandoffChecklistAction = "create-result" | "recalculate" | "export-backup";
 
 export interface FieldHandoffChecklistInput {
   hasResult: boolean;
@@ -10,12 +10,11 @@ export interface FieldHandoffChecklistInput {
   resultActionDisabled: boolean;
   unloadedBlockCount: number;
   warningCount: number;
-  instructionPrepared: boolean;
   needsExport: boolean;
 }
 
 export interface FieldHandoffChecklistItem {
-  id: "result" | "safety" | "instructions" | "backup";
+  id: "result" | "safety" | "backup";
   label: string;
   description: string;
   status: FieldHandoffChecklistItemStatus;
@@ -31,19 +30,14 @@ export interface FieldHandoffChecklist {
 }
 
 export function createFieldHandoffChecklist(input: FieldHandoffChecklistInput): FieldHandoffChecklist {
-  const items: FieldHandoffChecklistItem[] = [
-    createResultItem(input),
-    createSafetyItem(input),
-    createInstructionItem(input),
-    createBackupItem(input)
-  ];
+  const items: FieldHandoffChecklistItem[] = [createResultItem(input), createSafetyItem(input), createBackupItem(input)];
   const hasWaiting = items.some((item) => item.status === "waiting");
   const hasAttention = items.some((item) => item.status === "attention");
 
   if (hasWaiting) {
     return {
       title: "현장 전달 준비 중",
-      description: "결과를 만들고 지시서와 백업까지 확인하면 현장에 전달할 수 있습니다.",
+      description: "결과를 만들고 미적재, 경고, 백업 상태를 확인하면 현장에 전달할 수 있습니다.",
       tone: "waiting",
       items
     };
@@ -52,7 +46,7 @@ export function createFieldHandoffChecklist(input: FieldHandoffChecklistInput): 
   if (hasAttention) {
     return {
       title: "확인 후 현장 전달",
-      description: "아래 항목을 확인한 뒤 적재 지시서나 백업 파일을 전달하세요.",
+      description: "최신 결과, 미적재와 경고, 백업 파일 상태를 확인한 뒤 현장에 전달하세요.",
       tone: "attention",
       items
     };
@@ -60,7 +54,7 @@ export function createFieldHandoffChecklist(input: FieldHandoffChecklistInput): 
 
   return {
     title: "현장 전달 준비됨",
-    description: "최신 결과, 작업 지시서, 백업 상태가 모두 준비되었습니다.",
+    description: "최신 결과와 백업 상태가 준비되었습니다.",
     tone: "ready",
     items
   };
@@ -141,39 +135,6 @@ function createSafetyItem(input: FieldHandoffChecklistInput): FieldHandoffCheckl
     id: "safety",
     label: "미적재 없음",
     description: "미적재 박스와 추가 경고가 없습니다.",
-    status: "ready",
-    action: null,
-    actionLabel: null
-  };
-}
-
-function createInstructionItem(input: FieldHandoffChecklistInput): FieldHandoffChecklistItem {
-  if (!input.hasResult) {
-    return {
-      id: "instructions",
-      label: "작업 지시서",
-      description: "결과를 만든 뒤 쌓는 순서를 복사하거나 저장합니다.",
-      status: "waiting",
-      action: null,
-      actionLabel: null
-    };
-  }
-
-  if (!input.instructionPrepared) {
-    return {
-      id: "instructions",
-      label: "작업 지시서 준비",
-      description: "쌓는 순서에서 작업 지시서를 복사하거나 파일로 저장하세요.",
-      status: "attention",
-      action: "open-instructions",
-      actionLabel: "쌓는 순서 열기"
-    };
-  }
-
-  return {
-    id: "instructions",
-    label: "작업 지시서 준비됨",
-    description: "작업 지시서가 복사되었거나 파일로 저장되었습니다.",
     status: "ready",
     action: null,
     actionLabel: null

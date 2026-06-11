@@ -23,6 +23,9 @@ describe("field demo user guide document", () => {
     assert.match(document, /오류 행/);
     assert.match(document, /행 번호/);
     assert.match(document, /사유/);
+    assert.doesNotMatch(document, /작업 지시서/);
+    assert.doesNotMatch(document, /배치 상세/);
+    assert.doesNotMatch(document, /쌓는 순서/);
   });
 
   it("시연 체크리스트는 .xlsx 일괄등록과 오류 행 확인을 포함한다", () => {
@@ -32,5 +35,6 @@ describe("field demo user guide document", () => {
     // When / Then
     assert.match(document, /\.xlsx 일괄등록 가능/);
     assert.match(document, /오류 행과 사유 확인 가능/);
+    assert.doesNotMatch(document, /작업 지시서/);
   });
 });

@@ -21,6 +21,9 @@ describe("repository README", () => {
     assert.match(readme, /docs\/development-deliverables\.md/);
     assert.match(readme, /docs\/v1-readiness\.md/);
     assert.match(readme, /https:\/\/github\.com\/inshakr2\/Package-Tetris/);
+    assert.doesNotMatch(readme, /작업 지시서/);
+    assert.doesNotMatch(readme, /배치 상세/);
+    assert.doesNotMatch(readme, /쌓는 순서/);
     assert.doesNotMatch(readme, /npm install/);
     assert.doesNotMatch(readme, /npm run dev/);
   });

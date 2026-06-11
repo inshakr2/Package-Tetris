@@ -4,12 +4,10 @@ import {
   AlertTriangle,
   Box,
   CheckCircle2,
-  Copy,
   Download,
   Eye,
   FileUp,
   HardDrive,
-  ListOrdered,
   Maximize2,
   PackagePlus,
   PencilLine,
@@ -94,7 +92,6 @@ import {
   resolveChainComparisonSpaces,
   type ChainComparisonMode
 } from "@/lib/workspace/chain-comparison-view";
-import { writeClipboardText } from "@/lib/workspace/clipboard-text";
 import {
   getDeleteConfirmationCopy,
   type DeleteConfirmationKind
@@ -133,11 +130,6 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
-import { downloadTextFile } from "@/lib/workspace/text-file-download";
-import {
-  createStackingInstructionDownloadSuccessMessage,
-  createStackingInstructionFilename
-} from "@/lib/workspace/loading-instruction-file";
 import {
   createResultFreshnessState,
   createResultInputFingerprint,
@@ -180,15 +172,7 @@ import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
 import { loadFieldDemoCurrentWork } from "@/lib/workspace/field-demo-workspace";
 import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/lib/workspace/presets";
-import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
-import {
-  createStackingInstructionText,
-  createStackingInstructionSpaceLabel,
-  createStackingInstructionSteps,
-  createStackingLayerSummaries,
-  formatStackingInstructionCalculatedAt
-} from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
 import { normalizeWorkspace as normalizeWorkspaceForV2 } from "@/lib/workspace/workspace-migration";
 import {
@@ -209,9 +193,6 @@ import { PwaServiceWorkerRegistrar } from "./pwa-service-worker-registrar";
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
-type InstructionCopyStatus = "idle" | "copied" | "error";
-type InstructionDownloadStatus = "idle" | "downloaded" | "error";
-type ResultInspectionDialogKind = "placement" | "stacking";
 
 interface PwaBeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -3368,7 +3349,6 @@ const ResultStage = ({
   const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [threeResetToken, setThreeResetToken] = useState(0);
   const [threeDialogOpen, setThreeDialogOpen] = useState(false);
-  const [resultInspectionDialog, setResultInspectionDialog] = useState<ResultInspectionDialogKind | null>(null);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
@@ -3377,13 +3357,9 @@ const ResultStage = ({
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
   const [chainRequestedQuantity, setChainRequestedQuantity] = useState(1);
-  const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
-  const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
-  const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
   const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
@@ -3456,58 +3432,15 @@ const ResultStage = ({
       ),
     [latestResult?.spaces]
   );
-  const stackingLayerSummaries = useMemo(
-    () => (selectedPackedSpace ? createStackingLayerSummaries(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const stackingInstructionSteps = useMemo(
-    () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const placementDetailRows = useMemo(
-    () => (selectedPackedSpace ? createPlacementDetailRows(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const stackingInstructionSpaceLabel = useMemo(
-    () => createStackingInstructionSpaceLabel(resultSpace?.name, selectedPackedSpaceIndex),
-    [resultSpace?.name, selectedPackedSpaceIndex]
-  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
     latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
   const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
   const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
-  const stackingInstructionWarningMessages = useMemo(
-    () => [
-      ...(safetySpaceSplitWarning ? [safetySpaceSplitWarning] : []),
-      ...resultWarningSummary.map((warning) =>
-        warning.count > 1 ? `${warning.message} · ${warning.count}건` : warning.message
-      )
-    ],
-    [resultWarningSummary, safetySpaceSplitWarning]
-  );
-  const stackingInstructionText = useMemo(
-    () =>
-      createStackingInstructionText(
-        stackingInstructionSpaceLabel,
-        stackingInstructionSteps,
-        {
-          calculatedAtLabel: latestResult?.createdAt
-            ? formatStackingInstructionCalculatedAt(latestResult.createdAt)
-            : undefined,
-          unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
-          warnings: stackingInstructionWarningMessages
-        }
-      ),
-    [
-      latestResult?.createdAt,
-      latestResult?.unloadedBlockCount,
-      stackingInstructionSpaceLabel,
-      stackingInstructionSteps,
-      stackingInstructionWarningMessages
-    ]
-  );
+  const fieldHandoffWarningCount =
+    (safetySpaceSplitWarning ? 1 : 0) +
+    resultWarningSummary.reduce((count, warning) => count + warning.count, 0);
   const resultActionCtaDisabled = resultCreating || resultFreshnessState.ctaDisabled;
   const resultActionCtaTitle = resultCreating
     ? "결과를 계산하고 있습니다."
@@ -3523,18 +3456,15 @@ const ResultStage = ({
         resultFreshnessStatus: resultFreshnessState.status,
         resultActionDisabled: resultActionCtaDisabled,
         unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
-        warningCount: stackingInstructionWarningMessages.length,
-        instructionPrepared: instructionCopyStatus === "copied" || instructionDownloadStatus === "downloaded",
+        warningCount: fieldHandoffWarningCount,
         needsExport
       }),
     [
-      instructionCopyStatus,
-      instructionDownloadStatus,
+      fieldHandoffWarningCount,
       latestResult,
       needsExport,
       resultActionCtaDisabled,
-      resultFreshnessState.status,
-      stackingInstructionWarningMessages.length
+      resultFreshnessState.status
     ]
   );
   const recommendationCopy = offsetRecommendation ? createResultSpaceRecommendationCopy(offsetRecommendation) : null;
@@ -3550,20 +3480,10 @@ const ResultStage = ({
     setChainPreview(null);
     setChainComparisonMode("preview");
     setThreeDialogOpen(false);
-    setResultInspectionDialog(null);
     setChainStatus("idle");
     setChainStatusMessage("추가할 박스 1개를 선택하세요.");
-    setInstructionCopyStatus("idle");
-    setInstructionDownloadStatus("idle");
-    setInstructionDownloadFilename(null);
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
-
-  useEffect(() => {
-    setInstructionCopyStatus("idle");
-    setInstructionDownloadStatus("idle");
-    setInstructionDownloadFilename(null);
-  }, [stackingInstructionText]);
 
   useEffect(() => {
     const policyKey = `${workspacePolicy.partialSupportEnabled}:${workspacePolicy.minimumSupportRatio}`;
@@ -3730,29 +3650,9 @@ const ResultStage = ({
     }
   }
 
-  function openResultInspectionDialog(kind: ResultInspectionDialogKind, trigger: HTMLButtonElement) {
-    resultInspectionDialogTriggerRef.current = trigger;
-    setResultInspectionDialog(kind);
-  }
-
-  function closeResultInspectionDialog({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
-    setResultInspectionDialog(null);
-
-    if (restoreFocus) {
-      window.setTimeout(() => {
-        resultInspectionDialogTriggerRef.current?.focus();
-      }, 0);
-    }
-  }
-
-  function handleFieldHandoffAction(action: FieldHandoffChecklistAction, event: MouseEvent<HTMLButtonElement>) {
+  function handleFieldHandoffAction(action: FieldHandoffChecklistAction) {
     if (action === "create-result" || action === "recalculate") {
       onCreateResult();
-      return;
-    }
-
-    if (action === "open-instructions") {
-      openResultInspectionDialog("stacking", event.currentTarget);
       return;
     }
 
@@ -3768,10 +3668,6 @@ const ResultStage = ({
   function isFieldHandoffActionDisabled(action: FieldHandoffChecklistAction) {
     if (action === "create-result" || action === "recalculate") {
       return resultActionCtaDisabled;
-    }
-
-    if (action === "open-instructions") {
-      return !latestResult;
     }
 
     if (action === "export-backup") {
@@ -3800,39 +3696,6 @@ const ResultStage = ({
   function openTopFallbackFromExpanded() {
     closeExpandedThreeView({ restoreFocus: false });
     selectProjectionView("top");
-  }
-
-  async function copyStackingInstructions() {
-    if (!stackingInstructionText) {
-      return;
-    }
-
-    try {
-      await writeClipboardText(stackingInstructionText);
-      setInstructionCopyStatus("copied");
-    } catch {
-      setInstructionCopyStatus("error");
-    }
-  }
-
-  function downloadStackingInstructions() {
-    if (!stackingInstructionText) {
-      return;
-    }
-
-    try {
-      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex, new Date(), resultSpace?.name);
-
-      downloadTextFile({
-        text: stackingInstructionText,
-        filename
-      });
-      setInstructionDownloadFilename(filename);
-      setInstructionDownloadStatus("downloaded");
-    } catch {
-      setInstructionDownloadFilename(null);
-      setInstructionDownloadStatus("error");
-    }
   }
 
   function selectChainTemplate(blockTemplateId: string) {
@@ -4243,31 +4106,6 @@ const ResultStage = ({
               ) : null}
 
               <div className="projection-controls-stack">
-                <div className="result-inspection-actions" aria-label="선택 공간 상세 확인">
-                  <button
-                    className="secondary-button"
-                    aria-haspopup="dialog"
-                    aria-controls="result-inspection-dialog"
-                    disabled={!selectedPackedSpace}
-                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
-                    onClick={(event) => openResultInspectionDialog("placement", event.currentTarget)}
-                  >
-                    <Box size={16} />
-                    배치 상세
-                  </button>
-                  <button
-                    className="secondary-button"
-                    aria-haspopup="dialog"
-                    aria-controls="result-inspection-dialog"
-                    disabled={!selectedPackedSpace}
-                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
-                    onClick={(event) => openResultInspectionDialog("stacking", event.currentTarget)}
-                  >
-                    <ListOrdered size={16} />
-                    쌓는 순서
-                  </button>
-                </div>
-
                 {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
                   <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
                     {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
@@ -4429,22 +4267,6 @@ const ResultStage = ({
               </div>
             </aside>
           </div>
-          <ResultInspectionDialog
-            openKind={resultInspectionDialog}
-            spaceLabel={stackingInstructionSpaceLabel}
-            placementDetailRows={placementDetailRows}
-            stackingInstructionSteps={stackingInstructionSteps}
-            stackingLayerSummaries={stackingLayerSummaries}
-            instructionCopyStatus={instructionCopyStatus}
-            instructionDownloadStatus={instructionDownloadStatus}
-            instructionDownloadFilename={instructionDownloadFilename}
-            hasLatestResult={Boolean(latestResult)}
-            hasSelectedSpace={Boolean(selectedPackedSpace)}
-            stackingInstructionText={stackingInstructionText}
-            onCopyStackingInstructions={copyStackingInstructions}
-            onDownloadStackingInstructions={downloadStackingInstructions}
-            onClose={closeResultInspectionDialog}
-          />
           <OffsetRecommendationPreviewDialog
             open={offsetPreviewDialogOpen && Boolean(offsetRecommendation)}
             recommendation={offsetRecommendation}
@@ -4543,7 +4365,7 @@ const ResultStage = ({
                 ) : item.status === "attention" ? (
                   <AlertTriangle size={18} color="var(--amber)" />
                 ) : (
-                  <ListOrdered size={18} color="var(--muted)" />
+                  <AlertTriangle size={18} color="var(--muted)" />
                 )}
                 <span>
                   <strong>{item.label}</strong>
@@ -4564,9 +4386,9 @@ const ResultStage = ({
                         ? "primary-button field-handoff-action"
                         : "secondary-button field-handoff-action"
                     }
-                    onClick={(event) => {
+                    onClick={() => {
                       if (item.action) {
-                        handleFieldHandoffAction(item.action, event);
+                        handleFieldHandoffAction(item.action);
                       }
                     }}
                     disabled={item.action ? isFieldHandoffActionDisabled(item.action) : false}
@@ -4578,8 +4400,6 @@ const ResultStage = ({
                   >
                     {item.action === "export-backup" ? (
                       <Download size={16} />
-                    ) : item.action === "open-instructions" ? (
-                      <ListOrdered size={16} />
                     ) : (
                       <RotateCcw size={16} />
                     )}
@@ -4637,136 +4457,6 @@ const ResultStage = ({
     </section>
   );
 };
-
-function ResultInspectionDialog({
-  openKind,
-  spaceLabel,
-  placementDetailRows,
-  stackingInstructionSteps,
-  stackingLayerSummaries,
-  instructionCopyStatus,
-  instructionDownloadStatus,
-  instructionDownloadFilename,
-  hasLatestResult,
-  hasSelectedSpace,
-  stackingInstructionText,
-  onCopyStackingInstructions,
-  onDownloadStackingInstructions,
-  onClose
-}: {
-  openKind: ResultInspectionDialogKind | null;
-  spaceLabel: string;
-  placementDetailRows: ReturnType<typeof createPlacementDetailRows>;
-  stackingInstructionSteps: ReturnType<typeof createStackingInstructionSteps>;
-  stackingLayerSummaries: ReturnType<typeof createStackingLayerSummaries>;
-  instructionCopyStatus: InstructionCopyStatus;
-  instructionDownloadStatus: InstructionDownloadStatus;
-  instructionDownloadFilename: string | null;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-  stackingInstructionText: string;
-  onCopyStackingInstructions: () => void;
-  onDownloadStackingInstructions: () => void;
-  onClose: (options?: { restoreFocus?: boolean }) => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = "result-inspection-dialog-title";
-  const descriptionId = "result-inspection-dialog-description";
-  const isPlacement = openKind === "placement";
-  const title = isPlacement ? "배치 상세" : "쌓는 순서";
-  const description = isPlacement
-    ? `선택한 ${spaceLabel} 기준 · 박스별 위치와 회전 후 크기`
-    : `선택한 ${spaceLabel} 기준 · 아래층부터 확인`;
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-
-    if (!dialog) {
-      return;
-    }
-
-    if (openKind) {
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-
-      window.setTimeout(() => {
-        dialog.querySelector<HTMLButtonElement>("[data-result-inspection-close='true']")?.focus();
-      }, 0);
-      return;
-    }
-
-    if (dialog.open) {
-      dialog.close();
-    }
-  }, [openKind]);
-
-  return (
-    <dialog
-      id="result-inspection-dialog"
-      ref={dialogRef}
-      className="result-inspection-dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descriptionId}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          onClose();
-        }
-      }}
-    >
-      <div className="result-inspection-dialog-sheet">
-        <div className="space-form-dialog-head result-inspection-dialog-head">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            <p id={descriptionId} className="fine-print">
-              {hasLatestResult && hasSelectedSpace
-                ? description
-                : "결과를 만들면 선택 공간의 상세 정보를 확인할 수 있습니다."}
-            </p>
-          </div>
-          <button
-            className="icon-button panel-close-button"
-            data-result-inspection-close="true"
-            onClick={() => onClose()}
-            aria-label={`${title} 닫기`}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="result-inspection-dialog-body">
-          {isPlacement ? (
-            <PlacementDetailContent
-              titleId={titleId}
-              rows={placementDetailRows}
-              hasLatestResult={hasLatestResult}
-              hasSelectedSpace={hasSelectedSpace}
-            />
-          ) : (
-            <StackingOrderContent
-              steps={stackingInstructionSteps}
-              layers={stackingLayerSummaries}
-              instructionCopyStatus={instructionCopyStatus}
-              instructionDownloadStatus={instructionDownloadStatus}
-              instructionDownloadFilename={instructionDownloadFilename}
-              hasLatestResult={hasLatestResult}
-              hasSelectedSpace={hasSelectedSpace}
-              stackingInstructionText={stackingInstructionText}
-              onCopyStackingInstructions={onCopyStackingInstructions}
-              onDownloadStackingInstructions={onDownloadStackingInstructions}
-            />
-          )}
-        </div>
-      </div>
-    </dialog>
-  );
-}
 
 function createResultSpaceRecommendationCopy(recommendation: ResultSpaceAdjustmentRecommendation) {
   if (recommendation.kind === "overhang-pallet") {
@@ -5039,156 +4729,6 @@ function formatRecommendationSuggestedSetting(recommendation: ResultSpaceAdjustm
 
 function formatOffset(offset: { widthMm: number; depthMm: number; heightMm: number }) {
   return `${offset.widthMm} / ${offset.depthMm} / ${offset.heightMm}mm`;
-}
-
-function PlacementDetailContent({
-  titleId,
-  rows,
-  hasLatestResult,
-  hasSelectedSpace
-}: {
-  titleId: string;
-  rows: ReturnType<typeof createPlacementDetailRows>;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-}) {
-  if (rows.length > 0) {
-    return (
-      <div className="placement-detail-table" role="table" aria-labelledby={titleId}>
-        <div className="placement-detail-header" role="row">
-          <span role="columnheader">순서</span>
-          <span role="columnheader">박스</span>
-          <span role="columnheader">위치</span>
-          <span role="columnheader">회전 후 크기</span>
-          <span role="columnheader">방향</span>
-        </div>
-        {rows.map((row) => (
-          <div key={row.blockId} className="placement-detail-row" role="row">
-            <span role="cell" data-label="순서">
-              <strong>{row.sequenceLabel}</strong>
-            </span>
-            <span role="cell" data-label="박스">
-              <strong>{row.name}</strong>
-              <small>{row.handlingLabel}</small>
-            </span>
-            <span role="cell" data-label="위치">
-              {row.positionLabel}
-            </span>
-            <span role="cell" data-label="회전 후 크기">
-              {row.sizeLabel}
-            </span>
-            <span role="cell" data-label="방향">
-              {row.directionLabel}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (hasLatestResult && hasSelectedSpace) {
-    return <p className="meta">선택한 공간에 표시할 배치 좌표가 없습니다.</p>;
-  }
-
-  return <p className="meta">결과를 만들면 배치 상세표가 표시됩니다.</p>;
-}
-
-function StackingOrderContent({
-  steps,
-  layers,
-  instructionCopyStatus,
-  instructionDownloadStatus,
-  instructionDownloadFilename,
-  hasLatestResult,
-  hasSelectedSpace,
-  stackingInstructionText,
-  onCopyStackingInstructions,
-  onDownloadStackingInstructions
-}: {
-  steps: ReturnType<typeof createStackingInstructionSteps>;
-  layers: ReturnType<typeof createStackingLayerSummaries>;
-  instructionCopyStatus: InstructionCopyStatus;
-  instructionDownloadStatus: InstructionDownloadStatus;
-  instructionDownloadFilename: string | null;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-  stackingInstructionText: string;
-  onCopyStackingInstructions: () => void;
-  onDownloadStackingInstructions: () => void;
-}) {
-  return (
-    <>
-      <div className="loading-instruction-actions">
-        <button
-          className="secondary-button loading-instruction-copy-button"
-          onClick={onCopyStackingInstructions}
-          disabled={!stackingInstructionText}
-          title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
-        >
-          <Copy size={16} />
-          작업 순서 복사
-        </button>
-        <button
-          className="secondary-button loading-instruction-download-button"
-          onClick={onDownloadStackingInstructions}
-          disabled={!stackingInstructionText}
-          title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
-        >
-          <Download size={16} />
-          작업 지시서 저장
-        </button>
-      </div>
-      {instructionCopyStatus === "copied" ? (
-        <p className="loading-instruction-copy-status" data-tone="green" role="status">
-          작업 순서를 복사했습니다.
-        </p>
-      ) : instructionCopyStatus === "error" ? (
-        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-          복사하지 못했습니다. 브라우저 권한을 확인하세요.
-        </p>
-      ) : null}
-      {instructionDownloadStatus === "downloaded" ? (
-        <p className="loading-instruction-copy-status" data-tone="green" role="status">
-          {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
-        </p>
-      ) : instructionDownloadStatus === "error" ? (
-        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-          작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
-        </p>
-      ) : null}
-      {steps.length > 0 ? (
-        <>
-          <div className="loading-instruction-list" aria-label="현장 작업 순서">
-            {steps.map((step) => (
-              <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
-                <strong>{step.title}</strong>
-                <div className="loading-instruction-copy">
-                  <p>{step.instruction}</p>
-                  <small>{step.detail}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="stacking-layer-list" aria-label="층별 적재 순서">
-            {layers.map((layer) => (
-              <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
-                <strong>{layer.layerIndex}층</strong>
-                <span>
-                  {layer.heightLabel}
-                  <small>{layer.loadSummary}</small>
-                </span>
-                <small className="stacking-layer-count">총 {layer.blockCount}개</small>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : hasLatestResult && hasSelectedSpace ? (
-        <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
-      ) : (
-        <p className="meta">결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다.</p>
-      )}
-    </>
-  );
 }
 
 function ExpandedThreeViewDialog({

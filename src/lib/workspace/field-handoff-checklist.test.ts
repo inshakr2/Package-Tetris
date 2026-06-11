@@ -11,7 +11,6 @@ describe("field-handoff-checklist", () => {
       resultActionDisabled: false,
       unloadedBlockCount: 0,
       warningCount: 0,
-      instructionPrepared: false,
       needsExport: false
     };
 
@@ -26,13 +25,12 @@ describe("field-handoff-checklist", () => {
       [
         ["result", "waiting", "create-result"],
         ["safety", "waiting", null],
-        ["instructions", "waiting", null],
         ["backup", "ready", null]
       ]
     );
   });
 
-  it("입력이 바뀐 결과와 미전달 지시서, 백업 필요 상태를 현장 확인 항목으로 묶는다", () => {
+  it("입력이 바뀐 결과와 경고, 백업 필요 상태를 현장 확인 항목으로 묶는다", () => {
     // Given
     const input = {
       hasResult: true,
@@ -40,7 +38,6 @@ describe("field-handoff-checklist", () => {
       resultActionDisabled: false,
       unloadedBlockCount: 2,
       warningCount: 3,
-      instructionPrepared: false,
       needsExport: true
     };
 
@@ -55,13 +52,12 @@ describe("field-handoff-checklist", () => {
       [
         ["result", "attention", "recalculate"],
         ["safety", "attention", null],
-        ["instructions", "attention", "open-instructions"],
         ["backup", "attention", "export-backup"]
       ]
     );
   });
 
-  it("최신 결과, 확인된 안전 안내, 준비된 지시서와 백업이면 전달 준비 완료로 표시한다", () => {
+  it("최신 결과, 확인된 안전 안내와 백업이면 전달 준비 완료로 표시한다", () => {
     // Given
     const input = {
       hasResult: true,
@@ -69,7 +65,6 @@ describe("field-handoff-checklist", () => {
       resultActionDisabled: false,
       unloadedBlockCount: 0,
       warningCount: 0,
-      instructionPrepared: true,
       needsExport: false
     };
 

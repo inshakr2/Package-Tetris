@@ -4,7 +4,7 @@
 
 ## 제품 범위
 
-Package Tetris V1은 프론트엔드 단독 적재 시뮬레이션 도구다. 사용자는 공간과 박스 정보를 입력하고, 적재 결과를 3D/2D로 확인하며, 작업 지시서와 JSON 백업 파일을 만들 수 있다.
+Package Tetris V1은 프론트엔드 단독 적재 시뮬레이션 도구다. 사용자는 공간과 박스 정보를 입력하고, 적재 결과를 3D/2D로 확인하며, JSON 백업 파일을 만들 수 있다.
 
 V1 제외 범위:
 
@@ -89,15 +89,11 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 
 - `src/lib/workspace/result-viewer-controls.ts`: 3D, 위, 앞, 옆 보기 제어
 - `src/lib/workspace/projection-view.ts`: 2D 투영 보기 데이터 생성
-- `src/lib/workspace/placement-detail-table.ts`: 배치 상세 행 생성
-- `src/lib/workspace/stacking-layer-summary.ts`: 층별 요약과 작업 지시 문장 생성
 - `src/lib/workspace/result-warning-summary.ts`: 경고 요약
 - `src/lib/workspace/result-remaining-volume.ts`: 남은 부피 KPI
 - `src/lib/workspace/field-handoff-checklist.ts`: 현장 전달 전 점검
-- `src/lib/workspace/text-file-download.ts`: 작업 지시서 텍스트 파일 저장
-- `src/lib/workspace/clipboard-text.ts`: 작업 순서 복사
 
-결과 화면은 적재 결과를 크게 보여주고, 배치 상세와 쌓는 순서는 모달로 확인한다. 현장 작업자는 3D가 실패해도 위/앞/옆 보기로 적재 상태를 확인할 수 있다.
+결과 화면은 적재 결과를 크게 보여주고, 현장 작업자는 3D가 실패해도 위/앞/옆 보기로 적재 상태를 확인할 수 있다.
 
 ## 현장 UX 산출물
 
@@ -107,7 +103,6 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 - 3D 결과 보기: 자유시점, 위/앞/옆 보기, 크게 보기, 치수 오버레이
 - 추가 적재 시뮬레이션: 원본과 추가 결과 비교, 결과 반영
 - 안전 여유 추천: 공간 하나가 더 필요한 아쉬운 상황에서 검토값 제안
-- 작업 지시서: 아래층부터 쌓는 순서 복사/저장
 - 저장 보호: 자동저장, 백업 파일, 여러 탭 충돌, 오프라인 준비 안내
 
 ## 검증 기준
