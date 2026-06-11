@@ -87,7 +87,12 @@ import {
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
-import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import { type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  runMultiChainSimulationV0,
+  type MultiChainSimulationOutput,
+  type MultiChainSimulationVariant
+} from "@/lib/workspace/multi-chain-simulation";
 import {
   resolveChainComparisonSpaces,
   type ChainComparisonMode
@@ -1752,6 +1757,7 @@ export function TetrisWorkspaceApp() {
           selectedSpace={selectedSpace}
           workspacePolicy={workspace.policy}
           review={review}
+          blockTemplates={workspace.blockTemplates}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
           pendingImport={pendingImport}
@@ -3309,6 +3315,7 @@ const ResultStage = ({
   selectedSpace,
   workspacePolicy,
   review,
+  blockTemplates,
   draftBlocks,
   chainHistory,
   pendingImport,
@@ -3330,6 +3337,7 @@ const ResultStage = ({
   selectedSpace: SpaceDefinition | undefined;
   workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
+  blockTemplates: BlockTemplate[];
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
   pendingImport: PendingImport | null;
@@ -3352,11 +3360,13 @@ const ResultStage = ({
   const [showOrientationArrows, setShowOrientationArrows] = useState(true);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
-  const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
-  const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
+  const [selectedChainTemplateIds, setSelectedChainTemplateIds] = useState<string[]>([]);
+  const [chainSearchTerm, setChainSearchTerm] = useState("");
+  const [chainMultiPreview, setChainMultiPreview] = useState<MultiChainSimulationOutput | null>(null);
+  const [selectedChainVariantId, setSelectedChainVariantId] = useState<string | null>(null);
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
-  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
+  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스를 최대 3개까지 선택하세요.");
   const [chainRequestedQuantity, setChainRequestedQuantity] = useState(1);
   const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
@@ -3364,6 +3374,25 @@ const ResultStage = ({
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
+  const chainBlockOptions = useMemo(() => blockTemplates, [blockTemplates]);
+  const filteredChainBlockOptions = useMemo(
+    () => searchBlockTemplates(chainBlockOptions, chainSearchTerm),
+    [chainBlockOptions, chainSearchTerm]
+  );
+  const selectedChainTemplates = useMemo(
+    () =>
+      selectedChainTemplateIds.flatMap((templateId) => {
+        const template = chainBlockOptions.find((item) => item.blockTemplateId === templateId);
+
+        return template ? [template] : [];
+      }),
+    [chainBlockOptions, selectedChainTemplateIds]
+  );
+  const selectedChainVariant =
+    chainMultiPreview?.variants.find((variant) => variant.variantId === selectedChainVariantId) ?? null;
+  const chainPreview = chainMultiPreview && selectedChainVariant
+    ? convertMultiChainVariantToPreview(chainMultiPreview, selectedChainVariant)
+    : null;
   const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
   const displayedSpaces = useMemo(
     () =>
@@ -3388,9 +3417,6 @@ const ResultStage = ({
     latestResult && usableSize
       ? formatVolumeM3(calculateResultRemainingVolumeM3(latestResult.spaces ?? [], usableSize))
       : "-";
-  const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
-  const selectedChainTemplate =
-    chainBlockOptions.find((template) => template.blockTemplateId === selectedChainTemplateId) ?? null;
   const latestResultChainHistory = latestResult
     ? chainHistory.filter((item) => item.resultId === latestResult.resultId)
     : [];
@@ -3477,12 +3503,14 @@ const ResultStage = ({
     setProjectionView("top");
     setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
     setSelectedBlockTemplateId(null);
-    setSelectedChainTemplateId(null);
-    setChainPreview(null);
+    setSelectedChainTemplateIds([]);
+    setChainSearchTerm("");
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
     setThreeDialogOpen(false);
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+    setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
@@ -3499,7 +3527,8 @@ const ResultStage = ({
     }
 
     previousChainPolicyKeyRef.current = policyKey;
-    setChainPreview(null);
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
     setChainStatus("idle");
     setChainStatusMessage("부분 지지 정책이 바뀌었습니다. 추가 박스는 다시 계산하세요.");
@@ -3699,14 +3728,33 @@ const ResultStage = ({
     selectProjectionView("top");
   }
 
-  function selectChainTemplate(blockTemplateId: string) {
-    setSelectedChainTemplateId(blockTemplateId);
-    setChainPreview(null);
+  function clearChainPreviewState() {
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
-    setChainStatus("idle");
     setSelectedBlockTemplateId(null);
+  }
+
+  function toggleChainTemplateSelection(blockTemplateId: string) {
+    const isSelected = selectedChainTemplateIds.includes(blockTemplateId);
+
+    if (!isSelected && selectedChainTemplateIds.length >= 3) {
+      setChainStatus("error");
+      setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
+      return;
+    }
+
+    const nextSelectedTemplateIds = isSelected
+      ? selectedChainTemplateIds.filter((templateId) => templateId !== blockTemplateId)
+      : [...selectedChainTemplateIds, blockTemplateId];
+
+    setSelectedChainTemplateIds(nextSelectedTemplateIds);
+    clearChainPreviewState();
+    setChainStatus("idle");
     setChainStatusMessage(
-      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산 또는 지정 수량 계산을 실행하세요."
+      nextSelectedTemplateIds.length
+        ? `${nextSelectedTemplateIds.length}개 박스를 선택했습니다. 추천 결과를 계산하세요.`
+        : "추가할 박스를 최대 3개까지 선택하세요."
     );
   }
 
@@ -3718,6 +3766,20 @@ const ResultStage = ({
     calculateChainPreviewWithQuantity(chainRequestedQuantity);
   }
 
+  function selectChainVariant(variantId: string) {
+    const variant = chainMultiPreview?.variants.find((item) => item.variantId === variantId);
+
+    if (!variant) {
+      return;
+    }
+
+    setSelectedChainVariantId(variantId);
+    setChainComparisonMode("preview");
+    setSelectedBlockTemplateId(null);
+    setChainStatus("preview");
+    setChainStatusMessage(`${variant.label}: 총 ${variant.totalAddedQuantity}개 추가 가능`);
+  }
+
   function changeChainRequestedQuantity(quantity: number) {
     setChainRequestedQuantity(quantity);
 
@@ -3725,30 +3787,36 @@ const ResultStage = ({
       return;
     }
 
-    setChainPreview(null);
-    setChainComparisonMode("preview");
-    setSelectedBlockTemplateId(null);
+    clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage("수량이 바뀌었습니다. 다시 계산하세요.");
   }
 
   function calculateChainPreviewWithQuantity(requestedQuantity?: number) {
-    if (!latestResult || !selectedChainTemplate) {
+    if (!latestResult || selectedChainTemplates.length === 0) {
       setChainStatus("idle");
       setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
       return;
     }
 
+    if (requestedQuantity && selectedChainTemplates.length !== 1) {
+      setChainStatus("error");
+      setChainStatusMessage("지정 수량 계산은 박스 1개를 선택했을 때만 사용할 수 있습니다.");
+      return;
+    }
+
     setChainStatus("calculating");
     setChainStatusMessage(
-      requestedQuantity ? `${requestedQuantity}개 추가 기준으로 계산하고 있습니다.` : "남은 공간 기준으로 계산하고 있습니다."
+      requestedQuantity
+        ? `${requestedQuantity}개 추가 기준으로 계산하고 있습니다.`
+        : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
     window.setTimeout(() => {
       try {
-        const preview = runChainSimulationV0({
+        const output = runMultiChainSimulationV0({
           result: latestResult,
-          blockTemplate: selectedChainTemplate,
+          blockTemplates: selectedChainTemplates,
           runId: createClientId("chain-run"),
           policy: {
             fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
@@ -3758,26 +3826,36 @@ const ResultStage = ({
           },
           requestedQuantity
         });
+        const selectedVariant =
+          output.variants.find((variant) => variant.variantId === output.recommendedVariantId) ??
+          output.variants[0] ??
+          null;
 
-        if (preview.warnings.length > 0) {
-          setChainPreview(null);
-          setChainComparisonMode("preview");
-          setSelectedBlockTemplateId(null);
+        if (output.warnings.length > 0 || !selectedVariant) {
+          clearChainPreviewState();
           setChainStatus("error");
-          setChainStatusMessage(preview.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          setChainStatusMessage(output.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
           return;
         }
 
-        setChainPreview(preview);
-        setChainComparisonMode("preview");
-        setSelectedBlockTemplateId(preview.blockTemplateId);
+        if (selectedVariant.warnings.length > 0 && selectedVariant.totalAddedQuantity === 0) {
+          clearChainPreviewState();
+          setChainStatus("error");
+          setChainStatusMessage(selectedVariant.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          return;
+        }
 
-        if (preview.addedQuantity > 0) {
+        setChainMultiPreview(output);
+        setSelectedChainVariantId(selectedVariant.variantId);
+        setChainComparisonMode("preview");
+        setSelectedBlockTemplateId(null);
+
+        if (selectedVariant.totalAddedQuantity > 0) {
           setChainStatus("preview");
           setChainStatusMessage(
             requestedQuantity
-              ? `${preview.blockName} 요청 ${requestedQuantity}개 중 ${preview.addedQuantity}개 추가 가능`
-              : `${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`
+              ? `${selectedVariant.label}: 요청 ${requestedQuantity}개 중 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : `${selectedVariant.label}: 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
           );
           return;
         }
@@ -3785,12 +3863,11 @@ const ResultStage = ({
         setChainStatus("empty");
         setChainStatusMessage(
           requestedQuantity
-            ? `${preview.blockName}은 요청한 ${requestedQuantity}개를 더 넣을 수 없습니다.`
-            : `${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`
+            ? `${selectedVariant.label}은 요청한 ${requestedQuantity}개를 더 넣을 수 없습니다.`
+            : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
         );
       } catch {
-        setChainPreview(null);
-        setChainComparisonMode("preview");
+        clearChainPreviewState();
         setChainStatus("error");
         setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 박스를 선택하세요.");
       }
@@ -3803,19 +3880,16 @@ const ResultStage = ({
     }
 
     onConfirmChainSimulation(chainPreview, latestResult.resultId);
-    setChainPreview(null);
-    setChainComparisonMode("preview");
+    clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage("추가 결과를 반영했습니다.");
   }
 
   function clearChainSelection() {
-    setSelectedChainTemplateId(null);
-    setChainPreview(null);
-    setChainComparisonMode("preview");
-    setSelectedBlockTemplateId(null);
+    setSelectedChainTemplateIds([]);
+    clearChainPreviewState();
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+    setChainStatusMessage("추가할 박스를 최대 3개까지 선택하세요.");
   }
 
   return (
@@ -4312,19 +4386,25 @@ const ResultStage = ({
 
       <ChainSimulationPanel
         latestResult={latestResult}
-        blockOptions={chainBlockOptions}
-        selectedTemplateId={selectedChainTemplateId}
+        blockOptions={filteredChainBlockOptions}
+        selectedTemplateIds={selectedChainTemplateIds}
+        selectedTemplateNames={selectedChainTemplates.map((template) => template.name)}
+        searchTerm={chainSearchTerm}
         partialSupportEnabled={workspacePolicy.partialSupportEnabled}
         minimumSupportRatio={workspacePolicy.minimumSupportRatio}
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
         requestedQuantity={chainRequestedQuantity}
         preview={chainPreview}
+        variants={chainMultiPreview?.variants ?? []}
+        selectedVariantId={selectedChainVariantId}
         chainHistory={latestResultChainHistory}
         latestChainItem={latestChainItem}
         resultCreating={resultCreating}
         resultCalculationProgress={resultCalculationProgress}
-        onSelectTemplate={selectChainTemplate}
+        onSearchTermChange={setChainSearchTerm}
+        onToggleTemplate={toggleChainTemplateSelection}
+        onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
         onCalculateRequested={calculateRequestedChainPreview}
         onRequestedQuantityChange={changeChainRequestedQuantity}
@@ -4334,9 +4414,7 @@ const ResultStage = ({
         onUndo={() => {
           if (latestResult) {
             onUndoLastChainAddition(latestResult.resultId);
-            setChainPreview(null);
-            setChainComparisonMode("preview");
-            setSelectedBlockTemplateId(null);
+            clearChainPreviewState();
             setChainStatus("idle");
             setChainStatusMessage("직전 추가를 취소했습니다.");
           }
@@ -4907,18 +4985,24 @@ function ExpandedThreeViewDialog({
 function ChainSimulationPanel({
   latestResult,
   blockOptions,
-  selectedTemplateId,
+  selectedTemplateIds,
+  selectedTemplateNames,
+  searchTerm,
   partialSupportEnabled,
   minimumSupportRatio,
   chainStatus,
   statusMessage,
   requestedQuantity,
   preview,
+  variants,
+  selectedVariantId,
   chainHistory,
   latestChainItem,
   resultCreating,
   resultCalculationProgress,
-  onSelectTemplate,
+  onSearchTermChange,
+  onToggleTemplate,
+  onSelectVariant,
   onCalculate,
   onCalculateRequested,
   onRequestedQuantityChange,
@@ -4929,18 +5013,24 @@ function ChainSimulationPanel({
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   blockOptions: BlockTemplate[];
-  selectedTemplateId: string | null;
+  selectedTemplateIds: string[];
+  selectedTemplateNames: string[];
+  searchTerm: string;
   partialSupportEnabled: boolean;
   minimumSupportRatio: number;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
   requestedQuantity: number;
   preview: ChainSimulationOutput | null;
+  variants: MultiChainSimulationVariant[];
+  selectedVariantId: string | null;
   chainHistory: ChainHistoryItem[];
   latestChainItem: ChainHistoryItem | null;
   resultCreating: boolean;
   resultCalculationProgress: ResultCalculationProgressCopy;
-  onSelectTemplate: (blockTemplateId: string) => void;
+  onSearchTermChange: (searchTerm: string) => void;
+  onToggleTemplate: (blockTemplateId: string) => void;
+  onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
   onCalculateRequested: () => void;
   onRequestedQuantityChange: (quantity: number) => void;
@@ -4950,10 +5040,13 @@ function ChainSimulationPanel({
   onUndo: () => void;
 }) {
   const hasResult = Boolean(latestResult);
-  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
-  const canCalculateRequested = canCalculate && requestedQuantity >= 1;
+  const canCalculate = hasResult && selectedTemplateIds.length > 0 && chainStatus !== "calculating";
+  const canCalculateRequested = canCalculate && selectedTemplateIds.length === 1 && requestedQuantity >= 1;
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
   const partialSupportPercent = Math.round(minimumSupportRatio * 100);
+  const visibleBlockOptions = blockOptions.slice(0, 12);
+  const hiddenBlockOptionCount = Math.max(0, blockOptions.length - visibleBlockOptions.length);
+  const selectedVariant = variants.find((variant) => variant.variantId === selectedVariantId) ?? null;
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -4962,9 +5055,9 @@ function ChainSimulationPanel({
           <span className="badge" data-tone={hasResult ? "green" : undefined}>
             기준 결과 잠금
           </span>
-          <h3 id="chain-simulation-title">추가 박스 시뮬레이션</h3>
+          <h3 id="chain-simulation-title">5. 추가 박스 시뮬레이션</h3>
           <p className="panel-subtitle">
-            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 박스를 얼마나 더 넣을 수 있는지 확인합니다.
+            저장된 박스 중 최대 3개를 골라 현재 결과 위에 더 쌓을 수 있는 추천 결과를 비교합니다.
           </p>
         </div>
         <div className="chain-history-row" aria-label="체이닝 이력">
@@ -4986,26 +5079,55 @@ function ChainSimulationPanel({
         <div className="chain-panel-grid">
           <div>
             <strong className="chain-field-title">추가할 박스</strong>
-            <div className="chain-option-list" role="radiogroup" aria-label="추가할 박스 유형">
-              {blockOptions.length === 0 ? (
-                <p className="fine-print">현재 작업에 추가된 박스 유형이 없습니다.</p>
+            <label className="chain-search-field">
+              저장된 박스 검색
+              <input
+                aria-label="추가 시뮬레이션 박스 검색"
+                value={searchTerm}
+                placeholder="박스명, 그룹, 치수로 검색"
+                onChange={(event) => onSearchTermChange(event.target.value)}
+              />
+            </label>
+            <div className="chain-selection-summary" aria-label="추가 시뮬레이션 선택 상태">
+              <span className="badge" data-tone={selectedTemplateIds.length ? "green" : undefined}>
+                선택 {selectedTemplateIds.length}/3
+              </span>
+              {selectedTemplateNames.length ? (
+                selectedTemplateNames.map((name) => (
+                  <span key={name} className="badge" data-tone="green">
+                    {name}
+                  </span>
+                ))
               ) : (
-                blockOptions.map((template) => (
+                <span className="fine-print">비슷하게 남는 공간을 시험할 박스를 선택하세요.</span>
+              )}
+            </div>
+            <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
+              {visibleBlockOptions.length === 0 ? (
+                <p className="fine-print">
+                  {searchTerm.trim() ? "검색 결과가 없습니다." : "저장된 박스가 없습니다."}
+                </p>
+              ) : (
+                visibleBlockOptions.map((template) => (
                   <button
                     key={template.blockTemplateId}
                     className="chain-option-button"
-                    role="radio"
-                    aria-checked={selectedTemplateId === template.blockTemplateId}
-                    onClick={() => onSelectTemplate(template.blockTemplateId)}
+                    role="checkbox"
+                    aria-checked={selectedTemplateIds.includes(template.blockTemplateId)}
+                    onClick={() => onToggleTemplate(template.blockTemplateId)}
                   >
                     <strong>{template.name}</strong>
                     <span>
                             {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                            {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
                     </span>
                   </button>
                 ))
               )}
             </div>
+            {hiddenBlockOptionCount > 0 ? (
+              <p className="fine-print">검색 결과가 많습니다. 더 좁혀 찾으면 {hiddenBlockOptionCount}개를 더 볼 수 있습니다.</p>
+            ) : null}
           </div>
 
           <div className="chain-result-panel">
@@ -5033,9 +5155,36 @@ function ChainSimulationPanel({
               <span>{statusMessage}</span>
             </div>
 
+            {variants.length > 0 ? (
+              <div>
+                <strong className="chain-field-title">결과 비교</strong>
+                <div className="chain-variant-list" role="group" aria-label="추가 결과 선택">
+                  {variants.map((variant) => (
+                    <button
+                      key={variant.variantId}
+                      className="chain-variant-button"
+                      aria-pressed={selectedVariantId === variant.variantId}
+                      onClick={() => onSelectVariant(variant.variantId)}
+                    >
+                      <strong>{variant.label}</strong>
+                      <span>
+                        {variant.totalAddedQuantity}개 추가 · 남은 부피 {formatVolumeM3(variant.remainingVolumeM3)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {selectedVariant?.warnings.length ? (
+                  <div className="chain-policy-notice" data-enabled="false" role="status">
+                    <strong>계산 안내</strong>
+                    <span>{selectedVariant.warnings[0]}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="chain-quantity-control">
               <label className="chain-quantity-field">
-                원하는 추가 수량(개)
+                원하는 추가 수량(개) 단일 박스
                 <NumberFieldInput
                   aria-label="추가할 수량"
                   min={1}
@@ -5054,7 +5203,7 @@ function ChainSimulationPanel({
                   ? "추가 가능 수량 계산 중..."
                   : chainStatus === "error"
                     ? "다시 계산"
-                    : "최대 적재 계산"}
+                    : "추천 결과 계산"}
               </button>
               <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
                 이 결과 반영
@@ -5073,8 +5222,10 @@ function ChainSimulationPanel({
                 </button>
               ) : null}
             </div>
-            {!selectedTemplateId ? (
+            {selectedTemplateIds.length === 0 ? (
               <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
+            ) : selectedTemplateIds.length > 1 ? (
+              <p className="fine-print review-cta-hint">지정 수량 계산은 박스 1개 선택 시에만 사용할 수 있습니다.</p>
             ) : null}
           </div>
         </div>
@@ -5881,29 +6032,19 @@ function ImportConflictPanel({
   );
 }
 
-function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
-  const templateMap = new Map<string, BlockTemplate>();
-
-  blocks.forEach((block) => {
-    if (templateMap.has(block.blockTemplateId)) {
-      return;
-    }
-
-    templateMap.set(block.blockTemplateId, {
-      blockTemplateId: block.blockTemplateId,
-      entityVersion: block.entityVersion,
-      name: block.name,
-      dimensions: block.dimensions,
-      fragile: block.fragile,
-      weightKg: block.weightKg,
-      group1: block.group1,
-      group2: block.group2,
-      createdAt: block.createdAt,
-      updatedAt: block.updatedAt
-    });
-  });
-
-  return Array.from(templateMap.values());
+function convertMultiChainVariantToPreview(
+  output: MultiChainSimulationOutput,
+  variant: MultiChainSimulationVariant
+): ChainSimulationOutput {
+  return {
+    runId: output.runId,
+    blockTemplateId: variant.priorityBlockTemplateId ?? variant.variantId,
+    blockName: variant.label,
+    addedQuantity: variant.totalAddedQuantity,
+    spaces: variant.spaces,
+    averageUtilizationRate: variant.averageUtilizationRate,
+    warnings: variant.warnings
+  };
 }
 
 function createTopBlockGroups(blockGroups: BlockGroup[]) {

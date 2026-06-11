@@ -14,6 +14,7 @@ export interface MultiChainSimulationInput {
   blockTemplates: BlockTemplate[];
   runId: string;
   policy: PlacementPolicy;
+  requestedQuantity?: number;
 }
 
 export interface MultiChainSimulationTemplateQuantity {
@@ -122,7 +123,7 @@ function simulateTemplateOrder(
     spaces: clonePackedSpaces(input.result.spaces ?? [])
   };
   const outputs: ChainSimulationOutput[] = [];
-  let remainingCalculationLimit = MAX_MULTI_CHAIN_ADDED_BLOCKS;
+  let remainingCalculationLimit = input.requestedQuantity ?? MAX_MULTI_CHAIN_ADDED_BLOCKS;
 
   order.forEach((template, index) => {
     if (remainingCalculationLimit <= 0) {
@@ -163,7 +164,7 @@ function simulateTemplateOrder(
       spaces,
       averageUtilizationRate: currentResult.averageUtilizationRate,
       remainingVolumeM3: calculateRemainingVolumeM3(input.result, spaces),
-      warnings: collectVariantWarnings(outputs, remainingCalculationLimit)
+      warnings: collectVariantWarnings(outputs, input.requestedQuantity === undefined && remainingCalculationLimit <= 0)
     }
   };
 }
@@ -185,10 +186,10 @@ function createSkippedChainOutput(
   };
 }
 
-function collectVariantWarnings(outputs: ChainSimulationOutput[], remainingCalculationLimit: number) {
+function collectVariantWarnings(outputs: ChainSimulationOutput[], reachedCalculationLimit: boolean) {
   const warnings = outputs.flatMap((output) => output.warnings);
 
-  if (remainingCalculationLimit <= 0) {
+  if (reachedCalculationLimit) {
     warnings.push(CALCULATION_LIMIT_WARNING);
   }
 

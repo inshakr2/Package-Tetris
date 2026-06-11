@@ -2389,6 +2389,28 @@ select:focus-visible {
   margin-bottom: 8px;
 }
 
+.chain-search-field {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chain-search-field input {
+  width: 100%;
+  min-height: 48px;
+}
+
+.chain-selection-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
 .chain-option-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -2507,6 +2529,36 @@ select:focus-visible {
 .chain-status-box[data-tone="calculating"] {
   border-color: rgba(183, 121, 31, 0.28);
   background: #fffaf0;
+}
+
+.chain-variant-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.chain-variant-button {
+  display: grid;
+  gap: 4px;
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.chain-variant-button[aria-pressed="true"] {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.24);
+}
+
+.chain-variant-button span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .chain-actions {
@@ -3213,6 +3265,10 @@ select:focus-visible {
   }
 
   .chain-option-list {
+    grid-template-columns: 1fr;
+  }
+
+  .chain-variant-list {
     grid-template-columns: 1fr;
   }
 

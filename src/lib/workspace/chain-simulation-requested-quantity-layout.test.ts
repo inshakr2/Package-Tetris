@@ -53,7 +53,7 @@ describe("chain-simulation-requested-quantity-layout", () => {
     // Given
     const hasQuantityChangeHandler =
       workspaceSource.includes("function changeChainRequestedQuantity") &&
-      workspaceSource.includes("setChainPreview(null)") &&
+      workspaceSource.includes("clearChainPreviewState()") &&
       workspaceSource.includes("setSelectedBlockTemplateId(null)");
     const hasRecalculateCopy = workspaceSource.includes("수량이 바뀌었습니다. 다시 계산하세요.");
     const handlerIsWired = workspaceSource.includes("onRequestedQuantityChange={changeChainRequestedQuantity}");
