@@ -8,6 +8,8 @@ export interface OptimizationInput {
     fragileStackOnFragileAllowed: boolean;
     nonFragileOnFragileAllowed: false;
     rotation: "orthogonal-90deg";
+    partialSupportEnabled?: boolean;
+    minimumSupportRatio?: number;
   };
 }
 

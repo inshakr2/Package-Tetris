@@ -23,24 +23,25 @@ describe("field-number-input-layout", () => {
     assert.equal(importsParser, true);
     assert.equal(hasDirectEventNumberParsing, false);
     assert.equal(hasNumberFieldComponent, true);
-    assert.equal(numberFieldUsageCount, 12);
+    assert.equal(numberFieldUsageCount, 11);
   });
 
-  it("수량 입력은 현장 단위와 접근성 라벨을 함께 제공한다", () => {
+  it("수량 입력은 템플릿 등록이 아니라 작업 수량 단계에서 현장 단위와 접근성 라벨을 제공한다", () => {
     // Given / When
     const hasVisibleQuantityUnits =
-      source.includes("기본 수량(개)") &&
       source.includes("이번 작업 수량(개)") &&
-      source.includes("원하는 추가 수량(개)");
+      source.includes("지정 수량(개)");
     const hasA11yQuantityUnits =
-      source.includes('aria-label="박스 기본 수량 개"') &&
       source.includes('aria-label="이번 작업 수량 개"') &&
-      source.includes('aria-label="추가할 수량"');
+      source.includes("지정 수량");
+    const hasRemovedTemplateDefaultQuantity =
+      !source.includes("기본 수량(개)") && !source.includes('aria-label="박스 기본 수량 개"');
     const hasIntegerSteps = source.includes('step="1"');
 
     // Then
     assert.equal(hasVisibleQuantityUnits, true);
     assert.equal(hasA11yQuantityUnits, true);
+    assert.equal(hasRemovedTemplateDefaultQuantity, true);
     assert.equal(hasIntegerSteps, true);
   });
 

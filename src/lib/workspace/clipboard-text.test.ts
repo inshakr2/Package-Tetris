@@ -8,7 +8,7 @@ describe("clipboard-text", () => {
     const writes: string[] = [];
 
     // When
-    await writeClipboardText("Space 1 쌓는 순서", {
+    await writeClipboardText("Space 1 결과 확인", {
       navigator: {
         clipboard: {
           writeText: async (text) => {
@@ -19,7 +19,7 @@ describe("clipboard-text", () => {
     });
 
     // Then
-    assert.deepEqual(writes, ["Space 1 쌓는 순서"]);
+    assert.deepEqual(writes, ["Space 1 결과 확인"]);
   });
 
   it("Clipboard API가 없으면 textarea와 execCommand 폴백으로 복사한다", async () => {

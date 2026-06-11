@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { DEFAULT_PALLET_SPACE_ID } from "../workspace/presets";
 import { createDefaultWorkspace } from "../workspace/workspace-factory";
 import {
   copyWorkspaceForNewFile,
@@ -15,6 +16,20 @@ describe("json-transfer", () => {
       deviceId: "device-a",
       fileId: "file-a",
       now: "2026-06-08T00:00:00.000Z"
+    });
+    workspace.policy.partialSupportEnabled = true;
+    workspace.policy.minimumSupportRatio = 0.55;
+    workspace.blockTemplates.push({
+      blockTemplateId: "template-a",
+      entityVersion: 1,
+      name: "A-박스",
+      dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+      fragile: false,
+      weightKg: 4.5,
+      group1: "금영",
+      group2: "스피커",
+      createdAt: workspace.updatedAt,
+      updatedAt: workspace.updatedAt
     });
     workspace.recentResults.push({
       resultId: "result-a",
@@ -48,17 +63,373 @@ describe("json-transfer", () => {
     const parsed = JSON.parse(exportWorkspaceToJson(workspace));
 
     // Then
-    assert.equal(parsed.schema_version, 1);
+    assert.equal(parsed.schema_version, 2);
     assert.equal(parsed.device_id, "device-a");
     assert.equal(parsed.policy.truck_preset_display_name, "2.5톤반");
     assert.equal(parsed.policy.fragile_stack_on_fragile_allowed, true);
+    assert.equal(parsed.policy.partial_support_enabled, true);
+    assert.equal(parsed.policy.minimum_support_ratio, 0.55);
     assert.ok(parsed.draft);
     assert.equal(parsed.recent_results.length, 1);
     assert.equal(parsed.recent_results[0].spaceSnapshot.name, "결과 기준 공간");
     assert.equal(parsed.chain_history.length, 1);
     assert.equal(parsed.chain_history[0].blockName, "추가 박스");
     assert.equal(parsed.chain_history[0].previousAverageUtilizationRate, 0.82);
+    assert.ok(Array.isArray(parsed.block_groups));
+    assert.equal(parsed.block_groups.length, 2);
+    assert.equal(parsed.block_groups[0].name, "금영");
+    assert.equal(parsed.block_groups[1].name, "스피커");
     assert.ok(Array.isArray(parsed.custom_blocks));
+    assert.equal(parsed.custom_blocks[0].weightKg, 4.5);
+    assert.equal(parsed.custom_blocks[0].group1, "금영");
+    assert.equal(parsed.custom_blocks[0].group2, "스피커");
+  });
+
+  it("V1 백업 JSON은 V2 작업본으로 보정해서 가져온다", () => {
+    // Given
+    const v1Payload = {
+      schema_version: 1,
+      app_version: "0.1.0",
+      exported_at: "2026-06-09T00:00:00.000Z",
+      device_id: "device-v1",
+      file_id: "file-v1",
+      revision: 7,
+      created_at: "2026-06-08T00:00:00.000Z",
+      updated_at: "2026-06-09T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      custom_blocks: [
+        {
+          blockTemplateId: "template-v1",
+          entityVersion: 1,
+          name: "V1 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          createdAt: "2026-06-08T00:00:00.000Z",
+          updatedAt: "2026-06-08T00:00:00.000Z"
+        }
+      ],
+      draft: {
+        selectedSpaceId: "preset-pallet-1150",
+        blockItems: [
+          {
+            draftBlockItemId: "item-v1",
+            blockTemplateId: "template-v1",
+            quantity: 5,
+            createdAt: "2026-06-08T00:00:00.000Z",
+            updatedAt: "2026-06-08T00:00:00.000Z"
+          }
+        ],
+        currentStep: "blocks",
+        updatedAt: "2026-06-09T00:00:00.000Z"
+      },
+      recent_results: [],
+      chain_history: []
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(v1Payload));
+
+    // Then
+    assert.equal(workspace.schemaVersion, 2);
+    assert.equal(workspace.policy.partialSupportEnabled, false);
+    assert.equal(workspace.policy.minimumSupportRatio, 1);
+    assert.equal(workspace.blockTemplates[0]?.weightKg, null);
+    assert.equal(workspace.blockTemplates[0]?.group1, undefined);
+    assert.equal(workspace.blockTemplates[0]?.group2, undefined);
+    assert.deepEqual(workspace.blockGroups, []);
+    assert.equal(workspace.draft.selectedSpaceId, DEFAULT_PALLET_SPACE_ID);
+    assert.equal(workspace.draft.blockItems[0]?.loadPriority, null);
+  });
+
+  it("가져온 draft의 loadPriority는 화면 선택지와 같은 0/5/10 단계로 보정한다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-11T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 3,
+      created_at: "2026-06-11T00:00:00.000Z",
+      updated_at: "2026-06-11T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: false,
+        minimum_support_ratio: 1,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      block_groups: [],
+      custom_blocks: [
+        {
+          blockTemplateId: "template-a",
+          entityVersion: 1,
+          name: "A 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          createdAt: "2026-06-11T00:00:00.000Z",
+          updatedAt: "2026-06-11T00:00:00.000Z"
+        }
+      ],
+      draft: {
+        selectedSpaceId: "preset-pallet-1100",
+        blockItems: [
+          {
+            draftBlockItemId: "item-low",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 4.2,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          },
+          {
+            draftBlockItemId: "item-mid",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 6,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          },
+          {
+            draftBlockItemId: "item-high",
+            blockTemplateId: "template-a",
+            quantity: 1,
+            loadPriority: 99,
+            createdAt: "2026-06-11T00:00:00.000Z",
+            updatedAt: "2026-06-11T00:00:00.000Z"
+          }
+        ],
+        currentStep: "blocks",
+        updatedAt: "2026-06-11T00:00:00.000Z"
+      },
+      recent_results: [],
+      chain_history: []
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+
+    // Then
+    assert.deepEqual(
+      workspace.draft.blockItems.map((item) => item.loadPriority),
+      [null, 5, 10]
+    );
+  });
+
+  it("가져온 결과와 추가 시뮬레이션 이력의 legacy 산출물 필드는 다시 내보내지 않는다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-11T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 3,
+      created_at: "2026-06-11T00:00:00.000Z",
+      updated_at: "2026-06-11T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: true,
+        minimum_support_ratio: 0.55,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      block_groups: [],
+      custom_blocks: [],
+      draft: {
+        selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
+        blockItems: [],
+        currentStep: "result",
+        updatedAt: "2026-06-11T00:00:00.000Z"
+      },
+      recent_results: [
+        {
+          resultId: "result-legacy",
+          createdAt: "2026-06-11T00:00:00.000Z",
+          usedSpaceCount: 1,
+          averageUtilizationRate: 0.8,
+          unloadedBlockCount: 0,
+          spaces: [
+            {
+              spaceInstanceId: "space-1",
+              utilizationRate: 0.8,
+              blocks: [
+                {
+                  blockId: "block-1",
+                  blockTemplateId: "template-1",
+                  name: "A 박스",
+                  fragile: false,
+                  xMm: 0,
+                  yMm: 0,
+                  zMm: 0,
+                  widthMm: 100,
+                  depthMm: 100,
+                  heightMm: 100,
+                  rotation: "xyz",
+                  placementDetails: ["legacy"]
+                }
+              ],
+              stackingLayers: ["legacy"]
+            }
+          ],
+          warnings: ["확인"],
+          placementDetails: ["legacy"],
+          stackingLayers: ["legacy"],
+          loadingInstructionText: "legacy instruction",
+          workOrder: { legacy: true }
+        }
+      ],
+      chain_history: [
+        {
+          chainId: "chain-legacy",
+          resultId: "result-legacy",
+          blockId: "block-1",
+          blockTemplateId: "template-1",
+          blockName: "추가 박스",
+          addedQuantity: 2,
+          previousAverageUtilizationRate: 0.72,
+          previousSpaces: [
+            {
+              spaceInstanceId: "previous-space-1",
+              utilizationRate: 0.72,
+              blocks: [],
+              loadingInstructionText: "legacy"
+            }
+          ],
+          workOrder: { legacy: true }
+        }
+      ]
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+    const exported = exportWorkspaceToJson(workspace, "2026-06-11T01:00:00.000Z");
+    const exportedPayload = JSON.parse(exported);
+
+    // Then
+    const importedResult = workspace.recentResults[0] as unknown as Record<string, unknown>;
+    const importedChainItem = workspace.chainHistory[0] as unknown as Record<string, unknown>;
+    assert.equal("placementDetails" in importedResult, false);
+    assert.equal("stackingLayers" in importedResult, false);
+    assert.equal("loadingInstructionText" in importedResult, false);
+    assert.equal("workOrder" in importedChainItem, false);
+    assert.equal("placementDetails" in exportedPayload.recent_results[0], false);
+    assert.equal("stackingLayers" in exportedPayload.recent_results[0].spaces[0], false);
+    assert.equal("placementDetails" in exportedPayload.recent_results[0].spaces[0].blocks[0], false);
+    assert.equal("loadingInstructionText" in exportedPayload.chain_history[0].previousSpaces[0], false);
+    assert.doesNotMatch(exported, /legacy instruction|workOrder|placementDetails|stackingLayers/);
+  });
+
+  it("현재 작업본에 legacy 산출물 필드가 섞여도 JSON export는 허용 필드만 내보낸다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-11T00:00:00.000Z"
+    });
+    workspace.recentResults.push({
+      resultId: "result-live-legacy",
+      createdAt: workspace.updatedAt,
+      usedSpaceCount: 1,
+      averageUtilizationRate: 0.8,
+      unloadedBlockCount: 0,
+      spaces: [
+        {
+          spaceInstanceId: "space-1",
+          utilizationRate: 0.8,
+          blocks: []
+        }
+      ],
+      loadingInstructionText: "legacy live instruction"
+    } as unknown as (typeof workspace.recentResults)[number]);
+    workspace.chainHistory.push({
+      chainId: "chain-live-legacy",
+      resultId: "result-live-legacy",
+      blockId: "block-live",
+      addedQuantity: 1,
+      createdAt: workspace.updatedAt,
+      workOrder: { legacy: true }
+    } as unknown as (typeof workspace.chainHistory)[number]);
+
+    // When
+    const exported = exportWorkspaceToJson(workspace, "2026-06-11T01:00:00.000Z");
+    const exportedPayload = JSON.parse(exported);
+
+    // Then
+    assert.equal("loadingInstructionText" in exportedPayload.recent_results[0], false);
+    assert.equal("workOrder" in exportedPayload.chain_history[0], false);
+    assert.doesNotMatch(exported, /legacy live instruction|workOrder/);
+  });
+
+  it("block_groups가 없는 백업도 저장된 박스의 문자열 그룹을 레지스트리로 보정한다", () => {
+    // Given
+    const payload = {
+      schema_version: 2,
+      app_version: "0.1.0",
+      exported_at: "2026-06-10T00:00:00.000Z",
+      device_id: "device-a",
+      file_id: "file-a",
+      revision: 2,
+      created_at: "2026-06-10T00:00:00.000Z",
+      updated_at: "2026-06-10T00:00:00.000Z",
+      policy: {
+        fragile_stack_on_fragile_allowed: true,
+        partial_support_enabled: false,
+        minimum_support_ratio: 1,
+        truck_preset_display_name: "2.5톤반"
+      },
+      custom_spaces: [],
+      custom_blocks: [
+        {
+          blockTemplateId: "template-a",
+          entityVersion: 1,
+          name: "스피커 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          group1: "금영",
+          group2: "스피커",
+          createdAt: "2026-06-10T00:00:00.000Z",
+          updatedAt: "2026-06-10T00:00:00.000Z"
+        }
+      ],
+      draft: {
+        selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
+        blockItems: [],
+        currentStep: "blocks",
+        updatedAt: "2026-06-10T00:00:00.000Z"
+      },
+      recent_results: [],
+      chain_history: []
+    };
+
+    // When
+    const workspace = parseWorkspaceImport(JSON.stringify(payload));
+
+    // Then
+    assert.equal(workspace.blockGroups.length, 2);
+    const topGroup = workspace.blockGroups.find((group) => group.name === "금영");
+    const childGroup = workspace.blockGroups.find((group) => group.name === "스피커");
+    assert.ok(topGroup);
+    assert.ok(childGroup);
+    assert.equal(childGroup.parentGroupId, topGroup.blockGroupId);
+  });
+
+  it("지원 범위 밖 schema_version은 가져오기를 거부한다", () => {
+    // Given
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-a",
+      fileId: "file-a",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const payload = JSON.parse(exportWorkspaceToJson(workspace));
+    payload.schema_version = 99;
+
+    // When / Then
+    assert.throws(() => parseWorkspaceImport(JSON.stringify(payload)), /지원하지 않는 schema_version/);
   });
 
   it("같은 file_id의 다른 revision을 가져오면 충돌로 판정한다", () => {
@@ -118,7 +489,7 @@ describe("json-transfer", () => {
 
   it("위험한 prototype key가 포함된 import JSON을 거부한다", () => {
     // Given
-    const maliciousJson = "{\"schema_version\":1,\"__proto__\":{\"polluted\":true}}";
+    const maliciousJson = "{\"schema_version\":2,\"__proto__\":{\"polluted\":true}}";
 
     // When / Then
     assert.throws(() => parseWorkspaceImport(maliciousJson), /허용되지 않는 키/);

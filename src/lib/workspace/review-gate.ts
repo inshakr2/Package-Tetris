@@ -45,6 +45,8 @@ interface ReviewExecutionReadinessInput {
   selectedSpace: SpaceDefinition | undefined;
   blocks: BlockDefinition[];
   fragileStackOnFragileAllowed: boolean;
+  partialSupportEnabled?: boolean;
+  minimumSupportRatio?: number;
 }
 
 interface PlaceholderResultOptions {
@@ -64,7 +66,9 @@ const ORTHOGONAL_ROTATIONS = [
 export function reviewExecutionReadiness({
   selectedSpace,
   blocks,
-  fragileStackOnFragileAllowed
+  fragileStackOnFragileAllowed,
+  partialSupportEnabled,
+  minimumSupportRatio
 }: ReviewExecutionReadinessInput): ReviewGateResult {
   const messages: ReviewGateMessage[] = [];
   const usableSize = selectedSpace ? calculateUsableSize(selectedSpace) : null;
@@ -151,7 +155,9 @@ export function reviewExecutionReadiness({
           policy: {
             fragileStackOnFragileAllowed,
             nonFragileOnFragileAllowed: false as const,
-            rotation: "orthogonal-90deg" as const
+            rotation: "orthogonal-90deg" as const,
+            partialSupportEnabled,
+            minimumSupportRatio
           }
         };
 

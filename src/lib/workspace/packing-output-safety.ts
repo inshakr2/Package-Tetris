@@ -12,7 +12,9 @@ export function ensureSafeOptimizationOutput(
   const usableSize = calculateUsableSize(input.space);
   const policy = {
     fragileStackOnFragileAllowed: input.policy.fragileStackOnFragileAllowed,
-    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed
+    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed,
+    partialSupportEnabled: input.policy.partialSupportEnabled,
+    minimumSupportRatio: input.policy.minimumSupportRatio
   };
   const hasUnsafeSpace = output.spaces.some((space) => {
     return !validatePackedSpace(space, usableSize, policy).isValid;

@@ -1,4 +1,10 @@
-import { BlockDefinition, SpaceDefinition } from "./types";
+import {
+  BlockDefinition,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
+  PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
+  SpaceDefinition
+} from "./types";
+import { normalizeLoadPriorityScore } from "./load-priority";
 
 export type ResultFreshnessStatus = "fresh" | "stale" | "unknown";
 
@@ -6,6 +12,8 @@ interface ResultInputFingerprintInput {
   selectedSpace: SpaceDefinition | undefined;
   blocks: BlockDefinition[];
   fragileStackOnFragileAllowed: boolean;
+  partialSupportEnabled?: boolean;
+  minimumSupportRatio?: number;
 }
 
 interface ResultFreshnessStateInput {
@@ -29,15 +37,19 @@ export interface ResultFreshnessState {
 export function createResultInputFingerprint({
   selectedSpace,
   blocks,
-  fragileStackOnFragileAllowed
+  fragileStackOnFragileAllowed,
+  partialSupportEnabled,
+  minimumSupportRatio
 }: ResultInputFingerprintInput): string | null {
   if (!selectedSpace) {
     return null;
   }
 
-  return `result-input:v1:${JSON.stringify({
+  return `result-input:v2:${JSON.stringify({
     policy: {
-      fragileStackOnFragileAllowed
+      fragileStackOnFragileAllowed,
+      partialSupportEnabled: Boolean(partialSupportEnabled),
+      minimumSupportRatio: normalizeMinimumSupportRatio(partialSupportEnabled, minimumSupportRatio)
     },
     space: {
       spaceId: selectedSpace.spaceId,
@@ -98,6 +110,16 @@ export function createResultFreshnessState({
   };
 }
 
+function normalizeMinimumSupportRatio(partialSupportEnabled: unknown, value: unknown) {
+  if (!partialSupportEnabled) {
+    return DEFAULT_MINIMUM_SUPPORT_RATIO;
+  }
+
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1
+    ? value
+    : PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO;
+}
+
 function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
   const blockMap = new Map<
     string,
@@ -107,6 +129,7 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
       name: string;
       dimensions: BlockDefinition["dimensions"];
       fragile: boolean;
+      loadPriority: number;
       quantity: number;
     }
   >();
@@ -117,7 +140,8 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
       entityVersion: block.entityVersion,
       name: block.name,
       dimensions: block.dimensions,
-      fragile: block.fragile
+      fragile: block.fragile,
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority)
     });
     const existing = blockMap.get(key);
 
@@ -132,13 +156,14 @@ function createNormalizedBlockInputs(blocks: BlockDefinition[]) {
       name: block.name,
       dimensions: block.dimensions,
       fragile: block.fragile,
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority),
       quantity: block.quantity
     });
   });
 
   return Array.from(blockMap.values()).sort((left, right) => {
-    const leftKey = `${left.blockTemplateId}:${left.entityVersion}:${left.name}`;
-    const rightKey = `${right.blockTemplateId}:${right.entityVersion}:${right.name}`;
+    const leftKey = `${left.blockTemplateId}:${left.entityVersion}:${left.name}:${left.loadPriority}`;
+    const rightKey = `${right.blockTemplateId}:${right.entityVersion}:${right.name}:${right.loadPriority}`;
 
     return leftKey.localeCompare(rightKey);
   });

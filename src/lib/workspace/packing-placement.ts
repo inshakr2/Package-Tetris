@@ -1,4 +1,4 @@
-import { PackedBlock } from "./types";
+import { PackedBlock, PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO } from "./types";
 
 export type RotationKey = PackedBlock["rotation"];
 
@@ -11,6 +11,8 @@ export interface PlacementBounds {
 export interface PlacementPolicy {
   fragileStackOnFragileAllowed: boolean;
   nonFragileOnFragileAllowed: boolean;
+  partialSupportEnabled?: boolean;
+  minimumSupportRatio?: number;
 }
 
 export interface RotationCandidate {
@@ -198,20 +200,103 @@ function hasStableSupport(
     return false;
   }
 
-  const supportedArea = supportBlocks.reduce((sum, block) => {
-    return sum + intersectionArea2d(block, candidate);
-  }, 0);
+  const supportedArea = calculateSupportedArea(supportBlocks, candidate);
+  const requiredSupportRatio = getRequiredSupportRatio(policy);
 
-  return supportedArea >= candidate.widthMm * candidate.depthMm;
+  return supportedArea >= candidate.widthMm * candidate.depthMm * requiredSupportRatio;
 }
 
-function intersectionArea2d(block: PackedBlock, candidate: PositionCandidate) {
+function getRequiredSupportRatio(policy: PlacementPolicy) {
+  if (!policy.partialSupportEnabled) {
+    return 1;
+  }
+
+  return typeof policy.minimumSupportRatio === "number" &&
+    Number.isFinite(policy.minimumSupportRatio) &&
+    policy.minimumSupportRatio > 0 &&
+    policy.minimumSupportRatio <= 1
+    ? policy.minimumSupportRatio
+    : PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO;
+}
+
+function calculateSupportedArea(blocks: PackedBlock[], candidate: PositionCandidate) {
+  const intersections = blocks
+    .map((block) => createIntersectionRect(block, candidate))
+    .filter((rect): rect is SupportRect => rect !== null);
+
+  if (intersections.length === 0) {
+    return 0;
+  }
+
+  const xEdges = Array.from(new Set(intersections.flatMap((rect) => [rect.xStart, rect.xEnd]))).sort(
+    (left, right) => left - right
+  );
+
+  return xEdges.slice(0, -1).reduce((totalArea, xStart, index) => {
+    const xEnd = xEdges[index + 1];
+
+    if (xEnd === undefined || xEnd <= xStart) {
+      return totalArea;
+    }
+
+    const activeYRanges = intersections
+      .filter((rect) => rect.xStart < xEnd && xStart < rect.xEnd)
+      .map((rect) => ({ start: rect.yStart, end: rect.yEnd }));
+
+    return totalArea + (xEnd - xStart) * calculateUnionLength(activeYRanges);
+  }, 0);
+}
+
+interface SupportRect {
+  xStart: number;
+  xEnd: number;
+  yStart: number;
+  yEnd: number;
+}
+
+function createIntersectionRect(block: PackedBlock, candidate: PositionCandidate): SupportRect | null {
   const width =
     Math.min(block.xMm + block.widthMm, candidate.xMm + candidate.widthMm) - Math.max(block.xMm, candidate.xMm);
   const depth =
     Math.min(block.yMm + block.depthMm, candidate.yMm + candidate.depthMm) - Math.max(block.yMm, candidate.yMm);
 
-  return Math.max(0, width) * Math.max(0, depth);
+  if (width <= 0 || depth <= 0) {
+    return null;
+  }
+
+  return {
+    xStart: Math.max(block.xMm, candidate.xMm),
+    xEnd: Math.min(block.xMm + block.widthMm, candidate.xMm + candidate.widthMm),
+    yStart: Math.max(block.yMm, candidate.yMm),
+    yEnd: Math.min(block.yMm + block.depthMm, candidate.yMm + candidate.depthMm)
+  };
+}
+
+function calculateUnionLength(ranges: Array<{ start: number; end: number }>) {
+  const sortedRanges = ranges
+    .filter((range) => range.end > range.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+
+  if (sortedRanges.length === 0) {
+    return 0;
+  }
+
+  let total = 0;
+  let currentStart = sortedRanges[0]?.start ?? 0;
+  let currentEnd = sortedRanges[0]?.end ?? 0;
+
+  sortedRanges.slice(1).forEach((range) => {
+    if (range.start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, range.end);
+      return;
+    }
+
+    total += currentEnd - currentStart;
+    currentStart = range.start;
+    currentEnd = range.end;
+  });
+
+  return total + currentEnd - currentStart;
 }
 
 function rangesOverlap(leftStart: number, leftEnd: number, rightStart: number, rightEnd: number) {

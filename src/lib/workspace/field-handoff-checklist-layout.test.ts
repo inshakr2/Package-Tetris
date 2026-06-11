@@ -7,7 +7,7 @@ const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 
 describe("field-handoff-checklist-layout", () => {
-  it("결과 화면은 현장 전달 전 점검 패널과 기존 복구/전달 행동을 제공한다", () => {
+  it("결과 화면은 지시서 없이 현장 전달 전 점검 패널과 복구/백업 행동을 제공한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -15,13 +15,18 @@ describe("field-handoff-checklist-layout", () => {
     const importsChecklist = source.includes("createFieldHandoffChecklist");
     const buildsChecklist =
       source.includes("const fieldHandoffChecklist = useMemo(") &&
-      source.includes("instructionCopyStatus === \"copied\" || instructionDownloadStatus === \"downloaded\"");
+      !source.includes("instructionCopyStatus") &&
+      !source.includes("instructionDownloadStatus") &&
+      !source.includes("instructionPrepared");
     const rendersPanel =
       source.includes('className="sub-panel field-handoff-panel"') &&
       source.includes("현장 전달 전 점검") &&
-      source.includes("fieldHandoffChecklist.items.map");
+      source.includes("fieldHandoffChecklist.items.map") &&
+      source.includes('item.status === "review"') &&
+      source.includes("<Eye");
     const wiresExistingActions =
-      source.includes('openResultInspectionDialog("stacking", event.currentTarget)') &&
+      !source.includes("openResultInspectionDialog") &&
+      !source.includes("open-instructions") &&
       source.includes("onExportJson") &&
       source.includes("onCreateResult");
 
@@ -49,8 +54,12 @@ describe("field-handoff-checklist-layout", () => {
       /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.field-handoff-actions\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         css
       );
+    const reviewRule =
+      /\.field-handoff-item\[data-status="review"\]\s*{[\s\S]*?border-color:[\s\S]*?background:\s*#f8fafc;[\s\S]*?}/.test(
+        css
+      );
 
     // Then
-    assert.equal(panelRule && listRule && itemRule && actionRule && mobileRule, true);
+    assert.equal(panelRule && listRule && itemRule && actionRule && mobileRule && reviewRule, true);
   });
 });

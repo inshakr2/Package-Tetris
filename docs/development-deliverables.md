@@ -4,7 +4,7 @@
 
 ## 제품 범위
 
-Package Tetris V1은 프론트엔드 단독 적재 시뮬레이션 도구다. 사용자는 공간과 박스 정보를 입력하고, 적재 결과를 3D/2D로 확인하며, 작업 지시서와 JSON 백업 파일을 만들 수 있다.
+Package Tetris V1은 프론트엔드 단독 적재 시뮬레이션 도구다. 사용자는 공간과 박스 정보를 입력하고, 적재 결과를 3D/2D로 확인하며, JSON 백업 파일을 만들 수 있다.
 
 V1 제외 범위:
 
@@ -79,9 +79,10 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 - `src/lib/workspace/packing-worker.ts`: Worker에서 실행할 계산 진입점
 - `src/lib/workspace/packing-worker-client.ts`: 앱에서 Worker 계산을 호출하는 클라이언트 래퍼
 - `src/lib/workspace/chain-simulation.ts`: 기존 결과 유지 기반 추가 적재 시뮬레이션
+- `src/lib/workspace/multi-chain-simulation.ts`: 최대 3개 추가 박스의 추천/선택 순서 우선/박스별 우선 결과 비교
 - `src/lib/workspace/result-offset-recommendation.ts`: 안전 여유 조정 추천
 
-엔진은 박스를 단위 수량으로 펼친 뒤, fragile 정책, 회전 가능성, 바닥 면적, 부피 기준으로 배치 우선순위를 정한다. 각 박스는 기존 공간에 먼저 배치하고, 불가능하면 새 공간을 연다.
+엔진은 박스를 단위 수량으로 펼친 뒤, 작업별 하단 우선도, fragile 정책, 회전 가능성, 부분 지지 정책, 바닥 면적, 부피 기준으로 배치 우선순위를 정한다. 각 박스는 기존 공간에 먼저 배치하고, 불가능하면 새 공간을 연다.
 
 ## 결과 확인과 현장 작업 흐름
 
@@ -89,15 +90,11 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 
 - `src/lib/workspace/result-viewer-controls.ts`: 3D, 위, 앞, 옆 보기 제어
 - `src/lib/workspace/projection-view.ts`: 2D 투영 보기 데이터 생성
-- `src/lib/workspace/placement-detail-table.ts`: 배치 상세 행 생성
-- `src/lib/workspace/stacking-layer-summary.ts`: 층별 요약과 작업 지시 문장 생성
 - `src/lib/workspace/result-warning-summary.ts`: 경고 요약
 - `src/lib/workspace/result-remaining-volume.ts`: 남은 부피 KPI
 - `src/lib/workspace/field-handoff-checklist.ts`: 현장 전달 전 점검
-- `src/lib/workspace/text-file-download.ts`: 작업 지시서 텍스트 파일 저장
-- `src/lib/workspace/clipboard-text.ts`: 작업 순서 복사
 
-결과 화면은 적재 결과를 크게 보여주고, 배치 상세와 쌓는 순서는 모달로 확인한다. 현장 작업자는 3D가 실패해도 위/앞/옆 보기로 적재 상태를 확인할 수 있다.
+결과 화면은 적재 결과를 크게 보여주고, 현장 작업자는 3D가 실패해도 위/앞/옆 보기로 적재 상태를 확인할 수 있다.
 
 ## 현장 UX 산출물
 
@@ -107,7 +104,6 @@ V1은 서버 저장이 아니므로 브라우저 저장소와 JSON 백업을 함
 - 3D 결과 보기: 자유시점, 위/앞/옆 보기, 크게 보기, 치수 오버레이
 - 추가 적재 시뮬레이션: 원본과 추가 결과 비교, 결과 반영
 - 안전 여유 추천: 공간 하나가 더 필요한 아쉬운 상황에서 검토값 제안
-- 작업 지시서: 아래층부터 쌓는 순서 복사/저장
 - 저장 보호: 자동저장, 백업 파일, 여러 탭 충돌, 오프라인 준비 안내
 
 ## 검증 기준
@@ -116,6 +112,12 @@ V1 통합 검증:
 
 ```bash
 npm run v1:verify
+```
+
+V2 브랜치 마감 검증:
+
+```bash
+npm run v2:verify
 ```
 
 위 명령은 아래 작업을 순서대로 실행한다.
@@ -138,7 +140,7 @@ npm run v1:verify
 - `docs/non-developer-start-guide.md`: 개발 지식 없는 사용자의 시작 문서
 - `docs/windows-cmd-launch-guide.md`: Windows `.cmd` 자동 실행 가이드
 - `docs/field-demo-user-guide.md`: 현장 시연 상세 가이드
-- `docs/v1-readiness.md`: V1 완료 기준과 운영 전 파일럿 확인 범위
+- `docs/v1-readiness.md`: V1 역사 완료 기준과 운영 전 파일럿 확인 범위
 - `docs/tetris-ui-planning-draft.md`: UI/UX 기획서
 - `docs/agents/*.md`: PM, BA, UI, QA, 개발 역할 메모리
 - `docs/plans/*.md`: 기능 증분별 개발 계획 기록

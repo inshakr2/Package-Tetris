@@ -27,7 +27,7 @@ describe("agent role memory", () => {
     assert.deepEqual(existingFiles, expectedFiles);
   });
 
-  it("각 역할 메모리는 Package Tetris V1과 현장 작업자 기준을 공유한다", () => {
+  it("각 역할 메모리는 Package Tetris V2와 현장 작업자 기준을 공유한다", () => {
     // Given
     const roleFiles = [
       "business-analyst.md",
@@ -44,7 +44,7 @@ describe("agent role memory", () => {
     // Then
     for (const doc of docs) {
       assert.match(doc, /Package Tetris/);
-      assert.match(doc, /V1/);
+      assert.match(doc, /V2/);
       assert.match(doc, /현장 작업자|현장 사용자|현장 기준/);
     }
   });
@@ -63,6 +63,19 @@ describe("agent role memory", () => {
     assert.match(productManagerDoc, /푸시/);
   });
 
+  it("product-manager 메모리는 버튼과 기능 추가 전 UI 역할 협의를 강제한다", () => {
+    // Given
+    const productManagerDoc = readDoc(`${agentDir}/product-manager.md`);
+
+    // When / Then
+    assert.match(productManagerDoc, /단독으로 UI를 결정하지 않는다/);
+    assert.match(productManagerDoc, /버튼|기능/);
+    assert.match(productManagerDoc, /business-analyst/);
+    assert.match(productManagerDoc, /ui-designer/);
+    assert.match(productManagerDoc, /ui-ux-tester/);
+    assert.match(productManagerDoc, /피드백을 반영/);
+  });
+
   it("code-reviewer와 ui-ux-tester 메모리는 엔진 정합성과 화면 검증 기준을 나눠 가진다", () => {
     // Given
     const codeReviewerDoc = readDoc(`${agentDir}/code-reviewer.md`);
@@ -77,6 +90,9 @@ describe("agent role memory", () => {
     assert.match(uiUxTesterDoc, /768px/);
     assert.match(uiUxTesterDoc, /1280px/);
     assert.match(uiUxTesterDoc, /가로 넘침|horizontal overflow/);
+    assert.match(uiUxTesterDoc, /실제 브라우저/);
+    assert.match(uiUxTesterDoc, /좌표|bounding/);
+    assert.match(uiUxTesterDoc, /삭제 버튼|CTA|버튼/);
   });
 
   it("기획서와 UI 메모리는 구현된 3D 크게 보기와 치수 오버레이를 후속으로 남기지 않는다", () => {

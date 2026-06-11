@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { addBlockTemplateToDraft, createBlockTemplate } from "./block-library";
 import { resetCurrentWorkspace, hasCurrentWorkToReset } from "./current-work-reset";
+import { DEFAULT_PALLET_SPACE_ID } from "./presets";
 import { createDefaultWorkspace } from "./workspace-factory";
 import type { TetrisWorkspace } from "./types";
 
@@ -85,7 +86,7 @@ describe("current-work-reset", () => {
     assert.equal(resetWorkspace.revision, currentWorkspace.revision + 1);
     assert.equal(resetWorkspace.updatedAt, "2026-06-09T03:00:00.000Z");
     assert.deepEqual(resetWorkspace.draft, {
-      selectedSpaceId: "preset-pallet-1150",
+      selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
       blockItems: [],
       currentStep: "space",
       updatedAt: "2026-06-09T03:00:00.000Z"

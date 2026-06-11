@@ -101,6 +101,58 @@ describe("IndexedDbTetrisStorage", () => {
     assert.equal(restored?.draft.blockItems[0]?.quantity, 12);
   });
 
+  it("V1 IndexedDB 작업본은 V2 필드 기본값을 채워 복원한다", async () => {
+    // Given
+    const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);
+    const workspace = createDefaultWorkspace({
+      deviceId: "device-v1",
+      fileId: "file-v1",
+      now: "2026-06-09T00:00:00.000Z"
+    });
+    const v1Workspace = {
+      ...workspace,
+      schemaVersion: 1,
+      policy: {
+        fragileStackOnFragileAllowed: true,
+        truckPresetDisplayName: "2.5톤반"
+      },
+      blockTemplates: [
+        {
+          blockTemplateId: "template-v1",
+          entityVersion: 1,
+          name: "V1 저장 박스",
+          dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+          fragile: false,
+          createdAt: workspace.updatedAt,
+          updatedAt: workspace.updatedAt
+        }
+      ],
+      draft: {
+        ...workspace.draft,
+        blockItems: [
+          {
+            draftBlockItemId: "item-v1",
+            blockTemplateId: "template-v1",
+            quantity: 8,
+            createdAt: workspace.updatedAt,
+            updatedAt: workspace.updatedAt
+          }
+        ]
+      }
+    };
+    await storage.saveWorkspace(v1Workspace as unknown as ReturnType<typeof createDefaultWorkspace>);
+
+    // When
+    const restored = await storage.loadWorkspace();
+
+    // Then
+    assert.equal(restored?.schemaVersion, 2);
+    assert.equal(restored?.policy.partialSupportEnabled, false);
+    assert.equal(restored?.policy.minimumSupportRatio, 1);
+    assert.equal(restored?.blockTemplates[0]?.weightKg, null);
+    assert.equal(restored?.draft.blockItems[0]?.loadPriority, null);
+  });
+
   it("복원된 작업본에 비정상 숫자가 있어도 실행 전 검토와 부피 계산은 안전하게 처리한다", async () => {
     // Given
     const storage = new IndexedDbTetrisStorage(TEST_DB_NAME, LEGACY_TEST_DB_NAME);

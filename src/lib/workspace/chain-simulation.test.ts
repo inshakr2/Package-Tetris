@@ -240,6 +240,47 @@ describe("chain-simulation v0", () => {
     assert.equal(output.addedQuantity, 0);
   });
 
+  it("부분 지지 허용 ON이면 기존 배치 위 55% 이상 받침면에 추가 블록을 배치한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "support",
+        widthMm: 600,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate({
+        dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 500 }
+      }),
+      runId: "chain-run-partial-support",
+      policy: {
+        fragileStackOnFragileAllowed: true,
+        nonFragileOnFragileAllowed: false,
+        partialSupportEnabled: true,
+        minimumSupportRatio: 0.55
+      }
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 1);
+    const addedBlock = output.spaces[0]?.blocks.at(-1);
+    assert.equal(addedBlock?.blockId, "chain-run-partial-support-block-1");
+    assert.equal(addedBlock?.blockTemplateId, "template-extra");
+    assert.equal(addedBlock?.name, "추가 박스");
+    assert.equal(addedBlock?.fragile, false);
+    assert.equal(addedBlock?.xMm, 0);
+    assert.equal(addedBlock?.yMm, 0);
+    assert.equal(addedBlock?.zMm, 500);
+    assert.equal(addedBlock?.widthMm, 1000);
+    assert.equal(addedBlock?.depthMm, 1000);
+    assert.equal(addedBlock?.heightMm, 500);
+  });
+
   it("기존 결과에 공중에 떠 있는 블록이 있으면 추가 적재 계산을 거부한다", () => {
     // Given
     const result = createResult([

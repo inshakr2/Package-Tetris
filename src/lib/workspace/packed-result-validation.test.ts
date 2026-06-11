@@ -138,6 +138,72 @@ describe("packed-result-validation", () => {
     assert.equal(validation.isValid, false);
     assert.match(validation.reasons[0] ?? "", /안전 기준/);
   });
+
+  it("부분 지지 허용 ON이면 55% 이상 받침면의 기존 결과를 안전한 결과로 인정한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "support",
+        widthMm: 600,
+        depthMm: 1000,
+        heightMm: 500
+      }),
+      createPackedBlock({
+        blockId: "partially-supported-top",
+        xMm: 0,
+        yMm: 0,
+        zMm: 500,
+        widthMm: 1000,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+
+    // When
+    const validation = validatePackedResult(result, {
+      fragileStackOnFragileAllowed: true,
+      nonFragileOnFragileAllowed: false,
+      partialSupportEnabled: true,
+      minimumSupportRatio: 0.55
+    });
+
+    // Then
+    assert.equal(validation.isValid, true);
+    assert.deepEqual(validation.reasons, []);
+  });
+
+  it("부분 지지 허용 ON이어도 55%보다 작은 받침면의 기존 결과는 거부한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "support",
+        widthMm: 549,
+        depthMm: 1000,
+        heightMm: 500
+      }),
+      createPackedBlock({
+        blockId: "under-supported-top",
+        xMm: 0,
+        yMm: 0,
+        zMm: 500,
+        widthMm: 1000,
+        depthMm: 1000,
+        heightMm: 500
+      })
+    ]);
+
+    // When
+    const validation = validatePackedResult(result, {
+      fragileStackOnFragileAllowed: true,
+      nonFragileOnFragileAllowed: false,
+      partialSupportEnabled: true,
+      minimumSupportRatio: 0.55
+    });
+
+    // Then
+    assert.equal(validation.isValid, false);
+    assert.match(validation.reasons[0] ?? "", /안전 기준/);
+  });
 });
 
 function createSpace(): SpaceDefinition {

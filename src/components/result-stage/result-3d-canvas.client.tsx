@@ -33,6 +33,7 @@ interface Result3DCanvasProps {
   chainPreviewBlockIds: Set<string>;
   cameraPreset: ThreeCameraPreset;
   resetToken: number;
+  showOrientationArrows: boolean;
   spaceLabel: string;
   utilizationLabel: string;
   onSelectBlockTemplate: (blockTemplateId: string) => void;
@@ -60,6 +61,7 @@ export function Result3DCanvas({
   chainPreviewBlockIds,
   cameraPreset,
   resetToken,
+  showOrientationArrows,
   spaceLabel,
   utilizationLabel,
   onSelectBlockTemplate,
@@ -102,6 +104,9 @@ export function Result3DCanvas({
   const statusText = `${spaceLabel}, ${blocks.length}개 블록, ${utilizationLabel}${
     selectedBlock ? `, 현재 ${selectedBlock.name} 강조` : ""
   }`;
+  const orientationStatusText = showOrientationArrows
+    ? "화살표는 처음 입력한 높이 방향입니다."
+    : "방향 화살표 숨김";
 
   useEffect(() => {
     const host = hostRef.current;
@@ -244,13 +249,18 @@ export function Result3DCanvas({
       const edges = createBlockEdges(block, isSelected, previewState);
 
       mesh.add(edges);
+
+      if (showOrientationArrows) {
+        mesh.add(createBlockOrientationArrow(block, isSelected, previewState));
+      }
+
       blockGroup.add(mesh);
       meshes.push(mesh);
     });
 
     blockMeshesRef.current = meshes;
     requestSceneRender();
-  }, [chainPreviewBlockIds, sceneBlocks, selectedBlockTemplateId]);
+  }, [chainPreviewBlockIds, sceneBlocks, selectedBlockTemplateId, showOrientationArrows]);
 
   useEffect(() => {
     if (!cameraRef.current || !controlsRef.current) {
@@ -405,7 +415,7 @@ export function Result3DCanvas({
         tabIndex={0}
         role="region"
         aria-roledescription="3D 적재 보기"
-        aria-label={`${statusText}. 3D 적재 결과 조작 영역.`}
+        aria-label={`${statusText}. ${orientationStatusText} 3D 적재 결과 조작 영역.`}
         aria-describedby={keyboardHelpId}
         data-render-state={renderState}
         onClick={handleClick}
@@ -453,7 +463,7 @@ export function Result3DCanvas({
             <strong>{hoverState.block.name}</strong>
             <span>
               {hoverState.block.source.widthMm} / {hoverState.block.source.depthMm} / {hoverState.block.source.heightMm}mm
-              · {hoverState.block.fragile ? "깨짐주의" : "일반"}
+              · {hoverState.block.fragile ? "깨짐주의" : "일반"} · {hoverState.block.orientation.label}
             </span>
           </div>
         ) : null}
@@ -464,8 +474,8 @@ export function Result3DCanvas({
         </span>
         <span className="fine-print">
           {renderState === "error"
-            ? "3D가 뜨지 않아도 위/앞/옆 보기로 배치를 확인할 수 있습니다."
-            : statusText}
+            ? "방향 화살표가 없어도 위/앞/옆 보기로 배치를 확인할 수 있습니다."
+            : `${statusText} · ${orientationStatusText}`}
         </span>
       </div>
       {selectedBlock ? (
@@ -522,6 +532,52 @@ function createBlockEdges(block: PackingSceneBlock, isSelected: boolean, preview
     opacity: isSelected ? 0.9 : 0.64
   });
   return new THREE.LineSegments(geometry, material);
+}
+
+function createBlockOrientationArrow(
+  block: PackingSceneBlock,
+  isSelected: boolean,
+  previewState: "base" | "new"
+) {
+  const direction = new THREE.Vector3(
+    block.orientation.direction.x,
+    block.orientation.direction.y,
+    block.orientation.direction.z
+  ).normalize();
+  const origin = direction.clone().multiplyScalar(-block.orientation.length / 2);
+  const arrow = new THREE.ArrowHelper(
+    direction,
+    origin,
+    block.orientation.length,
+    previewState === "new" ? 0x166534 : 0x111827,
+    Math.max(block.orientation.length * 0.24, 0.12),
+    Math.max(block.orientation.length * 0.16, 0.08)
+  );
+  const opacity = isSelected ? 0.96 : 0.48;
+
+  arrow.name = "처음 입력한 높이 방향";
+  arrow.userData.orientationLabel = block.orientation.label;
+  arrow.traverse((object) => {
+    object.renderOrder = 3;
+
+    if ("material" in object) {
+      const material = object.material;
+      const materials = Array.isArray(material) ? material : [material];
+
+      materials.forEach((item) => {
+        if (!item) {
+          return;
+        }
+
+        item.transparent = true;
+        item.opacity = opacity;
+        item.depthTest = false;
+        item.depthWrite = false;
+      });
+    }
+  });
+
+  return arrow;
 }
 
 function createSpaceFrame(bounds: ReturnType<typeof createPackingSceneBounds>) {

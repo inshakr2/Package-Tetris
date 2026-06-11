@@ -39,6 +39,7 @@ interface StorageHealthSnapshotContext {
 export function hasMeaningfulWorkspaceData(workspace: TetrisWorkspace) {
   return (
     workspace.spaces.length > 0 ||
+    (workspace.blockGroups?.length ?? 0) > 0 ||
     workspace.blockTemplates.length > 0 ||
     workspace.draft.blockItems.length > 0 ||
     workspace.recentResults.length > 0 ||

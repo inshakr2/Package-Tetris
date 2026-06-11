@@ -6,6 +6,7 @@ import {
   type PlacementPolicy,
   type PositionCandidate
 } from "./packing-placement";
+import { normalizeLoadPriorityScore } from "./load-priority";
 import { ensureSafeOptimizationOutput } from "./packing-output-safety";
 import { BlockDefinition, PackedBlock, PackedSpace } from "./types";
 import { OptimizationInput, OptimizationOutput } from "./engine-contract";
@@ -18,6 +19,7 @@ interface MutablePackedSpace {
 
 interface SortableBlockUnit {
   block: BlockDefinition;
+  loadPriority: number;
   rotationCandidateCount: number;
   maxBaseAreaMm2: number;
   volumeM3: number;
@@ -28,7 +30,9 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
   const usableVolumeM3 = dimensionsVolumeM3(usableSize);
   const placementPolicy: PlacementPolicy = {
     fragileStackOnFragileAllowed: input.policy.fragileStackOnFragileAllowed,
-    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed
+    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed,
+    partialSupportEnabled: input.policy.partialSupportEnabled,
+    minimumSupportRatio: input.policy.minimumSupportRatio
   };
   const spaces: MutablePackedSpace[] = [];
   const warnings: string[] = [];
@@ -79,6 +83,7 @@ function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds
     )
     .map((block) => ({
       block,
+      loadPriority: normalizeLoadPriorityScore(block.loadPriority),
       rotationCandidateCount: getRotationCandidateCount(block, usableSize),
       maxBaseAreaMm2: getMaxStableBaseArea(block, usableSize),
       volumeM3: dimensionsVolumeM3(block.dimensions)
@@ -88,6 +93,12 @@ function expandBlockUnits(blocks: BlockDefinition[], usableSize: PlacementBounds
 }
 
 function compareBlockUnits(left: SortableBlockUnit, right: SortableBlockUnit) {
+  const loadPriorityDiff = right.loadPriority - left.loadPriority;
+
+  if (loadPriorityDiff !== 0) {
+    return loadPriorityDiff;
+  }
+
   if (left.block.fragile !== right.block.fragile) {
     return left.block.fragile ? 1 : -1;
   }

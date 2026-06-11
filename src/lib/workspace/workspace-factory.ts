@@ -1,9 +1,11 @@
 import {
   APP_VERSION,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
   TetrisWorkspace,
   TRUCK_PRESET_DISPLAY_NAME,
   WORKSPACE_SCHEMA_VERSION
 } from "./types";
+import { DEFAULT_PALLET_SPACE_ID } from "./presets";
 
 interface WorkspaceFactoryOptions {
   deviceId?: string;
@@ -32,12 +34,15 @@ export function createDefaultWorkspace(options: WorkspaceFactoryOptions = {}): T
     lastExportedAt: null,
     policy: {
       fragileStackOnFragileAllowed: true,
+      partialSupportEnabled: false,
+      minimumSupportRatio: DEFAULT_MINIMUM_SUPPORT_RATIO,
       truckPresetDisplayName: TRUCK_PRESET_DISPLAY_NAME
     },
     spaces: [],
+    blockGroups: [],
     blockTemplates: [],
     draft: {
-      selectedSpaceId: "preset-pallet-1150",
+      selectedSpaceId: DEFAULT_PALLET_SPACE_ID,
       blockItems: [],
       currentStep: "space",
       updatedAt: now

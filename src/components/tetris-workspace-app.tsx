@@ -2,14 +2,15 @@
 
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Box,
   CheckCircle2,
-  Copy,
   Download,
   Eye,
   FileUp,
+  GripVertical,
   HardDrive,
-  ListOrdered,
   Maximize2,
   PackagePlus,
   PencilLine,
@@ -63,15 +64,34 @@ import {
 } from "@/lib/persistence/workspace-sync-channel";
 import {
   addBlockTemplateToDraft,
+  createBlockGroup,
   createBlockTemplate,
+  removeBlockGroup,
   removeBlockTemplate,
   removeDraftBlockItem,
   restoreDraftBlockItem,
   resolveDraftBlocks,
   searchBlockTemplates,
   updateBlockTemplate,
+  updateDraftBlockItemLoadPriority,
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
+import {
+  BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS,
+  BLOCK_TEMPLATE_XLSX_COLUMNS,
+  createBlockTemplateImportSampleWorkbook,
+  readBlockTemplateXlsxFile,
+  type BlockTemplateImportCandidate,
+  type BlockTemplateImportPreview
+} from "@/lib/workspace/block-template-xlsx-import";
+import {
+  DRAFT_BLOCK_IMPORT_SAMPLE_ROWS,
+  DRAFT_BLOCK_XLSX_COLUMNS,
+  createDraftBlockImportSampleWorkbook,
+  readDraftBlockXlsxFile,
+  type DraftBlockImportCandidate,
+  type DraftBlockImportPreview
+} from "@/lib/workspace/draft-block-xlsx-import";
 import {
   calculateBlockVolumeM3,
   hasPositiveDimensions,
@@ -82,12 +102,16 @@ import {
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
-import { runChainSimulationV0, type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import { type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  runMultiChainSimulationV0,
+  type MultiChainSimulationOutput,
+  type MultiChainSimulationVariant
+} from "@/lib/workspace/multi-chain-simulation";
 import {
   resolveChainComparisonSpaces,
   type ChainComparisonMode
 } from "@/lib/workspace/chain-comparison-view";
-import { writeClipboardText } from "@/lib/workspace/clipboard-text";
 import {
   getDeleteConfirmationCopy,
   type DeleteConfirmationKind
@@ -126,11 +150,6 @@ import {
   SPACE_SPLIT_FLOOR_SUPPORT_WARNING
 } from "@/lib/workspace/result-warnings";
 import { createResultWarningSummary } from "@/lib/workspace/result-warning-summary";
-import { downloadTextFile } from "@/lib/workspace/text-file-download";
-import {
-  createStackingInstructionDownloadSuccessMessage,
-  createStackingInstructionFilename
-} from "@/lib/workspace/loading-instruction-file";
 import {
   createResultFreshnessState,
   createResultInputFingerprint,
@@ -142,7 +161,8 @@ import {
 } from "@/lib/workspace/result-calculation-failure";
 import {
   createOffsetAdjustmentRecommendation,
-  type OffsetAdjustmentRecommendation
+  createOverhangPalletRecommendation,
+  type ResultSpaceAdjustmentRecommendation
 } from "@/lib/workspace/result-offset-recommendation";
 import { getWorkspaceSectionTitle, WORKSPACE_SECTION_ORDER } from "@/lib/workspace/layout-sections";
 import {
@@ -170,19 +190,13 @@ import {
 } from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
-import { loadFieldDemoCurrentWork } from "@/lib/workspace/field-demo-workspace";
-import { calculateUsableSize, PRESET_SPACES } from "@/lib/workspace/presets";
-import { createPlacementDetailRows } from "@/lib/workspace/placement-detail-table";
+import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
-import {
-  createStackingInstructionText,
-  createStackingInstructionSpaceLabel,
-  createStackingInstructionSteps,
-  createStackingLayerSummaries,
-  formatStackingInstructionCalculatedAt
-} from "@/lib/workspace/stacking-layer-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
+import { normalizeWorkspace as normalizeWorkspaceForV2 } from "@/lib/workspace/workspace-migration";
+import { normalizeLoadPriorityScore } from "@/lib/workspace/load-priority";
 import {
+  BlockGroup,
   BlockDefinition,
   BlockTemplate,
   ChainHistoryItem,
@@ -190,6 +204,8 @@ import {
   ImportConflict,
   ImportConflictOption,
   PackedBlock,
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
+  PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
   SpaceDefinition,
   TetrisWorkspace
 } from "@/lib/workspace/types";
@@ -197,9 +213,6 @@ import { PwaServiceWorkerRegistrar } from "./pwa-service-worker-registrar";
 import type { ThreeCameraPreset } from "./result-stage/result-3d-canvas.client";
 
 type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
-type InstructionCopyStatus = "idle" | "copied" | "error";
-type InstructionDownloadStatus = "idle" | "downloaded" | "error";
-type ResultInspectionDialogKind = "placement" | "stacking";
 
 interface PwaBeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -246,11 +259,13 @@ const DEFAULT_SPACE_FORM = {
 };
 
 const DEFAULT_BLOCK_FORM = {
-  name: "신규 박스",
+  name: "",
   widthMm: 300,
   depthMm: 220,
   heightMm: 180,
-  quantity: 10,
+  weightKg: "",
+  group1: "",
+  group2: "",
   fragile: false
 };
 
@@ -261,6 +276,35 @@ const MOBILE_STICKY_HELPER_ID = "mobile-sticky-helper";
 const RESULT_PROGRESS_REVIEW_DELAY_MS = 80;
 const RESULT_PROGRESS_FRAME_DELAY_MS = 16;
 const RESULT_PROGRESS_RENDER_DELAY_MS = 80;
+const BLOCK_LIBRARY_PAGE_SIZE = 12;
+const BLOCK_GROUP_PAGE_SIZE = 10;
+const CHAIN_INLINE_OPTION_LIMIT = 6;
+const CHAIN_PICKER_PAGE_SIZE = 10;
+const CHAIN_MAX_SELECTED_TEMPLATE_COUNT = 3;
+const CHAIN_PRIORITY_SCORE_STEP = 10;
+const DRAFT_LOAD_PRIORITY_OPTIONS = [
+  { value: 0, label: "기본" },
+  { value: 5, label: "먼저 바닥에", displayLabel: "먼저\n바닥에" },
+  { value: 10, label: "맨 아래 우선" }
+] as const;
+type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
+
+const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
+  { name: "상위그룹", requirement: "선택", description: "예: 금영, 엔터그레인. 비워도 되지만 자동화 파일에서는 같은 표기를 유지하세요." },
+  { name: "하위그룹", requirement: "선택", description: "예: 스피커, 앰프. 상위그룹이 있을 때 함께 묶어 검색할 수 있습니다." },
+  { name: "박스명", requirement: "필수", description: "저장된 박스명과 중복되지 않아야 합니다." },
+  { name: "가로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "세로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "무게kg", requirement: "선택", description: "소수 입력이 가능하며 비워둘 수 있습니다." },
+  { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." }
+] as const;
+
+const DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS = [
+  { name: "박스명", requirement: "필수", description: "2번 박스 등록에 저장된 박스명과 정확히 같아야 합니다." },
+  { name: "작업수량", requirement: "필수", description: "이번 작업에 실을 수량입니다. 1 이상의 정수만 입력합니다." },
+  { name: "아래층우선타입", requirement: "필수", description: "1=기본, 2=먼저바닥에, 3=맨아래우선 중 하나를 숫자로 입력합니다." }
+] as const;
 
 const Result3DCanvas = dynamic(
   () => import("./result-stage/result-3d-canvas.client").then((mod) => mod.Result3DCanvas),
@@ -632,12 +676,22 @@ export function TetrisWorkspaceApp() {
   }, [workspace?.spaces]);
 
   const selectedSpace = allSpaces.find((space) => space.spaceId === workspace?.draft.selectedSpaceId);
-  const draftBlocks = workspace ? resolveDraftBlocks(workspace) : [];
+  const draftBlocks = useMemo(() => (workspace ? resolveDraftBlocks(workspace) : []), [workspace]);
+  const priorityBlockCount = draftBlocks.filter(
+    (block) => normalizeDraftLoadPriorityOptionValue(block.loadPriority) > 0
+  ).length;
+  const priorityBlockSummaries = draftBlocks.flatMap((block) => {
+    const summary = createDraftLoadPrioritySummary(block);
+
+    return summary ? [summary] : [];
+  });
   const review = workspace
     ? reviewExecutionReadiness({
         selectedSpace,
         blocks: draftBlocks,
-        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+        partialSupportEnabled: workspace.policy.partialSupportEnabled,
+        minimumSupportRatio: workspace.policy.minimumSupportRatio
       })
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
@@ -645,7 +699,9 @@ export function TetrisWorkspaceApp() {
     ? createResultInputFingerprint({
         selectedSpace,
         blocks: draftBlocks,
-        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+        partialSupportEnabled: workspace.policy.partialSupportEnabled,
+        minimumSupportRatio: workspace.policy.minimumSupportRatio
       })
     : null;
   const resultFreshnessState = createResultFreshnessState({
@@ -880,6 +936,8 @@ export function TetrisWorkspaceApp() {
       deleteSpace(pendingDelete.entityId);
     } else if (pendingDelete.kind === "block-template") {
       deleteBlockTemplate(pendingDelete.entityId);
+    } else if (pendingDelete.kind === "block-group") {
+      deleteBlockGroup(pendingDelete.entityId);
     } else {
       deleteCurrentBlockItem(pendingDelete.entityId);
     }
@@ -896,7 +954,7 @@ export function TetrisWorkspaceApp() {
       draft: {
         ...current.draft,
         selectedSpaceId:
-          current.draft.selectedSpaceId === spaceId ? "preset-pallet-1150" : current.draft.selectedSpaceId,
+          current.draft.selectedSpaceId === spaceId ? DEFAULT_PALLET_SPACE_ID : current.draft.selectedSpaceId,
         updatedAt: now
       }
     }));
@@ -914,6 +972,9 @@ export function TetrisWorkspaceApp() {
             heightMm: Number(blockForm.heightMm)
           },
           fragile: blockForm.fragile,
+          weightKg: parseOptionalWeightKg(blockForm.weightKg),
+          group1: blockForm.group1,
+          group2: blockForm.group2,
           now
         })
       );
@@ -933,12 +994,43 @@ export function TetrisWorkspaceApp() {
           heightMm: Number(blockForm.heightMm)
         },
         fragile: blockForm.fragile,
-        quantity: Number(blockForm.quantity),
+        weightKg: parseOptionalWeightKg(blockForm.weightKg),
+        group1: blockForm.group1,
+        group2: blockForm.group2,
         addToDraft,
         now
       })
     );
     setBlockForm(DEFAULT_BLOCK_FORM);
+  }
+
+  function importBlockTemplates(rows: BlockTemplateImportCandidate[]) {
+    if (rows.length === 0) {
+      return;
+    }
+
+    const rowsWithIds = rows.map((row) => ({
+      ...row,
+      blockTemplateId: createClientId("template")
+    }));
+
+    updateWorkspace((current, now) =>
+      rowsWithIds.reduce(
+        (nextWorkspace, row) =>
+          createBlockTemplate(nextWorkspace, {
+            blockTemplateId: row.blockTemplateId,
+            name: row.name,
+            dimensions: row.dimensions,
+            fragile: row.fragile,
+            weightKg: row.weightKg,
+            group1: row.group1,
+            group2: row.group2,
+            addToDraft: false,
+            now
+          }),
+        current
+      )
+    );
   }
 
   function editBlockTemplate(template: BlockTemplate) {
@@ -948,9 +1040,30 @@ export function TetrisWorkspaceApp() {
       widthMm: template.dimensions.widthMm,
       depthMm: template.dimensions.depthMm,
       heightMm: template.dimensions.heightMm,
-      quantity: 1,
+      weightKg: formatOptionalWeightFormValue(template.weightKg),
+      group1: template.group1 ?? "",
+      group2: template.group2 ?? "",
       fragile: template.fragile
     });
+  }
+
+  function addBlockGroup(name: string, parentGroupId: string | null) {
+    updateWorkspace((current, now) =>
+      createBlockGroup(current, {
+        name,
+        parentGroupId,
+        now
+      })
+    );
+  }
+
+  function deleteBlockGroup(blockGroupId: string) {
+    updateWorkspace((current, now) =>
+      removeBlockGroup(current, {
+        blockGroupId,
+        now
+      })
+    );
   }
 
   function addTemplateToDraft(template: BlockTemplate, quantity = 1) {
@@ -962,6 +1075,37 @@ export function TetrisWorkspaceApp() {
         now
       })
     );
+  }
+
+  function importDraftBlocks(rows: DraftBlockImportCandidate[]) {
+    if (rows.length === 0) {
+      return;
+    }
+
+    updateWorkspace((current, now) => {
+      let nextWorkspace = current;
+
+      for (const row of rows) {
+        const draftBlockItemId = createClientId("item");
+
+        nextWorkspace = addBlockTemplateToDraft(nextWorkspace, {
+          draftBlockItemId,
+          blockTemplateId: row.blockTemplateId,
+          quantity: row.quantity,
+          now
+        });
+
+        if (row.loadPriority > 0) {
+          nextWorkspace = updateDraftBlockItemLoadPriority(nextWorkspace, {
+            draftBlockItemId,
+            loadPriority: row.loadPriority,
+            now
+          });
+        }
+      }
+
+      return nextWorkspace;
+    });
   }
 
   function deleteBlockTemplate(templateId: string) {
@@ -982,6 +1126,29 @@ export function TetrisWorkspaceApp() {
         now
       })
     );
+  }
+
+  function updateCurrentLoadPriority(draftBlockItemId: string, loadPriority: number) {
+    updateWorkspace((current, now) =>
+      updateDraftBlockItemLoadPriority(current, {
+        draftBlockItemId,
+        loadPriority,
+        now
+      })
+    );
+  }
+
+  function updatePartialSupportPolicy(enabled: boolean) {
+    updateWorkspace((current, now) => ({
+      ...current,
+      revision: current.revision + 1,
+      updatedAt: now,
+      policy: {
+        ...current.policy,
+        partialSupportEnabled: enabled,
+        minimumSupportRatio: enabled ? PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO : DEFAULT_MINIMUM_SUPPORT_RATIO
+      }
+    }));
   }
 
   function deleteCurrentBlockItem(draftBlockItemId: string) {
@@ -1071,22 +1238,6 @@ export function TetrisWorkspaceApp() {
     setResetWorkDialogOpen(false);
   }
 
-  function loadFieldDemoCurrentWorkIntoDraft() {
-    if (saveConflict) {
-      return;
-    }
-
-    updateWorkspace((current, now) => loadFieldDemoCurrentWork(current, now));
-    setPendingDraftUndo(null);
-    setResultFailure(null);
-    setResultCalculationStep("idle");
-    setCreatingResult(false);
-    window.setTimeout(() => {
-      currentWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      currentWorkSectionRef.current?.focus({ preventScroll: true });
-    }, 0);
-  }
-
   function createPackingResult() {
     if (!workspace || !review || creatingResult) {
       return;
@@ -1134,7 +1285,9 @@ export function TetrisWorkspaceApp() {
           const inputFingerprint = createResultInputFingerprint({
             selectedSpace: optimizationInput.space,
             blocks: optimizationInput.blocks,
-            fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+            fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+            partialSupportEnabled: workspace.policy.partialSupportEnabled,
+            minimumSupportRatio: workspace.policy.minimumSupportRatio
           });
           const optimizationOutput = await runPackingEngineInWorker(optimizationInput);
           const resultWarnings = createPackingResultWarnings({
@@ -1599,7 +1752,12 @@ export function TetrisWorkspaceApp() {
               <BlockCreatePanel
                 form={blockForm}
                 editingTemplateId={editingTemplateId}
+                blockGroups={workspace.blockGroups}
                 onChange={setBlockForm}
+                onAddBlockGroup={addBlockGroup}
+                onDeleteBlockGroup={(group, trigger) =>
+                  requestDelete("block-group", group.blockGroupId, group.name, trigger)
+                }
                 onSave={(addToDraft) => saveBlockTemplate(addToDraft)}
                 onCancel={() => {
                   setEditingTemplateId(null);
@@ -1610,8 +1768,10 @@ export function TetrisWorkspaceApp() {
             <div className="section-column">
               <BlockLibraryPanel
                 templates={workspace.blockTemplates}
+                blockGroups={workspace.blockGroups}
                 onAddToDraft={addTemplateToDraft}
                 onEdit={editBlockTemplate}
+                onImportTemplates={importBlockTemplates}
                 onDeleteRequest={requestDelete}
               />
             </div>
@@ -1627,6 +1787,7 @@ export function TetrisWorkspaceApp() {
           <div className="section-layout current-work-layout">
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
+              templates={workspace.blockTemplates}
               canResetCurrentWork={canResetCurrentWork}
               resetDisabled={isWorkspaceLocked || !canResetCurrentWork}
               resetDisabledReason={
@@ -1636,21 +1797,26 @@ export function TetrisWorkspaceApp() {
                     ? null
                     : "비울 현재 작업이 없습니다."
               }
-              demoDisabled={isWorkspaceLocked}
-              demoDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다." : null}
+              importDisabled={isWorkspaceLocked}
+              importDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 현재 작업 엑셀을 등록할 수 있습니다." : null}
               onQuantityChange={updateCurrentQuantity}
+              onLoadPriorityChange={updateCurrentLoadPriority}
               onDeleteRequest={requestDelete}
               onRequestResetCurrentWork={requestResetCurrentWork}
-              onLoadFieldDemo={loadFieldDemoCurrentWorkIntoDraft}
+              onImportDraftBlocks={importDraftBlocks}
             />
             <ReviewCompactCard
               selectedSpace={selectedSpace}
               review={review}
+              priorityBlockCount={priorityBlockCount}
+              priorityBlockSummaries={priorityBlockSummaries}
+              partialSupportEnabled={workspace.policy.partialSupportEnabled}
               needsExport={needsExport}
               storageHealth={storageHealth}
               saveConflict={saveConflict}
               otherTabCount={otherTabCount}
               persistenceRequesting={persistenceRequesting}
+              onPartialSupportChange={updatePartialSupportPolicy}
               onExportJson={exportJson}
               onReloadLatestWorkspace={reloadLatestWorkspace}
               onRequestStorageProtection={requestBrowserStorageProtection}
@@ -1670,6 +1836,8 @@ export function TetrisWorkspaceApp() {
           selectedSpace={selectedSpace}
           workspacePolicy={workspace.policy}
           review={review}
+          blockGroups={workspace.blockGroups}
+          blockTemplates={workspace.blockTemplates}
           draftBlocks={draftBlocks}
           chainHistory={workspace.chainHistory}
           pendingImport={pendingImport}
@@ -1882,11 +2050,206 @@ function SelectedSpaceSummary({ selectedSpace }: { selectedSpace: SpaceDefinitio
 
 function BlockLibraryPanel({
   templates,
+  blockGroups,
+  onAddToDraft,
+  onEdit,
+  onImportTemplates,
+  onDeleteRequest
+}: {
+  templates: BlockTemplate[];
+  blockGroups: BlockGroup[];
+  onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
+  onEdit: (template: BlockTemplate) => void;
+  onImportTemplates: (rows: BlockTemplateImportCandidate[]) => void;
+  onDeleteRequest: (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => void;
+}) {
+  const [blockLibraryDialogOpen, setBlockLibraryDialogOpen] = useState(false);
+  const blockImportInputRef = useRef<HTMLInputElement>(null);
+  const [blockImportDialogOpen, setBlockImportDialogOpen] = useState(false);
+  const [blockImportFormatDialogOpen, setBlockImportFormatDialogOpen] = useState(false);
+  const [blockImportPreview, setBlockImportPreview] = useState<BlockTemplateImportPreview | null>(null);
+  const [blockImportFileName, setBlockImportFileName] = useState("");
+  const [blockImportLoading, setBlockImportLoading] = useState(false);
+  const [blockImportNotice, setBlockImportNotice] = useState<string | null>(null);
+
+  const handleEdit = (template: BlockTemplate) => {
+    setBlockLibraryDialogOpen(false);
+    onEdit(template);
+  };
+
+  const handleDeleteRequest = (
+    kind: DeleteConfirmationKind,
+    entityId: string,
+    name: string,
+    trigger?: HTMLElement | null
+  ) => {
+    setBlockLibraryDialogOpen(false);
+    onDeleteRequest(kind, entityId, name, trigger);
+  };
+
+  const closeBlockImportDialog = () => {
+    setBlockImportDialogOpen(false);
+    setBlockImportPreview(null);
+    setBlockImportFileName("");
+  };
+
+  const handleBlockImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setBlockImportLoading(true);
+    setBlockImportNotice(null);
+    setBlockImportFileName(file.name);
+
+    try {
+      const preview = await readBlockTemplateXlsxFile(file, {
+        existingTemplateNames: templates.map((template) => template.name)
+      });
+      setBlockImportPreview(preview);
+    } catch (error) {
+      setBlockImportPreview({
+        rows: [],
+        errors: [{ message: toErrorMessage(error) }],
+        canImport: false
+      });
+    } finally {
+      setBlockImportLoading(false);
+      setBlockImportDialogOpen(true);
+    }
+  };
+
+  const applyBlockTemplateImport = () => {
+    const preview = blockImportPreview;
+
+    if (!preview || !preview.canImport) {
+      return;
+    }
+
+    onImportTemplates(preview.rows);
+    setBlockImportNotice(`${preview.rows.length}개 박스를 저장했습니다.`);
+    closeBlockImportDialog();
+  };
+
+  const openBlockImportFilePicker = () => {
+    setBlockImportFormatDialogOpen(false);
+    window.setTimeout(() => {
+      blockImportInputRef.current?.click();
+    }, 0);
+  };
+
+  const downloadBlockImportSample = () => {
+    const sample = createBlockTemplateImportSampleWorkbook();
+    const blob = new Blob([sample.bytes], { type: sample.mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = sample.fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setBlockImportNotice("샘플 파일을 다운로드했습니다. 값을 바꾼 뒤 엑셀로 박스 일괄등록을 진행하세요.");
+  };
+
+  return (
+    <section className="rail-section block-template-library">
+      <h3>저장된 박스</h3>
+      <p className="panel-subtitle">저장한 박스를 팝업에서 검색하고 이번 작업에 추가합니다.</p>
+      <div className="block-library-summary-card">
+        <div>
+          <strong>{templates.length === 0 ? "저장된 박스 0개" : `저장된 박스 ${templates.length}개`}</strong>
+          <span className="fine-print">상위/하위 그룹과 검색으로 필요한 박스를 찾습니다.</span>
+        </div>
+        <div className="block-library-summary-actions">
+          <button
+            className="primary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-library-dialog"
+            onClick={() => setBlockLibraryDialogOpen(true)}
+            disabled={templates.length === 0}
+          >
+            <PackagePlus size={16} />
+            저장된 박스 찾아 추가
+          </button>
+          <button
+            className="secondary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-template-import-format-dialog"
+            onClick={() => setBlockImportFormatDialogOpen(true)}
+          >
+            <Eye size={16} />
+            엑셀 포맷 보기
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => blockImportInputRef.current?.click()}
+            disabled={blockImportLoading}
+          >
+            <FileUp size={16} />
+            {blockImportLoading ? "파일 확인 중" : "엑셀로 박스 일괄등록"}
+          </button>
+          <input
+            ref={blockImportInputRef}
+            className="file-input"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleBlockImportFileChange}
+          />
+        </div>
+      </div>
+      {blockImportNotice ? <p className="fine-print" role="status">{blockImportNotice}</p> : null}
+      {templates.length === 0 ? (
+        <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
+      ) : null}
+      <BlockLibraryDialog
+        open={blockLibraryDialogOpen}
+        templates={templates}
+        blockGroups={blockGroups}
+        onClose={() => setBlockLibraryDialogOpen(false)}
+        onAddToDraft={onAddToDraft}
+        onEdit={handleEdit}
+        onDeleteRequest={handleDeleteRequest}
+      />
+      <BlockTemplateImportDialog
+        open={blockImportDialogOpen}
+        fileName={blockImportFileName}
+        preview={blockImportPreview}
+        onClose={closeBlockImportDialog}
+        onConfirm={applyBlockTemplateImport}
+      />
+      <BlockTemplateImportFormatDialog
+        open={blockImportFormatDialogOpen}
+        onClose={() => setBlockImportFormatDialogOpen(false)}
+        onDownloadSample={downloadBlockImportSample}
+        onPickFile={openBlockImportFilePicker}
+      />
+    </section>
+  );
+}
+
+function BlockLibraryDialog({
+  open,
+  templates,
+  blockGroups,
+  onClose,
   onAddToDraft,
   onEdit,
   onDeleteRequest
 }: {
+  open: boolean;
   templates: BlockTemplate[];
+  blockGroups: BlockGroup[];
+  onClose: () => void;
   onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
   onEdit: (template: BlockTemplate) => void;
   onDeleteRequest: (
@@ -1896,78 +2259,798 @@ function BlockLibraryPanel({
     trigger?: HTMLElement | null
   ) => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [blockLibrarySearchTerm, setBlockLibrarySearchTerm] = useState("");
-  const visibleTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
+  const [blockLibraryGroup1Filter, setBlockLibraryGroup1Filter] = useState("");
+  const [blockLibraryGroup2Filter, setBlockLibraryGroup2Filter] = useState("");
+  const [blockLibraryPage, setBlockLibraryPage] = useState(1);
+  const blockLibraryGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const blockLibraryGroup2Options = useMemo(
+    () => createChildBlockGroups(blockGroups, blockLibraryGroup1Filter),
+    [blockGroups, blockLibraryGroup1Filter]
+  );
+  const searchedTemplates = searchBlockTemplates(templates, blockLibrarySearchTerm);
+  const visibleTemplates = searchedTemplates.filter((template) => {
+    const matchesGroup1 = !blockLibraryGroup1Filter || template.group1 === blockLibraryGroup1Filter;
+    const matchesGroup2 = !blockLibraryGroup2Filter || template.group2 === blockLibraryGroup2Filter;
+    return matchesGroup1 && matchesGroup2;
+  });
+  const blockLibraryPageCount = Math.max(1, Math.ceil(visibleTemplates.length / BLOCK_LIBRARY_PAGE_SIZE));
+  const currentBlockLibraryPage = Math.min(blockLibraryPage, blockLibraryPageCount);
+  const blockLibraryPageStart = (currentBlockLibraryPage - 1) * BLOCK_LIBRARY_PAGE_SIZE;
+  const pagedTemplates = visibleTemplates.slice(
+    blockLibraryPageStart,
+    blockLibraryPageStart + BLOCK_LIBRARY_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setBlockLibraryPage(1);
+  }, [blockLibraryGroup1Filter, blockLibraryGroup2Filter, blockLibrarySearchTerm]);
+
+  useEffect(() => {
+    if (blockLibraryPage > blockLibraryPageCount) {
+      setBlockLibraryPage(blockLibraryPageCount);
+    }
+  }, [blockLibraryPage, blockLibraryPageCount]);
+
+  useEffect(() => {
+    if (
+      blockLibraryGroup2Filter &&
+      !blockLibraryGroup2Options.some((group) => group.name === blockLibraryGroup2Filter)
+    ) {
+      setBlockLibraryGroup2Filter("");
+    }
+  }, [blockLibraryGroup2Filter, blockLibraryGroup2Options]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("[data-block-library-search='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
 
   return (
-    <section className="rail-section block-template-library">
-      <h3>저장된 박스</h3>
-      <p className="panel-subtitle">저장한 박스를 현재 작업에 다시 사용합니다.</p>
-      <label className="block-library-search">
-        저장된 박스 찾기
-        <input
-          aria-label="저장된 박스 검색"
-          placeholder="박스명, 치수, 깨짐주의 검색"
-          value={blockLibrarySearchTerm}
-          onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
-        />
-      </label>
-      <div className="list library-card-grid">
-        {templates.length === 0 ? (
-          <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
-        ) : visibleTemplates.length === 0 ? (
-          <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
-        ) : (
-          visibleTemplates.map((template) => (
-            <article key={template.blockTemplateId} className="library-card">
-              <div className="card-heading">
-                <strong>{template.name}</strong>
-                {template.fragile ? (
-                  <span className="badge" data-tone="amber">
-                    깨짐주의
-                  </span>
-                ) : (
-                  <span className="badge">일반</span>
-                )}
-              </div>
-              <p className="meta">{formatDimensions(template.dimensions)} · v{template.entityVersion}</p>
-              <div className="form-actions">
-                <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
-                  이번 작업에 추가
-                </button>
-                <button className="secondary-button" onClick={() => onEdit(template)}>
-                  수정
-                </button>
-                <button
-                  className="danger-button"
-                  onClick={(event) =>
-                    onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
-                  }
+    <dialog
+      id="block-library-dialog"
+      ref={dialogRef}
+      className="block-library-dialog"
+      aria-modal="true"
+      aria-labelledby="block-library-dialog-title"
+      onClose={onClose}
+    >
+      <div className="block-library-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-library-dialog-title">저장된 박스 찾기</h2>
+            <p className="fine-print">검색하거나 그룹을 좁힌 뒤 이번 작업에 추가합니다.</p>
+          </div>
+          <button className="icon-button" data-block-library-close="true" onClick={onClose} aria-label="저장된 박스 찾기 닫기">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-library-dialog-body">
+          <div className="block-library-dialog-tools">
+            <label className="block-library-search">
+              저장된 박스 찾기
+              <input
+                data-block-library-search="true"
+                aria-label="저장된 박스 검색"
+                placeholder="박스명, 치수, 무게, 그룹 검색"
+                value={blockLibrarySearchTerm}
+                onChange={(event) => setBlockLibrarySearchTerm(event.target.value)}
+              />
+            </label>
+            <div className="block-library-filters" aria-label="저장된 박스 그룹 필터">
+              <label>
+                상위그룹
+                <select
+                  aria-label="상위그룹 필터"
+                  value={blockLibraryGroup1Filter}
+                  onChange={(event) => {
+                    setBlockLibraryGroup1Filter(event.target.value);
+                    setBlockLibraryGroup2Filter("");
+                  }}
                 >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </article>
-          ))
-        )}
+                  <option value="">전체 상위그룹</option>
+                  {blockLibraryGroup1Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                하위그룹
+                <select
+                  aria-label="하위그룹 필터"
+                  value={blockLibraryGroup2Filter}
+                  onChange={(event) => setBlockLibraryGroup2Filter(event.target.value)}
+                  disabled={!blockLibraryGroup1Filter}
+                >
+                  <option value="">전체 하위그룹</option>
+                  {blockLibraryGroup2Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <p className="fine-print">
+            검색 결과 {visibleTemplates.length}개 / 전체 {templates.length}개 · {currentBlockLibraryPage}/
+            {blockLibraryPageCount} 페이지
+          </p>
+          <div className="block-library-dialog-list">
+            {visibleTemplates.length === 0 ? (
+              <p className="fine-print">검색 결과가 없습니다. 다른 이름이나 치수로 찾아보세요.</p>
+            ) : (
+              pagedTemplates.map((template) => (
+                <article key={template.blockTemplateId} className="library-card">
+                  <div className="card-heading">
+                    <strong>{template.name}</strong>
+                    {template.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createBlockTemplateCardMeta(template).join(" · ")}</p>
+                  <div className="form-actions">
+                    <button className="primary-button" onClick={() => onAddToDraft(template, 1)}>
+                      이번 작업에 추가
+                    </button>
+                    <button className="secondary-button" onClick={() => onEdit(template)}>
+                      수정
+                    </button>
+                    <button
+                      className="danger-button"
+                      aria-label={`저장된 박스 ${template.name} 삭제`}
+                      onClick={(event) =>
+                        onDeleteRequest("block-template", template.blockTemplateId, template.name, event.currentTarget)
+                      }
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="block-library-pagination" aria-label="저장된 박스 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setBlockLibraryPage((page) => Math.max(1, page - 1))}
+              disabled={currentBlockLibraryPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentBlockLibraryPage} / {blockLibraryPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setBlockLibraryPage((page) => Math.min(blockLibraryPageCount, page + 1))}
+              disabled={currentBlockLibraryPage >= blockLibraryPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
+        </div>
       </div>
-    </section>
+    </dialog>
+  );
+}
+
+function BlockTemplateImportDialog({
+  open,
+  fileName,
+  preview,
+  onClose,
+  onConfirm
+}: {
+  open: boolean;
+  fileName: string;
+  preview: BlockTemplateImportPreview | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previewRows = preview?.rows ?? [];
+  const previewErrors = preview?.errors ?? [];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-block-template-import-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="block-template-import-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog"
+      aria-modal="true"
+      aria-labelledby="block-template-import-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-template-import-dialog-title">엑셀 박스 일괄등록 미리보기</h2>
+            <p className="fine-print">{fileName || "선택한 파일"} 내용을 저장 전에 확인합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-block-template-import-close="true"
+            onClick={onClose}
+            aria-label="엑셀 박스 일괄등록 미리보기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-import-summary">
+            <div>
+              <strong>가져올 박스 {previewRows.length}개</strong>
+              <span className="fine-print">오류가 없을 때만 저장할 수 있습니다.</span>
+            </div>
+            <div>
+              <strong>오류 행 {previewErrors.length}개</strong>
+              <span className="fine-print">행 번호와 사유를 확인한 뒤 엑셀을 수정하세요.</span>
+            </div>
+          </div>
+          {previewErrors.length > 0 ? (
+            <div className="block-template-import-error-list" role="alert">
+              {previewErrors.map((error, index) => (
+                <p key={`${error.rowNumber ?? "workbook"}-${error.field ?? "file"}-${index}`}>
+                  {error.rowNumber ? `${error.rowNumber}행 · ` : ""}
+                  {error.field ? `${error.field}: ` : ""}
+                  {error.message}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          <div className="block-template-import-list" aria-label="가져올 박스 미리보기">
+            {previewRows.length === 0 ? (
+              <p className="fine-print">가져올 수 있는 박스가 없습니다.</p>
+            ) : (
+              previewRows.map((row) => (
+                <article className="library-card" key={`${row.rowNumber}-${row.name}`}>
+                  <div className="card-heading">
+                    <strong>{row.name}</strong>
+                    {row.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createImportCandidateMeta(row)}</p>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button className="primary-button" onClick={onConfirm} disabled={!preview || !preview.canImport}>
+              일괄등록 적용
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function DraftBlockImportDialog({
+  open,
+  fileName,
+  preview,
+  confirmDisabled,
+  onClose,
+  onConfirm
+}: {
+  open: boolean;
+  fileName: string;
+  preview: DraftBlockImportPreview | null;
+  confirmDisabled: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previewRows = preview?.rows ?? [];
+  const previewErrors = preview?.errors ?? [];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-draft-block-import-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="draft-block-import-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog"
+      aria-modal="true"
+      aria-labelledby="draft-block-import-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="draft-block-import-dialog-title">현재 작업 엑셀 미리보기</h2>
+            <p className="fine-print">{fileName || "선택한 파일"} 내용을 이번 작업에 추가하기 전에 확인합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-draft-block-import-close="true"
+            onClick={onClose}
+            aria-label="현재 작업 엑셀 미리보기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-import-summary">
+            <div>
+              <strong>추가할 박스 {previewRows.length}개</strong>
+              <span className="fine-print">기존 저장 박스와 같은 이름이면 같은 박스로 연결됩니다.</span>
+            </div>
+            <div>
+              <strong>오류 행 {previewErrors.length}개</strong>
+              <span className="fine-print">오류가 없을 때만 현재 작업에 추가할 수 있습니다.</span>
+            </div>
+          </div>
+          {previewErrors.length > 0 ? (
+            <div className="block-template-import-error-list" role="alert">
+              {previewErrors.map((error, index) => (
+                <p key={`${error.rowNumber ?? "workbook"}-${error.field ?? "file"}-${index}`}>
+                  {error.rowNumber ? `${error.rowNumber}행 · ` : ""}
+                  {error.field ? `${error.field}: ` : ""}
+                  {error.message}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          <div className="block-template-import-list" aria-label="현재 작업에 추가할 박스 미리보기">
+            {previewRows.length === 0 ? (
+              <p className="fine-print">현재 작업에 추가할 수 있는 박스가 없습니다.</p>
+            ) : (
+              previewRows.map((row) => (
+                <article className="library-card" key={`${row.rowNumber}-${row.name}`}>
+                  <div className="card-heading">
+                    <strong>{row.name}</strong>
+                    {row.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createDraftImportCandidateMeta(row)}</p>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button
+              className="primary-button"
+              onClick={onConfirm}
+              disabled={!preview || !preview.canImport || confirmDisabled}
+            >
+              현재 작업에 추가
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function DraftBlockImportFormatDialog({
+  open,
+  onClose,
+  onDownloadSample,
+  onPickFile
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDownloadSample: () => void;
+  onPickFile: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-draft-block-format-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="draft-block-import-format-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog block-template-import-format-dialog"
+      aria-modal="true"
+      aria-labelledby="draft-block-import-format-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="draft-block-import-format-dialog-title">현재 작업 엑셀 등록 포맷</h2>
+            <p className="fine-print">첫 행은 아래 열 이름과 동일해야 하며 .xlsx 파일만 지원합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-draft-block-format-close="true"
+            onClick={onClose}
+            aria-label="현재 작업 엑셀 등록 포맷 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-format-callout">
+            <strong>이번 작업 물량 자동화 기준</strong>
+            <span>
+              저장된 박스명을 기준으로 작업수량과 아래층우선타입만 가져옵니다. 자동으로 엑셀을 만들 때는
+              열 순서를 바꾸지 말고 {DRAFT_BLOCK_XLSX_COLUMNS.join(" / ")} 순서로 내보내세요.
+              아래층우선타입은 1=기본, 2=먼저바닥에, 3=맨아래우선 숫자만 사용할 수 있습니다.
+            </span>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 열 설명">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  <th>열 이름</th>
+                  <th>구분</th>
+                  <th>입력 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS.map((column) => (
+                  <tr key={column.name}>
+                    <th scope="row">{column.name}</th>
+                    <td>{column.requirement}</td>
+                    <td>{column.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 샘플 행">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  {DRAFT_BLOCK_XLSX_COLUMNS.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.map((row) => (
+                  <tr key={row.join("-")}>
+                    {row.map((cell, index) => (
+                      <td key={`${row[0]}-${DRAFT_BLOCK_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button
+              className="secondary-button"
+              onClick={onDownloadSample}
+              aria-label="현재 작업 샘플 파일 다운로드"
+            >
+              <Download size={16} />
+              현재 작업 샘플 다운로드
+            </button>
+            <button className="primary-button" onClick={onPickFile}>
+              이 포맷으로 파일 선택
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function BlockTemplateImportFormatDialog({
+  open,
+  onClose,
+  onDownloadSample,
+  onPickFile
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDownloadSample: () => void;
+  onPickFile: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-block-template-format-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="block-template-import-format-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog block-template-import-format-dialog"
+      aria-modal="true"
+      aria-labelledby="block-template-import-format-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-template-import-format-dialog-title">엑셀 박스 일괄등록 포맷</h2>
+            <p className="fine-print">첫 행은 아래 열 이름과 동일해야 하며 .xlsx 파일만 지원합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-block-template-format-close="true"
+            onClick={onClose}
+            aria-label="엑셀 박스 일괄등록 포맷 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-format-callout">
+            <strong>업무 자동화 기준</strong>
+            <span>
+              자동으로 엑셀을 만들 때는 열 순서를 바꾸지 말고 {BLOCK_TEMPLATE_XLSX_COLUMNS.join(" / ")} 순서로
+              내보내면 바로 등록할 수 있습니다.
+            </span>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="엑셀 열 설명">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  <th>열 이름</th>
+                  <th>구분</th>
+                  <th>입력 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS.map((column) => (
+                  <tr key={column.name}>
+                    <th scope="row">{column.name}</th>
+                    <td>{column.requirement}</td>
+                    <td>{column.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="엑셀 샘플 행">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  {BLOCK_TEMPLATE_XLSX_COLUMNS.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => (
+                  <tr key={row.join("-")}>
+                    {row.map((cell, index) => (
+                      <td key={`${row[2]}-${BLOCK_TEMPLATE_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button
+              className="secondary-button"
+              onClick={onDownloadSample}
+              aria-label="박스 일괄등록 샘플 파일 다운로드"
+            >
+              <Download size={16} />
+              샘플 파일 다운로드
+            </button>
+            <button className="primary-button" onClick={onPickFile}>
+              이 포맷으로 파일 선택
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
 function BlockCreatePanel({
   form,
   editingTemplateId,
+  blockGroups,
   onChange,
+  onAddBlockGroup,
+  onDeleteBlockGroup,
   onSave,
   onCancel
 }: {
   form: BlockForm;
   editingTemplateId: string | null;
+  blockGroups: BlockGroup[];
   onChange: (value: BlockForm) => void;
+  onAddBlockGroup: (name: string, parentGroupId: string | null) => void;
+  onDeleteBlockGroup: (group: BlockGroup, trigger?: HTMLElement | null) => void;
   onSave: (addToDraft: boolean) => void;
   onCancel: () => void;
 }) {
+  const [blockGroupRegister, setBlockGroupRegister] = useState({
+    topName: "",
+    parentGroupId: "",
+    childName: ""
+  });
+  const [blockGroupDialogOpen, setBlockGroupDialogOpen] = useState(false);
+  const topBlockGroups = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const childBlockGroups = useMemo(() => createChildBlockGroups(blockGroups, form.group1), [blockGroups, form.group1]);
+
+  const saveTopGroup = () => {
+    const groupName = blockGroupRegister.topName.trim();
+
+    if (!groupName) {
+      return;
+    }
+
+    onAddBlockGroup(groupName, null);
+    onChange({ ...form, group1: groupName, group2: "" });
+    setBlockGroupRegister((current) => ({ ...current, topName: "" }));
+  };
+
+  const saveChildGroup = () => {
+    const groupName = blockGroupRegister.childName.trim();
+
+    if (!groupName || !blockGroupRegister.parentGroupId) {
+      return;
+    }
+
+    const parentGroup = blockGroups.find((group) => group.blockGroupId === blockGroupRegister.parentGroupId);
+    onAddBlockGroup(groupName, blockGroupRegister.parentGroupId);
+
+    if (parentGroup) {
+      onChange({ ...form, group1: parentGroup.name, group2: groupName });
+    }
+
+    setBlockGroupRegister((current) => ({ ...current, childName: "" }));
+  };
+
   return (
     <section>
       <div className="section-head">
@@ -1976,67 +3059,182 @@ function BlockCreatePanel({
         </span>
         <div>
           <h2 id="block-library-title">{getWorkspaceSectionTitle("blocks")}</h2>
-                  <p className="panel-subtitle">박스 크기와 수량을 입력합니다. 저장한 박스는 다음 작업에도 다시 쓸 수 있습니다.</p>
+          <p className="panel-subtitle">박스 크기와 분류 정보를 저장합니다. 수량은 이번 작업에 넣을 때 조정합니다.</p>
         </div>
       </div>
-      <div className="form-grid block-template-form">
-        <label>
-          박스명
-          <input value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} />
-        </label>
-        <label>
-          가로(mm)
-          <NumberFieldInput
-            aria-label="박스 가로 mm"
-            min={1}
-            value={form.widthMm}
-            onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
-          />
-        </label>
-        <label>
-          세로(mm)
-          <NumberFieldInput
-            aria-label="박스 세로 mm"
-            min={1}
-            value={form.depthMm}
-            onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
-          />
-        </label>
-        <label>
-          높이(mm)
-          <NumberFieldInput
-            aria-label="박스 높이 mm"
-            min={1}
-            value={form.heightMm}
-            onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
-          />
-        </label>
-        <label>
-          기본 수량(개)
-          <NumberFieldInput
-            aria-label="박스 기본 수량 개"
-            min={1}
-            value={form.quantity}
-            onValidValueChange={(quantity) => onChange({ ...form, quantity })}
-          />
-        </label>
-        <label className="checkbox-line">
+      <div className="block-template-form-rows block-template-form">
+        <div className="form-row form-row-two block-template-name-row">
+          <label>
+            박스명
+            <input
+              placeholder="예: 스피커 박스"
+              value={form.name}
+              onChange={(event) => onChange({ ...form, name: event.target.value })}
+            />
+          </label>
+          <label>
+            무게(kg)
+            <input
+              aria-label="박스 무게 kg"
+              inputMode="decimal"
+              min="0"
+              placeholder="선택 입력"
+              step="0.1"
+              type="number"
+              value={form.weightKg}
+              onClick={selectNumberFieldValue}
+              onFocus={selectNumberFieldValue}
+              onChange={(event) => onChange({ ...form, weightKg: event.target.value })}
+            />
+          </label>
+        </div>
+        <div className="form-row form-row-three block-template-dimension-row">
+          <label>
+            가로(mm)
+            <NumberFieldInput
+              aria-label="박스 가로 mm"
+              min={1}
+              value={form.widthMm}
+              onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
+            />
+          </label>
+          <label>
+            세로(mm)
+            <NumberFieldInput
+              aria-label="박스 세로 mm"
+              min={1}
+              value={form.depthMm}
+              onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
+            />
+          </label>
+          <label>
+            높이(mm)
+            <NumberFieldInput
+              aria-label="박스 높이 mm"
+              min={1}
+              value={form.heightMm}
+              onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
+            />
+          </label>
+        </div>
+        <div className="form-row form-row-two block-template-group-row">
+          <label>
+            상위그룹
+            <select
+              aria-label="박스 상위그룹 선택"
+              value={form.group1}
+              onChange={(event) => onChange({ ...form, group1: event.target.value, group2: "" })}
+            >
+              <option value="">상위그룹 없음</option>
+              {topBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            하위그룹
+            <select
+              aria-label="박스 하위그룹 선택"
+              value={form.group2}
+              onChange={(event) => onChange({ ...form, group2: event.target.value })}
+              disabled={!form.group1}
+            >
+              <option value="">하위그룹 없음</option>
+              {childBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="checkbox-line block-template-fragile-row">
           <input
             type="checkbox"
             checked={form.fragile}
             onChange={(event) => onChange({ ...form, fragile: event.target.checked })}
           />
-                  깨짐주의
+          깨짐주의
         </label>
       </div>
+      <details className="block-group-register">
+        <summary>새 그룹 등록</summary>
+        <div className="block-group-register-grid">
+          <label>
+            새 상위그룹명
+            <input
+              placeholder="예: 금영"
+              value={blockGroupRegister.topName}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, topName: event.target.value }))
+              }
+            />
+          </label>
+          <button className="secondary-button" onClick={saveTopGroup} disabled={!blockGroupRegister.topName.trim()}>
+            상위그룹 추가
+          </button>
+          <label>
+            하위그룹을 넣을 상위
+            <select
+              value={blockGroupRegister.parentGroupId}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, parentGroupId: event.target.value }))
+              }
+            >
+              <option value="">상위그룹 선택</option>
+              {topBlockGroups.map((group) => (
+                <option key={group.blockGroupId} value={group.blockGroupId}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            새 하위그룹명
+            <input
+              placeholder="예: 스피커"
+              value={blockGroupRegister.childName}
+              onChange={(event) =>
+                setBlockGroupRegister((current) => ({ ...current, childName: event.target.value }))
+              }
+            />
+          </label>
+          <button
+            className="secondary-button"
+            onClick={saveChildGroup}
+            disabled={!blockGroupRegister.parentGroupId || !blockGroupRegister.childName.trim()}
+          >
+            하위그룹 추가
+          </button>
+        </div>
+        <div className="block-group-register-actions">
+          <span className="fine-print">등록된 그룹 {blockGroups.length}개</span>
+          <button
+            className="secondary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-group-management-dialog"
+            onClick={() => setBlockGroupDialogOpen(true)}
+          >
+            등록된 그룹 관리
+          </button>
+        </div>
+      </details>
+      <BlockGroupManagementDialog
+        open={blockGroupDialogOpen}
+        blockGroups={blockGroups}
+        onClose={() => setBlockGroupDialogOpen(false)}
+        onDeleteBlockGroup={onDeleteBlockGroup}
+      />
       <div className="form-actions">
         <button className="primary-button" onClick={() => onSave(true)}>
           <PackagePlus size={16} />
-                  {editingTemplateId ? "박스 수정" : "저장 후 이번 작업에 추가"}
+          {editingTemplateId ? "박스 수정" : "저장 후 1개 추가"}
         </button>
         {!editingTemplateId ? (
           <button className="secondary-button" onClick={() => onSave(false)}>
-                    저장만 하기
+            저장만 하기
           </button>
         ) : (
           <button className="secondary-button" onClick={onCancel}>
@@ -2049,25 +3247,212 @@ function BlockCreatePanel({
   );
 }
 
+function BlockGroupManagementDialog({
+  open,
+  blockGroups,
+  onClose,
+  onDeleteBlockGroup
+}: {
+  open: boolean;
+  blockGroups: BlockGroup[];
+  onClose: () => void;
+  onDeleteBlockGroup: (group: BlockGroup, trigger?: HTMLElement | null) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [blockGroupSearchTerm, setBlockGroupSearchTerm] = useState("");
+  const [blockGroupPage, setBlockGroupPage] = useState(1);
+  const topBlockGroups = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const normalizedSearchTerm = blockGroupSearchTerm.trim().toLocaleLowerCase("ko-KR");
+  const visibleGroups = topBlockGroups.filter((group) => {
+    if (!normalizedSearchTerm) {
+      return true;
+    }
+
+    const childNames = blockGroups
+      .filter((childGroup) => childGroup.parentGroupId === group.blockGroupId)
+      .map((childGroup) => childGroup.name)
+      .join(" ");
+
+    return `${group.name} ${childNames}`.toLocaleLowerCase("ko-KR").includes(normalizedSearchTerm);
+  });
+  const blockGroupPageCount = Math.max(1, Math.ceil(visibleGroups.length / BLOCK_GROUP_PAGE_SIZE));
+  const currentBlockGroupPage = Math.min(blockGroupPage, blockGroupPageCount);
+  const blockGroupPageStart = (currentBlockGroupPage - 1) * BLOCK_GROUP_PAGE_SIZE;
+  const pagedGroups = visibleGroups.slice(blockGroupPageStart, blockGroupPageStart + BLOCK_GROUP_PAGE_SIZE);
+
+  useEffect(() => {
+    setBlockGroupPage(1);
+  }, [blockGroupSearchTerm]);
+
+  useEffect(() => {
+    if (blockGroupPage > blockGroupPageCount) {
+      setBlockGroupPage(blockGroupPageCount);
+    }
+  }, [blockGroupPage, blockGroupPageCount]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLInputElement>("[data-block-group-search='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  const requestGroupDelete = (group: BlockGroup, trigger: HTMLElement) => {
+    onClose();
+    onDeleteBlockGroup(group, trigger);
+  };
+
+  return (
+    <dialog
+      id="block-group-management-dialog"
+      ref={dialogRef}
+      className="block-group-management-dialog"
+      aria-modal="true"
+      aria-labelledby="block-group-management-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-group-management-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-group-management-dialog-title">등록된 그룹 관리</h2>
+            <p className="fine-print">상위/하위 그룹을 검색하고 필요 없는 분류를 삭제합니다.</p>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="등록된 그룹 관리 닫기">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-group-management-dialog-body">
+          <label className="block-group-management-search">
+            등록된 그룹 찾기
+            <input
+              data-block-group-search="true"
+              aria-label="등록된 그룹 검색"
+              placeholder="상위그룹, 하위그룹 검색"
+              value={blockGroupSearchTerm}
+              onChange={(event) => setBlockGroupSearchTerm(event.target.value)}
+            />
+          </label>
+          <p className="fine-print">
+            검색 결과 {visibleGroups.length}개 / 전체 {topBlockGroups.length}개 · {currentBlockGroupPage}/
+            {blockGroupPageCount} 페이지
+          </p>
+          <div className="block-group-management-dialog-list">
+            {topBlockGroups.length === 0 ? (
+              <p className="fine-print">등록된 그룹이 아직 없습니다.</p>
+            ) : visibleGroups.length === 0 ? (
+              <p className="fine-print">검색 결과가 없습니다. 다른 그룹명으로 찾아보세요.</p>
+            ) : (
+              pagedGroups.map((group) => {
+                const children = blockGroups
+                  .filter((candidate) => candidate.parentGroupId === group.blockGroupId)
+                  .sort(compareBlockGroupNames);
+
+                return (
+                  <article className="block-group-card" key={group.blockGroupId}>
+                    <div className="block-group-card-head">
+                      <strong>{group.name}</strong>
+                      <button
+                        className="danger-button icon-button"
+                        aria-label={`상위 그룹 ${group.name} 삭제`}
+                        onClick={(event) => requestGroupDelete(group, event.currentTarget)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className="block-group-children">
+                      {children.length === 0 ? (
+                        <span className="fine-print">하위 그룹 없음</span>
+                      ) : (
+                        children.map((childGroup) => (
+                          <span className="block-group-chip" key={childGroup.blockGroupId}>
+                            {childGroup.name}
+                            <button
+                              className="danger-button icon-button"
+                              aria-label={`하위 그룹 ${childGroup.name} 삭제`}
+                              onClick={(event) => requestGroupDelete(childGroup, event.currentTarget)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+          <div className="block-group-pagination" aria-label="등록된 그룹 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setBlockGroupPage((page) => Math.max(1, page - 1))}
+              disabled={currentBlockGroupPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentBlockGroupPage} / {blockGroupPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setBlockGroupPage((page) => Math.min(blockGroupPageCount, page + 1))}
+              disabled={currentBlockGroupPage >= blockGroupPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 function CurrentWorkBlocksPanel({
   blocks,
+  templates,
   canResetCurrentWork,
   resetDisabled,
   resetDisabledReason,
-  demoDisabled,
-  demoDisabledReason,
+  importDisabled,
+  importDisabledReason,
   onQuantityChange,
+  onLoadPriorityChange,
   onDeleteRequest,
   onRequestResetCurrentWork,
-  onLoadFieldDemo
+  onImportDraftBlocks
 }: {
   blocks: BlockDefinition[];
+  templates: BlockTemplate[];
   canResetCurrentWork: boolean;
   resetDisabled: boolean;
   resetDisabledReason: string | null;
-  demoDisabled: boolean;
-  demoDisabledReason: string | null;
+  importDisabled: boolean;
+  importDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
+  onLoadPriorityChange: (draftBlockItemId: string, loadPriority: DraftLoadPriorityOptionValue) => void;
   onDeleteRequest: (
     kind: DeleteConfirmationKind,
     entityId: string,
@@ -2075,8 +3460,93 @@ function CurrentWorkBlocksPanel({
     trigger?: HTMLElement | null
   ) => void;
   onRequestResetCurrentWork: () => void;
-  onLoadFieldDemo: () => void;
+  onImportDraftBlocks: (rows: DraftBlockImportCandidate[]) => void;
 }) {
+  const draftImportInputRef = useRef<HTMLInputElement>(null);
+  const [draftImportDialogOpen, setDraftImportDialogOpen] = useState(false);
+  const [draftImportFormatDialogOpen, setDraftImportFormatDialogOpen] = useState(false);
+  const [draftImportPreview, setDraftImportPreview] = useState<DraftBlockImportPreview | null>(null);
+  const [draftImportFileName, setDraftImportFileName] = useState("");
+  const [draftImportLoading, setDraftImportLoading] = useState(false);
+  const [draftImportNotice, setDraftImportNotice] = useState<string | null>(null);
+
+  const closeDraftBlockImportDialog = () => {
+    setDraftImportDialogOpen(false);
+    setDraftImportPreview(null);
+    setDraftImportFileName("");
+  };
+
+  const handleDraftImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setDraftImportLoading(true);
+    setDraftImportNotice(null);
+    setDraftImportFileName(file.name);
+
+    try {
+      const preview = await readDraftBlockXlsxFile(file, {
+        existingTemplates: templates.map((template) => ({
+          blockTemplateId: template.blockTemplateId,
+          name: template.name,
+          dimensions: template.dimensions,
+          weightKg: template.weightKg,
+          fragile: template.fragile,
+          group1: template.group1,
+          group2: template.group2
+        }))
+      });
+      setDraftImportPreview(preview);
+    } catch (error) {
+      setDraftImportPreview({
+        rows: [],
+        errors: [{ message: toErrorMessage(error) }],
+        canImport: false
+      });
+    } finally {
+      setDraftImportLoading(false);
+      setDraftImportDialogOpen(true);
+    }
+  };
+
+  const applyDraftBlockImport = () => {
+    const preview = draftImportPreview;
+
+    if (!preview || !preview.canImport || importDisabled) {
+      return;
+    }
+
+    onImportDraftBlocks(preview.rows);
+    setDraftImportNotice(`${preview.rows.length}개 박스를 현재 작업에 추가했습니다.`);
+    closeDraftBlockImportDialog();
+  };
+
+  const openDraftImportFilePicker = () => {
+    setDraftImportFormatDialogOpen(false);
+    window.setTimeout(() => {
+      draftImportInputRef.current?.click();
+    }, 0);
+  };
+
+  const downloadDraftBlockImportSample = () => {
+    const sample = createDraftBlockImportSampleWorkbook();
+    const blob = new Blob([sample.bytes], { type: sample.mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = sample.fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 박스명, 작업수량, 아래층우선타입을 바꿔 등록하세요.");
+  };
+
   return (
     <section className="current-block-panel">
       <div className="current-work-head">
@@ -2091,20 +3561,36 @@ function CurrentWorkBlocksPanel({
         </div>
         <div className="current-work-actions">
           <button
-            className="secondary-button current-work-demo-action"
-            onClick={onLoadFieldDemo}
-            disabled={demoDisabled}
-            title={demoDisabledReason ?? undefined}
-            aria-describedby={demoDisabled ? "current-work-demo-disabled-reason" : undefined}
+            className="secondary-button current-work-format-action"
+            aria-haspopup="dialog"
+            aria-controls="draft-block-import-format-dialog"
+            onClick={() => setDraftImportFormatDialogOpen(true)}
           >
-            <Truck size={16} />
-            시연 예제 불러오기
+            <Eye size={16} />
+            엑셀 포맷 보기
           </button>
-          {demoDisabled ? (
-            <span id="current-work-demo-disabled-reason" className="sr-only">
-              최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다.
+          <button
+            className="secondary-button current-work-import-action"
+            onClick={() => draftImportInputRef.current?.click()}
+            disabled={draftImportLoading || importDisabled}
+            title={importDisabledReason ?? undefined}
+            aria-describedby={importDisabled ? "current-work-import-disabled-reason" : undefined}
+          >
+            <FileUp size={16} />
+            {draftImportLoading ? "파일 확인 중" : "엑셀로 등록하기"}
+          </button>
+          {importDisabled ? (
+            <span id="current-work-import-disabled-reason" className="sr-only">
+              최신본을 불러온 뒤 현재 작업 엑셀을 등록할 수 있습니다.
             </span>
           ) : null}
+          <input
+            ref={draftImportInputRef}
+            className="file-input"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleDraftImportFileChange}
+          />
           <button
             className="secondary-button current-work-reset-action"
             onClick={onRequestResetCurrentWork}
@@ -2122,6 +3608,7 @@ function CurrentWorkBlocksPanel({
           ) : null}
         </div>
       </div>
+      {draftImportNotice ? <p className="fine-print" role="status">{draftImportNotice}</p> : null}
       <div className="block-list">
         {blocks.length === 0 ? (
                   <p className="fine-print">박스를 추가하거나 새 박스를 저장 후 이번 작업에 추가하세요.</p>
@@ -2147,12 +3634,28 @@ function CurrentWorkBlocksPanel({
                     onValidValueChange={(quantity) => onQuantityChange(block.draftBlockItemId, quantity)}
                   />
                 </label>
-                <div className="summary-tile compact">
+                <div className="draft-priority-control" role="group" aria-label={`${block.name} 아래층 우선 설정`}>
+                  <span>아래층 우선</span>
+                  <div className="draft-priority-options">
+                    {DRAFT_LOAD_PRIORITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className="secondary-button"
+                        aria-pressed={normalizeDraftLoadPriorityOptionValue(block.loadPriority) === option.value}
+                        onClick={() => onLoadPriorityChange(block.draftBlockItemId, option.value)}
+                      >
+                        {"displayLabel" in option ? option.displayLabel : option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="summary-tile compact draft-block-volume-tile">
                   <span>총 부피</span>
                   <strong>{formatBlockVolumeM3(block)}</strong>
                 </div>
                 <button
-                  className="danger-button"
+                  className="danger-button draft-block-remove-action"
                   onClick={(event) =>
                     onDeleteRequest("draft-block", block.draftBlockItemId, block.name, event.currentTarget)
                   }
@@ -2165,6 +3668,20 @@ function CurrentWorkBlocksPanel({
           ))
         )}
       </div>
+      <DraftBlockImportDialog
+        open={draftImportDialogOpen}
+        fileName={draftImportFileName}
+        preview={draftImportPreview}
+        confirmDisabled={importDisabled}
+        onClose={closeDraftBlockImportDialog}
+        onConfirm={applyDraftBlockImport}
+      />
+      <DraftBlockImportFormatDialog
+        open={draftImportFormatDialogOpen}
+        onClose={() => setDraftImportFormatDialogOpen(false)}
+        onDownloadSample={downloadDraftBlockImportSample}
+        onPickFile={openDraftImportFilePicker}
+      />
     </section>
   );
 }
@@ -2287,11 +3804,15 @@ function DraftUndoToast({
 function ReviewCompactCard({
   selectedSpace,
   review,
+  priorityBlockCount,
+  priorityBlockSummaries,
+  partialSupportEnabled,
   needsExport,
   storageHealth,
   saveConflict,
   otherTabCount,
   persistenceRequesting,
+  onPartialSupportChange,
   onExportJson,
   onReloadLatestWorkspace,
   onRequestStorageProtection,
@@ -2301,11 +3822,15 @@ function ReviewCompactCard({
 }: {
   selectedSpace: SpaceDefinition | undefined;
   review: ReviewGateResult | null;
+  priorityBlockCount: number;
+  priorityBlockSummaries: string[];
+  partialSupportEnabled: boolean;
   needsExport: boolean;
   storageHealth: StorageHealthSnapshot | null;
   saveConflict: WorkspaceSaveConflictNotice | null;
   otherTabCount: number;
   persistenceRequesting: boolean;
+  onPartialSupportChange: (enabled: boolean) => void;
   onExportJson: () => void;
   onReloadLatestWorkspace: () => void;
   onRequestStorageProtection: () => void;
@@ -2344,13 +3869,43 @@ function ReviewCompactCard({
                   깨짐주의끼리 쌓기 허용, 깨짐주의 위 일반 박스 쌓기 금지, 90도 회전 기준으로 입력을 확인합니다. 부피 기준 최소 공간 수는 참고 최소값이며, 실제로는 받쳐 주는 바닥과 쌓는 규칙 때문에 더 늘어날 수 있습니다.
         </p>
       </div>
-      <div className="summary-grid compact-summary">
+      <div className="partial-support-policy-card">
+        <div className="partial-support-copy">
+          <strong>부분 지지 허용</strong>
+          <p className="fine-print">
+            받침면 55% 이상이면 적재 가능으로 계산합니다. 실제 현장에서는 흔들림, 박스 강도, 작업자 안전을
+            현장 책임자 판단으로 확인하세요.
+          </p>
+        </div>
+        <label className="partial-support-toggle">
+          <input
+            type="checkbox"
+            aria-label="부분 지지 허용"
+            checked={partialSupportEnabled}
+            disabled={Boolean(saveConflict)}
+            onChange={(event) => onPartialSupportChange(event.target.checked)}
+          />
+          <span>{partialSupportEnabled ? "허용 중" : "꺼짐"}</span>
+        </label>
+      </div>
+      <div className="summary-grid compact-summary review-summary-grid">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
         <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
+        <SummaryTile label="하단 우선" value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"} />
         <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
                 <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
         <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
+      {priorityBlockSummaries.length > 0 ? (
+        <div className="review-priority-summary" aria-label="하단 우선 박스">
+          <strong>하단 우선 박스</strong>
+          <ul>
+            {priorityBlockSummaries.map((summary) => (
+              <li key={summary}>{summary}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <ul className="checklist compact-checklist">
         {saveConflict ? (
           <li className="review-message" data-tone="red">
@@ -2438,6 +3993,8 @@ const ResultStage = ({
   selectedSpace,
   workspacePolicy,
   review,
+  blockGroups,
+  blockTemplates,
   draftBlocks,
   chainHistory,
   pendingImport,
@@ -2459,6 +4016,8 @@ const ResultStage = ({
   selectedSpace: SpaceDefinition | undefined;
   workspacePolicy: TetrisWorkspace["policy"];
   review: ReviewGateResult | null;
+  blockGroups: BlockGroup[];
+  blockTemplates: BlockTemplate[];
   draftBlocks: BlockDefinition[];
   chainHistory: ChainHistoryItem[];
   pendingImport: PendingImport | null;
@@ -2478,24 +4037,62 @@ const ResultStage = ({
   const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [threeResetToken, setThreeResetToken] = useState(0);
   const [threeDialogOpen, setThreeDialogOpen] = useState(false);
-  const [resultInspectionDialog, setResultInspectionDialog] = useState<ResultInspectionDialogKind | null>(null);
+  const [showOrientationArrows, setShowOrientationArrows] = useState(true);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
-  const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
-  const [chainPreview, setChainPreview] = useState<ChainSimulationOutput | null>(null);
+  const [selectedChainTemplateIds, setSelectedChainTemplateIds] = useState<string[]>([]);
+  const [chainSearchTerm, setChainSearchTerm] = useState("");
+  const [chainGroup1Filter, setChainGroup1Filter] = useState("");
+  const [chainGroup2Filter, setChainGroup2Filter] = useState("");
+  const [chainMultiPreview, setChainMultiPreview] = useState<MultiChainSimulationOutput | null>(null);
+  const [selectedChainVariantId, setSelectedChainVariantId] = useState<string | null>(null);
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
-  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스 1개를 선택하세요.");
-  const [chainRequestedQuantity, setChainRequestedQuantity] = useState(1);
-  const [instructionCopyStatus, setInstructionCopyStatus] = useState<InstructionCopyStatus>("idle");
-  const [instructionDownloadStatus, setInstructionDownloadStatus] = useState<InstructionDownloadStatus>("idle");
-  const [instructionDownloadFilename, setInstructionDownloadFilename] = useState<string | null>(null);
-  const [offsetRecommendation, setOffsetRecommendation] = useState<OffsetAdjustmentRecommendation | null>(null);
+  const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스를 최대 3개까지 선택하세요.");
+  const [chainRequestedQuantitiesByTemplateId, setChainRequestedQuantitiesByTemplateId] = useState<
+    Record<string, number | null>
+  >({});
+  const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const resultInspectionDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previousLatestResultIdRef = useRef<string | null | undefined>(undefined);
+  const previousChainPolicyKeyRef = useRef<string | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
+  const chainBlockOptions = useMemo(() => blockTemplates, [blockTemplates]);
+  const chainGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
+  const chainGroup2Options = useMemo(
+    () => createChildBlockGroups(blockGroups, chainGroup1Filter),
+    [blockGroups, chainGroup1Filter]
+  );
+  const searchedChainBlockOptions = useMemo(
+    () => searchBlockTemplates(chainBlockOptions, chainSearchTerm),
+    [chainBlockOptions, chainSearchTerm]
+  );
+  const filteredChainBlockOptions = useMemo(
+    () =>
+      searchedChainBlockOptions.filter((template) => {
+        const matchesGroup1 = !chainGroup1Filter || template.group1 === chainGroup1Filter;
+        const matchesGroup2 = !chainGroup2Filter || template.group2 === chainGroup2Filter;
+
+        return matchesGroup1 && matchesGroup2;
+      }),
+    [chainGroup1Filter, chainGroup2Filter, searchedChainBlockOptions]
+  );
+  const selectedChainTemplates = useMemo(
+    () =>
+      selectedChainTemplateIds.flatMap((templateId) => {
+        const template = chainBlockOptions.find((item) => item.blockTemplateId === templateId);
+
+        return template ? [template] : [];
+      }),
+    [chainBlockOptions, selectedChainTemplateIds]
+  );
+  const selectedChainVariant =
+    chainMultiPreview?.variants.find((variant) => variant.variantId === selectedChainVariantId) ?? null;
+  const chainPreview = chainMultiPreview && selectedChainVariant
+    ? convertMultiChainVariantToPreview(chainMultiPreview, selectedChainVariant)
+    : null;
   const isChainComparisonActive = Boolean(chainPreview && chainPreview.addedQuantity > 0);
   const displayedSpaces = useMemo(
     () =>
@@ -2520,9 +4117,6 @@ const ResultStage = ({
     latestResult && usableSize
       ? formatVolumeM3(calculateResultRemainingVolumeM3(latestResult.spaces ?? [], usableSize))
       : "-";
-  const chainBlockOptions = useMemo(() => createChainBlockOptions(draftBlocks), [draftBlocks]);
-  const selectedChainTemplate =
-    chainBlockOptions.find((template) => template.blockTemplateId === selectedChainTemplateId) ?? null;
   const latestResultChainHistory = latestResult
     ? chainHistory.filter((item) => item.resultId === latestResult.resultId)
     : [];
@@ -2565,58 +4159,15 @@ const ResultStage = ({
       ),
     [latestResult?.spaces]
   );
-  const stackingLayerSummaries = useMemo(
-    () => (selectedPackedSpace ? createStackingLayerSummaries(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const stackingInstructionSteps = useMemo(
-    () => (selectedPackedSpace ? createStackingInstructionSteps(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const placementDetailRows = useMemo(
-    () => (selectedPackedSpace ? createPlacementDetailRows(selectedPackedSpace) : []),
-    [selectedPackedSpace]
-  );
-  const stackingInstructionSpaceLabel = useMemo(
-    () => createStackingInstructionSpaceLabel(resultSpace?.name, selectedPackedSpaceIndex),
-    [resultSpace?.name, selectedPackedSpaceIndex]
-  );
   const safetySpaceSplitWarning =
     latestResult?.warnings?.find((warning) => warning === SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? null;
   const resultWarnings =
     latestResult?.warnings?.filter((warning) => warning !== SPACE_SPLIT_FLOOR_SUPPORT_WARNING) ?? [];
   const resultWarningSummary = useMemo(() => createResultWarningSummary(resultWarnings), [resultWarnings]);
   const unloadedWarningSummary = latestResult?.unloadedBlockCount ? resultWarningSummary : [];
-  const stackingInstructionWarningMessages = useMemo(
-    () => [
-      ...(safetySpaceSplitWarning ? [safetySpaceSplitWarning] : []),
-      ...resultWarningSummary.map((warning) =>
-        warning.count > 1 ? `${warning.message} · ${warning.count}건` : warning.message
-      )
-    ],
-    [resultWarningSummary, safetySpaceSplitWarning]
-  );
-  const stackingInstructionText = useMemo(
-    () =>
-      createStackingInstructionText(
-        stackingInstructionSpaceLabel,
-        stackingInstructionSteps,
-        {
-          calculatedAtLabel: latestResult?.createdAt
-            ? formatStackingInstructionCalculatedAt(latestResult.createdAt)
-            : undefined,
-          unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
-          warnings: stackingInstructionWarningMessages
-        }
-      ),
-    [
-      latestResult?.createdAt,
-      latestResult?.unloadedBlockCount,
-      stackingInstructionSpaceLabel,
-      stackingInstructionSteps,
-      stackingInstructionWarningMessages
-    ]
-  );
+  const fieldHandoffWarningCount =
+    (safetySpaceSplitWarning ? 1 : 0) +
+    resultWarningSummary.reduce((count, warning) => count + warning.count, 0);
   const resultActionCtaDisabled = resultCreating || resultFreshnessState.ctaDisabled;
   const resultActionCtaTitle = resultCreating
     ? "결과를 계산하고 있습니다."
@@ -2632,46 +4183,81 @@ const ResultStage = ({
         resultFreshnessStatus: resultFreshnessState.status,
         resultActionDisabled: resultActionCtaDisabled,
         unloadedBlockCount: latestResult?.unloadedBlockCount ?? 0,
-        warningCount: stackingInstructionWarningMessages.length,
-        instructionPrepared: instructionCopyStatus === "copied" || instructionDownloadStatus === "downloaded",
+        warningCount: fieldHandoffWarningCount,
         needsExport
       }),
     [
-      instructionCopyStatus,
-      instructionDownloadStatus,
+      fieldHandoffWarningCount,
       latestResult,
       needsExport,
       resultActionCtaDisabled,
-      resultFreshnessState.status,
-      stackingInstructionWarningMessages.length
+      resultFreshnessState.status
     ]
   );
+  const recommendationCopy = offsetRecommendation ? createResultSpaceRecommendationCopy(offsetRecommendation) : null;
 
   useEffect(() => {
+    const nextResultId = latestResult?.resultId ?? null;
+    const hadPreviousResult = typeof previousLatestResultIdRef.current === "string";
+    const resultChanged =
+      hadPreviousResult && previousLatestResultIdRef.current !== nextResultId;
+
+    previousLatestResultIdRef.current = nextResultId;
     setResultViewMode("three");
     setThreeCameraPreset("isometric");
     setThreeResetToken((value) => value + 1);
     setProjectionView("top");
     setSelectedSpaceInstanceId(latestResult?.spaces?.[0]?.spaceInstanceId ?? null);
     setSelectedBlockTemplateId(null);
-    setSelectedChainTemplateId(null);
-    setChainPreview(null);
+    setSelectedChainTemplateIds([]);
+    setChainSearchTerm("");
+    setChainGroup1Filter("");
+    setChainGroup2Filter("");
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
     setThreeDialogOpen(false);
-    setResultInspectionDialog(null);
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
-    setInstructionCopyStatus("idle");
-    setInstructionDownloadStatus("idle");
-    setInstructionDownloadFilename(null);
+    setChainStatusMessage(
+      resultChanged
+        ? "기준 결과가 바뀌어 추가 박스 선택과 조건을 초기화했습니다."
+        : "추가할 박스를 최대 3개까지 선택하세요."
+    );
+    setChainRequestedQuantitiesByTemplateId({});
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
   useEffect(() => {
-    setInstructionCopyStatus("idle");
-    setInstructionDownloadStatus("idle");
-    setInstructionDownloadFilename(null);
-  }, [stackingInstructionText]);
+    if (
+      chainGroup2Filter &&
+      !chainGroup2Options.some((group) => group.name === chainGroup2Filter)
+    ) {
+      setChainGroup2Filter("");
+    }
+  }, [chainGroup2Filter, chainGroup2Options]);
+
+  useEffect(() => {
+    const policyKey = `${workspacePolicy.partialSupportEnabled}:${workspacePolicy.minimumSupportRatio}`;
+
+    if (previousChainPolicyKeyRef.current === null) {
+      previousChainPolicyKeyRef.current = policyKey;
+      return;
+    }
+
+    if (previousChainPolicyKeyRef.current === policyKey) {
+      return;
+    }
+
+    previousChainPolicyKeyRef.current = policyKey;
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
+    setChainComparisonMode("preview");
+    setChainStatus("idle");
+    setChainStatusMessage("부분 지지 정책이 바뀌었습니다. 추가 박스는 다시 계산하세요.");
+  }, [
+    workspacePolicy.partialSupportEnabled,
+    workspacePolicy.minimumSupportRatio
+  ]);
 
   useEffect(() => {
     if (!offsetRecommendation) {
@@ -2683,30 +4269,49 @@ const ResultStage = ({
     let cancelled = false;
 
     async function calculateOffsetRecommendation() {
-      if (
-        !latestResult ||
-        !resultSpace ||
-        latestResult.unloadedBlockCount > 0 ||
-        resultFreshnessState.status === "stale"
-      ) {
+      if (!latestResult || !resultSpace || resultFreshnessState.status === "stale") {
         setOffsetRecommendation(null);
         return;
       }
 
       const recommendationSpaces =
         isChainComparisonActive && chainComparisonMode === "preview" ? displayedSpaces : packedSpaces;
+      const recommendationPolicy = {
+        fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
+        nonFragileOnFragileAllowed: false,
+        rotation: "orthogonal-90deg",
+        partialSupportEnabled: workspacePolicy.partialSupportEnabled,
+        minimumSupportRatio: workspacePolicy.minimumSupportRatio
+      } as const;
 
       setOffsetRecommendation(null);
 
       try {
+        const overhangRecommendation = await createOverhangPalletRecommendation({
+          space: resultSpace,
+          blocks: draftBlocks,
+          spaces: packedSpaces,
+          unloadedBlockCount: latestResult.unloadedBlockCount,
+          policy: recommendationPolicy,
+          runPackingEngine: runPackingEngineInWorker
+        });
+
+        if (!cancelled && overhangRecommendation) {
+          setOffsetRecommendation(overhangRecommendation);
+          return;
+        }
+
+        if (latestResult.unloadedBlockCount > 0) {
+          if (!cancelled) {
+            setOffsetRecommendation(null);
+          }
+          return;
+        }
+
         const recommendation = await createOffsetAdjustmentRecommendation({
           space: resultSpace,
           spaces: recommendationSpaces,
-          policy: {
-            fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
-            nonFragileOnFragileAllowed: false,
-            rotation: "orthogonal-90deg"
-          },
+          policy: recommendationPolicy,
           runPackingEngine: runPackingEngineInWorker
         });
 
@@ -2728,6 +4333,7 @@ const ResultStage = ({
   }, [
     chainComparisonMode,
     displayedSpaces,
+    draftBlocks,
     isChainComparisonActive,
     latestResult,
     packedSpaces,
@@ -2796,29 +4402,9 @@ const ResultStage = ({
     }
   }
 
-  function openResultInspectionDialog(kind: ResultInspectionDialogKind, trigger: HTMLButtonElement) {
-    resultInspectionDialogTriggerRef.current = trigger;
-    setResultInspectionDialog(kind);
-  }
-
-  function closeResultInspectionDialog({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
-    setResultInspectionDialog(null);
-
-    if (restoreFocus) {
-      window.setTimeout(() => {
-        resultInspectionDialogTriggerRef.current?.focus();
-      }, 0);
-    }
-  }
-
-  function handleFieldHandoffAction(action: FieldHandoffChecklistAction, event: MouseEvent<HTMLButtonElement>) {
+  function handleFieldHandoffAction(action: FieldHandoffChecklistAction) {
     if (action === "create-result" || action === "recalculate") {
       onCreateResult();
-      return;
-    }
-
-    if (action === "open-instructions") {
-      openResultInspectionDialog("stacking", event.currentTarget);
       return;
     }
 
@@ -2834,10 +4420,6 @@ const ResultStage = ({
   function isFieldHandoffActionDisabled(action: FieldHandoffChecklistAction) {
     if (action === "create-result" || action === "recalculate") {
       return resultActionCtaDisabled;
-    }
-
-    if (action === "open-instructions") {
-      return !latestResult;
     }
 
     if (action === "export-backup") {
@@ -2868,129 +4450,247 @@ const ResultStage = ({
     selectProjectionView("top");
   }
 
-  async function copyStackingInstructions() {
-    if (!stackingInstructionText) {
-      return;
-    }
-
-    try {
-      await writeClipboardText(stackingInstructionText);
-      setInstructionCopyStatus("copied");
-    } catch {
-      setInstructionCopyStatus("error");
-    }
-  }
-
-  function downloadStackingInstructions() {
-    if (!stackingInstructionText) {
-      return;
-    }
-
-    try {
-      const filename = createStackingInstructionFilename(selectedPackedSpaceIndex, new Date(), resultSpace?.name);
-
-      downloadTextFile({
-        text: stackingInstructionText,
-        filename
-      });
-      setInstructionDownloadFilename(filename);
-      setInstructionDownloadStatus("downloaded");
-    } catch {
-      setInstructionDownloadFilename(null);
-      setInstructionDownloadStatus("error");
-    }
-  }
-
-  function selectChainTemplate(blockTemplateId: string) {
-    setSelectedChainTemplateId(blockTemplateId);
-    setChainPreview(null);
+  function clearChainPreviewState() {
+    setChainMultiPreview(null);
+    setSelectedChainVariantId(null);
     setChainComparisonMode("preview");
-    setChainStatus("idle");
     setSelectedBlockTemplateId(null);
+  }
+
+  function toggleChainTemplateSelection(blockTemplateId: string) {
+    const isSelected = selectedChainTemplateIds.includes(blockTemplateId);
+
+    if (!isSelected && selectedChainTemplateIds.length >= CHAIN_MAX_SELECTED_TEMPLATE_COUNT) {
+      if (chainStatus === "preview" && chainPreview) {
+        setChainStatus("preview");
+        setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다. 현재 미리보기는 유지됩니다.");
+        return;
+      }
+
+      setChainStatus("idle");
+      setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
+      return;
+    }
+
+    const nextSelectedTemplateIds = isSelected
+      ? selectedChainTemplateIds.filter((templateId) => templateId !== blockTemplateId)
+      : [...selectedChainTemplateIds, blockTemplateId];
+
+    setSelectedChainTemplateIds(nextSelectedTemplateIds);
+    setChainRequestedQuantitiesByTemplateId((current) => {
+      const next = { ...current };
+
+      if (isSelected) {
+        delete next[blockTemplateId];
+      } else if (!(blockTemplateId in next)) {
+        next[blockTemplateId] = null;
+      }
+
+      return next;
+    });
+    clearChainPreviewState();
+    setChainStatus("idle");
     setChainStatusMessage(
-      chainPreview ? "다른 박스를 선택해서 미리보기를 새로 계산합니다." : "최대 적재 계산 또는 지정 수량 계산을 실행하세요."
+      nextSelectedTemplateIds.length
+        ? createChainSelectionOrderStatusMessage(nextSelectedTemplateIds.length)
+        : "추가할 박스를 최대 3개까지 선택하세요."
     );
   }
 
+  function updateSelectedChainTemplateOrder(nextSelectedTemplateIds: string[]) {
+    setSelectedChainTemplateIds(nextSelectedTemplateIds);
+
+    if (chainPreview) {
+      clearChainPreviewState();
+      setChainStatus("idle");
+      setChainStatusMessage("추가 우선순위가 바뀌었습니다. 다시 계산하세요.");
+      return;
+    }
+
+    setChainStatus("idle");
+    setChainStatusMessage(createChainSelectionOrderStatusMessage(nextSelectedTemplateIds.length));
+  }
+
+  function reorderSelectedChainTemplate(sourceTemplateId: string, targetTemplateId: string) {
+    if (sourceTemplateId === targetTemplateId) {
+      return;
+    }
+
+    const sourceIndex = selectedChainTemplateIds.indexOf(sourceTemplateId);
+    const targetIndex = selectedChainTemplateIds.indexOf(targetTemplateId);
+
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return;
+    }
+
+    const nextSelectedTemplateIds = [...selectedChainTemplateIds];
+    const [movedTemplateId] = nextSelectedTemplateIds.splice(sourceIndex, 1);
+    nextSelectedTemplateIds.splice(targetIndex, 0, movedTemplateId);
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
+  }
+
+  function moveSelectedChainTemplate(blockTemplateId: string, direction: -1 | 1) {
+    const currentIndex = selectedChainTemplateIds.indexOf(blockTemplateId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= selectedChainTemplateIds.length) {
+      return;
+    }
+
+    const nextSelectedTemplateIds = [...selectedChainTemplateIds];
+    [nextSelectedTemplateIds[currentIndex], nextSelectedTemplateIds[nextIndex]] = [
+      nextSelectedTemplateIds[nextIndex],
+      nextSelectedTemplateIds[currentIndex]
+    ];
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
+  }
+
   function calculateChainPreview() {
-    calculateChainPreviewWithQuantity();
+    calculateChainPreviewWithQuantity(createSelectedChainQuantityLimitMap());
   }
 
-  function calculateRequestedChainPreview() {
-    calculateChainPreviewWithQuantity(chainRequestedQuantity);
+  function selectChainVariant(variantId: string) {
+    const variant = chainMultiPreview?.variants.find((item) => item.variantId === variantId);
+
+    if (!variant) {
+      return;
+    }
+
+    setSelectedChainVariantId(variantId);
+    setChainComparisonMode("preview");
+    setSelectedBlockTemplateId(null);
+    setChainStatus("preview");
+    setChainStatusMessage(`${variant.label}: 총 ${variant.totalAddedQuantity}개 추가 가능`);
   }
 
-  function changeChainRequestedQuantity(quantity: number) {
-    setChainRequestedQuantity(quantity);
+  function changeChainTemplateQuantityLimit(blockTemplateId: string, quantity: number | null) {
+    setChainRequestedQuantitiesByTemplateId((current) => ({
+      ...current,
+      [blockTemplateId]: quantity
+    }));
 
     if (!chainPreview) {
       return;
     }
 
-    setChainPreview(null);
-    setChainComparisonMode("preview");
-    setSelectedBlockTemplateId(null);
+    clearChainPreviewState();
     setChainStatus("idle");
-    setChainStatusMessage("수량이 바뀌었습니다. 다시 계산하세요.");
+    setChainStatusMessage("추가 조건이 바뀌었습니다. 다시 계산하세요.");
   }
 
-  function calculateChainPreviewWithQuantity(requestedQuantity?: number) {
-    if (!latestResult || !selectedChainTemplate) {
+  function createSelectedChainQuantityLimitMap() {
+    return Object.fromEntries(
+      selectedChainTemplates.flatMap((template) => {
+        const requestedQuantity = chainRequestedQuantitiesByTemplateId[template.blockTemplateId];
+
+        return requestedQuantity && requestedQuantity >= 1
+          ? [[template.blockTemplateId, requestedQuantity] as const]
+          : [];
+      })
+    );
+  }
+
+  function createSelectedChainPriorityMap() {
+    if (selectedChainTemplateIds.length <= 1) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      selectedChainTemplateIds.map((templateId, index) => [
+        templateId,
+        createChainPriorityScoreForIndex(index)
+      ] as const)
+    );
+  }
+
+  function calculateChainPreviewWithQuantity(requestedQuantitiesByTemplateId: Record<string, number> = {}) {
+    if (!latestResult || selectedChainTemplates.length === 0) {
       setChainStatus("idle");
       setChainStatusMessage("박스를 선택해야 계산할 수 있습니다.");
       return;
     }
 
+    const priorityByTemplateId = createSelectedChainPriorityMap();
+    const hasQuantityLimits = Object.keys(requestedQuantitiesByTemplateId).length > 0;
+    const hasPrioritySettings = Object.keys(priorityByTemplateId).length > 0;
+
     setChainStatus("calculating");
     setChainStatusMessage(
-      requestedQuantity ? `${requestedQuantity}개 추가 기준으로 계산하고 있습니다.` : "남은 공간 기준으로 계산하고 있습니다."
+      hasQuantityLimits && hasPrioritySettings
+        ? "박스별 지정 수량과 선택 순서로 결과를 계산하고 있습니다."
+        : hasQuantityLimits
+        ? "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
+        : hasPrioritySettings
+          ? "선택 순서 결과를 계산하고 있습니다."
+        : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
     window.setTimeout(() => {
       try {
-        const preview = runChainSimulationV0({
+        const output = runMultiChainSimulationV0({
           result: latestResult,
-          blockTemplate: selectedChainTemplate,
+          blockTemplates: selectedChainTemplates,
           runId: createClientId("chain-run"),
           policy: {
             fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
-            nonFragileOnFragileAllowed: false
+            nonFragileOnFragileAllowed: false,
+            partialSupportEnabled: workspacePolicy.partialSupportEnabled,
+            minimumSupportRatio: workspacePolicy.minimumSupportRatio
           },
-          requestedQuantity
+          requestedQuantitiesByTemplateId,
+          priorityByTemplateId
         });
+        const selectedVariant =
+          output.variants.find((variant) => variant.mode === "custom-priority") ??
+          output.variants.find((variant) => variant.variantId === output.recommendedVariantId) ??
+          output.variants[0] ??
+          null;
 
-        if (preview.warnings.length > 0) {
-          setChainPreview(null);
-          setChainComparisonMode("preview");
-          setSelectedBlockTemplateId(null);
+        if (output.warnings.length > 0 || !selectedVariant) {
+          clearChainPreviewState();
           setChainStatus("error");
-          setChainStatusMessage(preview.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          setChainStatusMessage(output.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
           return;
         }
 
-        setChainPreview(preview);
-        setChainComparisonMode("preview");
-        setSelectedBlockTemplateId(preview.blockTemplateId);
+        if (selectedVariant.warnings.length > 0 && selectedVariant.totalAddedQuantity === 0) {
+          clearChainPreviewState();
+          setChainStatus("error");
+          setChainStatusMessage(selectedVariant.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          return;
+        }
 
-        if (preview.addedQuantity > 0) {
+        setChainMultiPreview(output);
+        setSelectedChainVariantId(selectedVariant.variantId);
+        setChainComparisonMode("preview");
+        setSelectedBlockTemplateId(null);
+
+        if (selectedVariant.totalAddedQuantity > 0) {
           setChainStatus("preview");
           setChainStatusMessage(
-            requestedQuantity
-              ? `${preview.blockName} 요청 ${requestedQuantity}개 중 ${preview.addedQuantity}개 추가 가능`
-              : `${preview.blockName} 최대 ${preview.addedQuantity}개 추가 가능`
+            hasQuantityLimits && hasPrioritySettings
+              ? `${selectedVariant.label}: 지정 수량과 선택 순서 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : hasQuantityLimits
+              ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : hasPrioritySettings
+                ? `${selectedVariant.label}: 선택 순서 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              : `${selectedVariant.label}: 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
           );
           return;
         }
 
         setChainStatus("empty");
         setChainStatusMessage(
-          requestedQuantity
-            ? `${preview.blockName}은 요청한 ${requestedQuantity}개를 더 넣을 수 없습니다.`
-            : `${preview.blockName}은 현재 결과에 더 들어가지 않습니다.`
+          hasQuantityLimits && hasPrioritySettings
+            ? `${selectedVariant.label}은 지정 수량과 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
+            : hasQuantityLimits
+            ? `${selectedVariant.label}은 지정 조건의 박스를 더 넣을 수 없습니다.`
+            : hasPrioritySettings
+              ? `${selectedVariant.label}은 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
+            : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
         );
       } catch {
-        setChainPreview(null);
-        setChainComparisonMode("preview");
+        clearChainPreviewState();
         setChainStatus("error");
         setChainStatusMessage("추가 적재 계산에 실패했습니다. 다시 계산하거나 다른 박스를 선택하세요.");
       }
@@ -3003,19 +4703,23 @@ const ResultStage = ({
     }
 
     onConfirmChainSimulation(chainPreview, latestResult.resultId);
-    setChainPreview(null);
-    setChainComparisonMode("preview");
+    clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage("추가 결과를 반영했습니다.");
   }
 
-  function clearChainSelection() {
-    setSelectedChainTemplateId(null);
-    setChainPreview(null);
-    setChainComparisonMode("preview");
-    setSelectedBlockTemplateId(null);
+  function cancelChainPreview() {
+    clearChainPreviewState();
     setChainStatus("idle");
-    setChainStatusMessage("추가할 박스 1개를 선택하세요.");
+    setChainStatusMessage("추가 결과 미리보기를 취소했습니다. 선택한 박스와 조건은 유지됩니다.");
+  }
+
+  function clearChainSelection() {
+    setSelectedChainTemplateIds([]);
+    setChainRequestedQuantitiesByTemplateId({});
+    clearChainPreviewState();
+    setChainStatus("idle");
+    setChainStatusMessage("추가 박스 선택과 조건을 모두 초기화했습니다.");
   }
 
   return (
@@ -3159,25 +4863,20 @@ const ResultStage = ({
       ) : null}
 
       {offsetRecommendation ? (
-        <div className="offset-recommendation-card" role="status" aria-label="안전 여유 조정 추천">
+        <div className="offset-recommendation-card" role="status" aria-label={recommendationCopy?.ariaLabel}>
           <div className="offset-recommendation-copy">
             <span className="badge" data-tone="green">
-              안전 여유 조정 추천
+              {recommendationCopy?.badge}
             </span>
-            <strong>
-              안전 여유를 최대 {offsetRecommendation.reductionMm}mm 검토하면 공간을 더 적게 쓸 가능성이 있습니다.
-            </strong>
-            <p className="fine-print">
-              현재 {offsetRecommendation.originalUsedSpaceCount}개 공간이 필요하지만, 현장 책임자 확인 후 안전 여유를 조정하면{" "}
-              {offsetRecommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.
-            </p>
+            <strong>{recommendationCopy?.title}</strong>
+            <p className="fine-print">{recommendationCopy?.description}</p>
             <div className="offset-recommendation-values" aria-label="추천 수치 비교">
               <span>
-                현재 적재 가능
+                {recommendationCopy?.currentValueLabel}
                 <strong>{formatDimensions(offsetRecommendation.usableSizeBefore)}</strong>
               </span>
               <span>
-                추천 검토값
+                {recommendationCopy?.suggestedValueLabel}
                 <strong>{formatDimensions(offsetRecommendation.usableSizeAfter)}</strong>
               </span>
             </div>
@@ -3185,7 +4884,7 @@ const ResultStage = ({
           <div className="offset-recommendation-actions">
             <button className="secondary-button" onClick={onReviewSpaceOffset}>
               <PencilLine size={16} />
-              공간 설정 확인
+              {recommendationCopy?.reviewActionLabel}
             </button>
             <button
               className="secondary-button"
@@ -3304,7 +5003,7 @@ const ResultStage = ({
                     >
                       원본 보기
                     </button>
-                    <button className="secondary-button chain-preview-cancel-action" onClick={clearChainSelection}>
+                    <button className="secondary-button chain-preview-cancel-action" onClick={cancelChainPreview}>
                       미리보기 취소
                     </button>
                   </div>
@@ -3312,31 +5011,6 @@ const ResultStage = ({
               ) : null}
 
               <div className="projection-controls-stack">
-                <div className="result-inspection-actions" aria-label="선택 공간 상세 확인">
-                  <button
-                    className="secondary-button"
-                    aria-haspopup="dialog"
-                    aria-controls="result-inspection-dialog"
-                    disabled={!selectedPackedSpace}
-                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
-                    onClick={(event) => openResultInspectionDialog("placement", event.currentTarget)}
-                  >
-                    <Box size={16} />
-                    배치 상세
-                  </button>
-                  <button
-                    className="secondary-button"
-                    aria-haspopup="dialog"
-                    aria-controls="result-inspection-dialog"
-                    disabled={!selectedPackedSpace}
-                    title={selectedPackedSpace ? undefined : "확인할 공간 결과가 없습니다."}
-                    onClick={(event) => openResultInspectionDialog("stacking", event.currentTarget)}
-                  >
-                    <ListOrdered size={16} />
-                    쌓는 순서
-                  </button>
-                </div>
-
                 {resultViewMode === "three" && selectedPackedSpace && usableSize ? (
                   <div className="view-buttons three-camera-buttons" aria-label="3D 카메라 시점 선택">
                     {THREE_CAMERA_CONTROL_ITEMS.map((item) => (
@@ -3350,6 +5024,15 @@ const ResultStage = ({
                         {item.label}
                       </button>
                     ))}
+                    <button
+                      className="secondary-button result-orientation-toggle"
+                      aria-label={showOrientationArrows ? "방향 화살표 숨기기" : "방향 화살표 표시하기"}
+                      aria-pressed={showOrientationArrows}
+                      onClick={() => setShowOrientationArrows((current) => !current)}
+                    >
+                      <Eye size={16} />
+                      방향 표시
+                    </button>
                     <button
                       className="secondary-button result-three-expand-button"
                       aria-haspopup="dialog"
@@ -3373,6 +5056,7 @@ const ResultStage = ({
                     chainPreviewBlockIds={chainPreviewBlockIds}
                     cameraPreset={threeCameraPreset}
                     resetToken={threeResetToken}
+                    showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
@@ -3391,11 +5075,13 @@ const ResultStage = ({
                     chainPreviewBlockIds={chainPreviewBlockIds}
                     cameraPreset={threeCameraPreset}
                     resetToken={threeResetToken}
+                    showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · ${formatDimensions(usableSize)}`}
                     onSelectCameraPreset={setThreeCameraPreset}
                     onResetViewer={resetResultViewer}
+                    onToggleOrientationArrows={() => setShowOrientationArrows((current) => !current)}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
                     onOpenFallbackView={openTopFallbackFromExpanded}
@@ -3498,22 +5184,6 @@ const ResultStage = ({
               </div>
             </aside>
           </div>
-          <ResultInspectionDialog
-            openKind={resultInspectionDialog}
-            spaceLabel={stackingInstructionSpaceLabel}
-            placementDetailRows={placementDetailRows}
-            stackingInstructionSteps={stackingInstructionSteps}
-            stackingLayerSummaries={stackingLayerSummaries}
-            instructionCopyStatus={instructionCopyStatus}
-            instructionDownloadStatus={instructionDownloadStatus}
-            instructionDownloadFilename={instructionDownloadFilename}
-            hasLatestResult={Boolean(latestResult)}
-            hasSelectedSpace={Boolean(selectedPackedSpace)}
-            stackingInstructionText={stackingInstructionText}
-            onCopyStackingInstructions={copyStackingInstructions}
-            onDownloadStackingInstructions={downloadStackingInstructions}
-            onClose={closeResultInspectionDialog}
-          />
           <OffsetRecommendationPreviewDialog
             open={offsetPreviewDialogOpen && Boolean(offsetRecommendation)}
             recommendation={offsetRecommendation}
@@ -3546,29 +5216,47 @@ const ResultStage = ({
 
       <ChainSimulationPanel
         latestResult={latestResult}
-        blockOptions={chainBlockOptions}
-        selectedTemplateId={selectedChainTemplateId}
+        blockOptions={filteredChainBlockOptions}
+        blockGroups={blockGroups}
+        selectedTemplateIds={selectedChainTemplateIds}
+        selectedTemplates={selectedChainTemplates}
+        searchTerm={chainSearchTerm}
+        group1Filter={chainGroup1Filter}
+        group2Filter={chainGroup2Filter}
+        group1Options={chainGroup1Options}
+        group2Options={chainGroup2Options}
+        partialSupportEnabled={workspacePolicy.partialSupportEnabled}
+        minimumSupportRatio={workspacePolicy.minimumSupportRatio}
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
-        requestedQuantity={chainRequestedQuantity}
+        requestedQuantitiesByTemplateId={chainRequestedQuantitiesByTemplateId}
         preview={chainPreview}
+        variants={chainMultiPreview?.variants ?? []}
+        selectedVariantId={selectedChainVariantId}
         chainHistory={latestResultChainHistory}
         latestChainItem={latestChainItem}
         resultCreating={resultCreating}
         resultCalculationProgress={resultCalculationProgress}
-        onSelectTemplate={selectChainTemplate}
+        onSearchTermChange={setChainSearchTerm}
+        onGroup1FilterChange={(groupName) => {
+          setChainGroup1Filter(groupName);
+          setChainGroup2Filter("");
+        }}
+        onGroup2FilterChange={setChainGroup2Filter}
+        onToggleTemplate={toggleChainTemplateSelection}
+        onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
-        onCalculateRequested={calculateRequestedChainPreview}
-        onRequestedQuantityChange={changeChainRequestedQuantity}
+        onTemplateQuantityLimitChange={changeChainTemplateQuantityLimit}
+        onReorderSelectedTemplate={reorderSelectedChainTemplate}
+        onMoveSelectedTemplate={moveSelectedChainTemplate}
         onConfirm={confirmChainPreview}
+        onCancelPreview={cancelChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
         onUndo={() => {
           if (latestResult) {
             onUndoLastChainAddition(latestResult.resultId);
-            setChainPreview(null);
-            setChainComparisonMode("preview");
-            setSelectedBlockTemplateId(null);
+            clearChainPreviewState();
             setChainStatus("idle");
             setChainStatusMessage("직전 추가를 취소했습니다.");
           }
@@ -3609,8 +5297,10 @@ const ResultStage = ({
                   <CheckCircle2 size={18} color="var(--green)" />
                 ) : item.status === "attention" ? (
                   <AlertTriangle size={18} color="var(--amber)" />
+                ) : item.status === "review" ? (
+                  <Eye size={18} color="var(--muted)" />
                 ) : (
-                  <ListOrdered size={18} color="var(--muted)" />
+                  <AlertTriangle size={18} color="var(--muted)" />
                 )}
                 <span>
                   <strong>{item.label}</strong>
@@ -3631,9 +5321,9 @@ const ResultStage = ({
                         ? "primary-button field-handoff-action"
                         : "secondary-button field-handoff-action"
                     }
-                    onClick={(event) => {
+                    onClick={() => {
                       if (item.action) {
-                        handleFieldHandoffAction(item.action, event);
+                        handleFieldHandoffAction(item.action);
                       }
                     }}
                     disabled={item.action ? isFieldHandoffActionDisabled(item.action) : false}
@@ -3645,8 +5335,6 @@ const ResultStage = ({
                   >
                     {item.action === "export-backup" ? (
                       <Download size={16} />
-                    ) : item.action === "open-instructions" ? (
-                      <ListOrdered size={16} />
                     ) : (
                       <RotateCcw size={16} />
                     )}
@@ -3705,134 +5393,36 @@ const ResultStage = ({
   );
 };
 
-function ResultInspectionDialog({
-  openKind,
-  spaceLabel,
-  placementDetailRows,
-  stackingInstructionSteps,
-  stackingLayerSummaries,
-  instructionCopyStatus,
-  instructionDownloadStatus,
-  instructionDownloadFilename,
-  hasLatestResult,
-  hasSelectedSpace,
-  stackingInstructionText,
-  onCopyStackingInstructions,
-  onDownloadStackingInstructions,
-  onClose
-}: {
-  openKind: ResultInspectionDialogKind | null;
-  spaceLabel: string;
-  placementDetailRows: ReturnType<typeof createPlacementDetailRows>;
-  stackingInstructionSteps: ReturnType<typeof createStackingInstructionSteps>;
-  stackingLayerSummaries: ReturnType<typeof createStackingLayerSummaries>;
-  instructionCopyStatus: InstructionCopyStatus;
-  instructionDownloadStatus: InstructionDownloadStatus;
-  instructionDownloadFilename: string | null;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-  stackingInstructionText: string;
-  onCopyStackingInstructions: () => void;
-  onDownloadStackingInstructions: () => void;
-  onClose: (options?: { restoreFocus?: boolean }) => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = "result-inspection-dialog-title";
-  const descriptionId = "result-inspection-dialog-description";
-  const isPlacement = openKind === "placement";
-  const title = isPlacement ? "배치 상세" : "쌓는 순서";
-  const description = isPlacement
-    ? `선택한 ${spaceLabel} 기준 · 박스별 위치와 회전 후 크기`
-    : `선택한 ${spaceLabel} 기준 · 아래층부터 확인`;
+function createResultSpaceRecommendationCopy(recommendation: ResultSpaceAdjustmentRecommendation) {
+  if (recommendation.kind === "overhang-pallet") {
+    const improvedUnloaded = recommendation.improvedUnloadedBlockCount < recommendation.originalUnloadedBlockCount;
+    const improvementText = improvedUnloaded
+      ? `현재 미적재 ${recommendation.originalUnloadedBlockCount}개가 있지만, 오버행 파레트로 검토하면 미적재를 ${recommendation.improvedUnloadedBlockCount}개까지 줄일 수 있습니다.`
+      : `현재 ${recommendation.originalUsedSpaceCount}개 공간이 필요하지만, 오버행 파레트로 검토하면 ${recommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.`;
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
+    return {
+      ariaLabel: "오버행 파레트 검토 추천",
+      badge: "오버행 파레트 검토",
+      title: "오버행 파레트로 다시 계산하면 공간 사용을 줄일 가능성이 있습니다.",
+      description: `${improvementText} 자동으로 바꾸지 않습니다. 현장 책임자 확인 후 오버행 파레트를 선택해 다시 계산하세요.`,
+      currentValueLabel: recommendation.originalSpace.name,
+      suggestedValueLabel: recommendation.suggestedSpace.name,
+      reviewActionLabel: "공간 선택 확인",
+      previewDescription:
+        "실제 공간 선택은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 오버행 파레트를 선택해 다시 계산하세요."
+    };
+  }
 
-    if (!dialog) {
-      return;
-    }
-
-    if (openKind) {
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-
-      window.setTimeout(() => {
-        dialog.querySelector<HTMLButtonElement>("[data-result-inspection-close='true']")?.focus();
-      }, 0);
-      return;
-    }
-
-    if (dialog.open) {
-      dialog.close();
-    }
-  }, [openKind]);
-
-  return (
-    <dialog
-      id="result-inspection-dialog"
-      ref={dialogRef}
-      className="result-inspection-dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descriptionId}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          onClose();
-        }
-      }}
-    >
-      <div className="result-inspection-dialog-sheet">
-        <div className="space-form-dialog-head result-inspection-dialog-head">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            <p id={descriptionId} className="fine-print">
-              {hasLatestResult && hasSelectedSpace
-                ? description
-                : "결과를 만들면 선택 공간의 상세 정보를 확인할 수 있습니다."}
-            </p>
-          </div>
-          <button
-            className="icon-button panel-close-button"
-            data-result-inspection-close="true"
-            onClick={() => onClose()}
-            aria-label={`${title} 닫기`}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="result-inspection-dialog-body">
-          {isPlacement ? (
-            <PlacementDetailContent
-              titleId={titleId}
-              rows={placementDetailRows}
-              hasLatestResult={hasLatestResult}
-              hasSelectedSpace={hasSelectedSpace}
-            />
-          ) : (
-            <StackingOrderContent
-              steps={stackingInstructionSteps}
-              layers={stackingLayerSummaries}
-              instructionCopyStatus={instructionCopyStatus}
-              instructionDownloadStatus={instructionDownloadStatus}
-              instructionDownloadFilename={instructionDownloadFilename}
-              hasLatestResult={hasLatestResult}
-              hasSelectedSpace={hasSelectedSpace}
-              stackingInstructionText={stackingInstructionText}
-              onCopyStackingInstructions={onCopyStackingInstructions}
-              onDownloadStackingInstructions={onDownloadStackingInstructions}
-            />
-          )}
-        </div>
-      </div>
-    </dialog>
-  );
+  return {
+    ariaLabel: "안전 여유 조정 추천",
+    badge: "안전 여유 조정 추천",
+    title: `안전 여유를 최대 ${recommendation.reductionMm}mm 검토하면 공간을 더 적게 쓸 가능성이 있습니다.`,
+    description: `현재 ${recommendation.originalUsedSpaceCount}개 공간이 필요하지만, 현장 책임자 확인 후 안전 여유를 조정하면 ${recommendation.improvedUsedSpaceCount}개 공간으로 줄어들 수 있습니다.`,
+    currentValueLabel: "현재 적재 가능",
+    suggestedValueLabel: "추천 검토값",
+    reviewActionLabel: "공간 설정 확인",
+    previewDescription: "실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요."
+  };
 }
 
 function OffsetRecommendationPreviewDialog({
@@ -3842,7 +5432,7 @@ function OffsetRecommendationPreviewDialog({
   onClose
 }: {
   open: boolean;
-  recommendation: OffsetAdjustmentRecommendation | null;
+  recommendation: ResultSpaceAdjustmentRecommendation | null;
   resultSpace: SpaceDefinition | null;
   onClose: (options?: { restoreFocus?: boolean }) => void;
 }) {
@@ -3854,6 +5444,7 @@ function OffsetRecommendationPreviewDialog({
   const [cameraPreset, setCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [resetToken, setResetToken] = useState(0);
   const previewSpaces = recommendation?.previewSpaces ?? [];
+  const recommendationCopy = recommendation ? createResultSpaceRecommendationCopy(recommendation) : null;
   const selectedPreviewSpace =
     previewSpaces.find((space) => space.spaceInstanceId === selectedPreviewSpaceId) ?? previewSpaces[0] ?? null;
   const selectedPreviewSpaceIndex = selectedPreviewSpace
@@ -3936,7 +5527,8 @@ function OffsetRecommendationPreviewDialog({
           <div>
             <h2 id={titleId}>추천 적용 미리보기</h2>
             <p id={descriptionId} className="fine-print">
-              실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요.
+              {recommendationCopy?.previewDescription ??
+                "실제 공간 설정은 아직 바뀌지 않았습니다. 현장 책임자 확인 후 공간 설정에서 직접 수정하세요."}
             </p>
           </div>
           <button
@@ -3962,11 +5554,11 @@ function OffsetRecommendationPreviewDialog({
               </span>
               <span>
                 현재 안전 여유
-                <strong>{formatOffset(recommendation.originalOffset)}</strong>
+                <strong>{formatRecommendationCurrentSetting(recommendation)}</strong>
               </span>
               <span>
                 추천 검토값
-                <strong>{formatOffset(recommendation.suggestedOffset)}</strong>
+                <strong>{formatRecommendationSuggestedSetting(recommendation)}</strong>
               </span>
             </div>
 
@@ -3974,7 +5566,10 @@ function OffsetRecommendationPreviewDialog({
               <aside className="offset-preview-space-list" aria-label="추천값 기준 공간 선택">
                 <strong>추천값 기준 3D 보기</strong>
                 <span className="fine-print">
-                  {resultSpace?.name ?? "선택 공간"} · {formatDimensions(recommendation.usableSizeAfter)}
+                  {recommendation.kind === "overhang-pallet"
+                    ? recommendation.suggestedSpace.name
+                    : (resultSpace?.name ?? "선택 공간")}{" "}
+                  · {formatDimensions(recommendation.usableSizeAfter)}
                 </span>
                 <div className="space-instance-list">
                   {previewSpaces.map((space, index) => (
@@ -4036,6 +5631,7 @@ function OffsetRecommendationPreviewDialog({
                     chainPreviewBlockIds={emptyPreviewBlockIds}
                     cameraPreset={cameraPreset}
                     resetToken={resetToken}
+                    showOrientationArrows={true}
                     spaceLabel={`추천 Space ${selectedPreviewSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPreviewSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedPreviewBlock}
@@ -4055,158 +5651,20 @@ function OffsetRecommendationPreviewDialog({
   );
 }
 
-function formatOffset(offset: OffsetAdjustmentRecommendation["originalOffset"]) {
+function formatRecommendationCurrentSetting(recommendation: ResultSpaceAdjustmentRecommendation) {
+  return recommendation.kind === "overhang-pallet"
+    ? recommendation.originalSpace.name
+    : formatOffset(recommendation.originalOffset);
+}
+
+function formatRecommendationSuggestedSetting(recommendation: ResultSpaceAdjustmentRecommendation) {
+  return recommendation.kind === "overhang-pallet"
+    ? recommendation.suggestedSpace.name
+    : formatOffset(recommendation.suggestedOffset);
+}
+
+function formatOffset(offset: { widthMm: number; depthMm: number; heightMm: number }) {
   return `${offset.widthMm} / ${offset.depthMm} / ${offset.heightMm}mm`;
-}
-
-function PlacementDetailContent({
-  titleId,
-  rows,
-  hasLatestResult,
-  hasSelectedSpace
-}: {
-  titleId: string;
-  rows: ReturnType<typeof createPlacementDetailRows>;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-}) {
-  if (rows.length > 0) {
-    return (
-      <div className="placement-detail-table" role="table" aria-labelledby={titleId}>
-        <div className="placement-detail-header" role="row">
-          <span role="columnheader">순서</span>
-          <span role="columnheader">박스</span>
-          <span role="columnheader">위치</span>
-          <span role="columnheader">회전 후 크기</span>
-          <span role="columnheader">방향</span>
-        </div>
-        {rows.map((row) => (
-          <div key={row.blockId} className="placement-detail-row" role="row">
-            <span role="cell" data-label="순서">
-              <strong>{row.sequenceLabel}</strong>
-            </span>
-            <span role="cell" data-label="박스">
-              <strong>{row.name}</strong>
-              <small>{row.handlingLabel}</small>
-            </span>
-            <span role="cell" data-label="위치">
-              {row.positionLabel}
-            </span>
-            <span role="cell" data-label="회전 후 크기">
-              {row.sizeLabel}
-            </span>
-            <span role="cell" data-label="방향">
-              {row.directionLabel}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (hasLatestResult && hasSelectedSpace) {
-    return <p className="meta">선택한 공간에 표시할 배치 좌표가 없습니다.</p>;
-  }
-
-  return <p className="meta">결과를 만들면 배치 상세표가 표시됩니다.</p>;
-}
-
-function StackingOrderContent({
-  steps,
-  layers,
-  instructionCopyStatus,
-  instructionDownloadStatus,
-  instructionDownloadFilename,
-  hasLatestResult,
-  hasSelectedSpace,
-  stackingInstructionText,
-  onCopyStackingInstructions,
-  onDownloadStackingInstructions
-}: {
-  steps: ReturnType<typeof createStackingInstructionSteps>;
-  layers: ReturnType<typeof createStackingLayerSummaries>;
-  instructionCopyStatus: InstructionCopyStatus;
-  instructionDownloadStatus: InstructionDownloadStatus;
-  instructionDownloadFilename: string | null;
-  hasLatestResult: boolean;
-  hasSelectedSpace: boolean;
-  stackingInstructionText: string;
-  onCopyStackingInstructions: () => void;
-  onDownloadStackingInstructions: () => void;
-}) {
-  return (
-    <>
-      <div className="loading-instruction-actions">
-        <button
-          className="secondary-button loading-instruction-copy-button"
-          onClick={onCopyStackingInstructions}
-          disabled={!stackingInstructionText}
-          title={stackingInstructionText ? undefined : "복사할 작업 순서가 없습니다."}
-        >
-          <Copy size={16} />
-          작업 순서 복사
-        </button>
-        <button
-          className="secondary-button loading-instruction-download-button"
-          onClick={onDownloadStackingInstructions}
-          disabled={!stackingInstructionText}
-          title={stackingInstructionText ? undefined : "저장할 작업 지시서가 없습니다."}
-        >
-          <Download size={16} />
-          작업 지시서 저장
-        </button>
-      </div>
-      {instructionCopyStatus === "copied" ? (
-        <p className="loading-instruction-copy-status" data-tone="green" role="status">
-          작업 순서를 복사했습니다.
-        </p>
-      ) : instructionCopyStatus === "error" ? (
-        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-          복사하지 못했습니다. 브라우저 권한을 확인하세요.
-        </p>
-      ) : null}
-      {instructionDownloadStatus === "downloaded" ? (
-        <p className="loading-instruction-copy-status" data-tone="green" role="status">
-          {createStackingInstructionDownloadSuccessMessage(instructionDownloadFilename ?? "작업 지시서.txt")}
-        </p>
-      ) : instructionDownloadStatus === "error" ? (
-        <p className="loading-instruction-copy-status" data-tone="amber" role="status">
-          작업 지시서 파일을 만들지 못했습니다. 브라우저 다운로드 설정을 확인하세요.
-        </p>
-      ) : null}
-      {steps.length > 0 ? (
-        <>
-          <div className="loading-instruction-list" aria-label="현장 작업 순서">
-            {steps.map((step) => (
-              <div key={`${step.stepIndex}-${step.title}`} className="loading-instruction-row">
-                <strong>{step.title}</strong>
-                <div className="loading-instruction-copy">
-                  <p>{step.instruction}</p>
-                  <small>{step.detail}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="stacking-layer-list" aria-label="층별 적재 순서">
-            {layers.map((layer) => (
-              <div key={`${layer.zMm}-${layer.layerIndex}`} className="stacking-layer-row">
-                <strong>{layer.layerIndex}층</strong>
-                <span>
-                  {layer.heightLabel}
-                  <small>{layer.loadSummary}</small>
-                </span>
-                <small className="stacking-layer-count">총 {layer.blockCount}개</small>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : hasLatestResult && hasSelectedSpace ? (
-        <p className="meta">선택한 공간에 적재된 박스가 없습니다.</p>
-      ) : (
-        <p className="meta">결과를 만들면 선택 공간의 층별 적재 순서가 표시됩니다.</p>
-      )}
-    </>
-  );
 }
 
 function ExpandedThreeViewDialog({
@@ -4217,11 +5675,13 @@ function ExpandedThreeViewDialog({
   chainPreviewBlockIds,
   cameraPreset,
   resetToken,
+  showOrientationArrows,
   spaceLabel,
   utilizationLabel,
   spaceDescription,
   onSelectCameraPreset,
   onResetViewer,
+  onToggleOrientationArrows,
   onSelectBlockTemplate,
   onClearSelection,
   onOpenFallbackView,
@@ -4234,11 +5694,13 @@ function ExpandedThreeViewDialog({
   chainPreviewBlockIds: Set<string>;
   cameraPreset: ThreeCameraPreset;
   resetToken: number;
+  showOrientationArrows: boolean;
   spaceLabel: string;
   utilizationLabel: string;
   spaceDescription: string;
   onSelectCameraPreset: (preset: ThreeCameraPreset) => void;
   onResetViewer: () => void;
+  onToggleOrientationArrows: () => void;
   onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
   onOpenFallbackView: () => void;
@@ -4324,6 +5786,15 @@ function ExpandedThreeViewDialog({
             <RotateCcw size={16} />
             처음
           </button>
+          <button
+            className="secondary-button result-orientation-toggle"
+            aria-label={showOrientationArrows ? "확대 3D 방향 화살표 숨기기" : "확대 3D 방향 화살표 표시하기"}
+            aria-pressed={showOrientationArrows}
+            onClick={onToggleOrientationArrows}
+          >
+            <Eye size={16} />
+            방향 표시
+          </button>
         </div>
 
         <div className="result-three-dialog-body">
@@ -4335,6 +5806,7 @@ function ExpandedThreeViewDialog({
               chainPreviewBlockIds={chainPreviewBlockIds}
               cameraPreset={cameraPreset}
               resetToken={resetToken}
+              showOrientationArrows={showOrientationArrows}
               spaceLabel={spaceLabel}
               utilizationLabel={utilizationLabel}
               onSelectBlockTemplate={onSelectBlockTemplate}
@@ -4354,51 +5826,129 @@ function ExpandedThreeViewDialog({
   );
 }
 
+interface ChainBlockPickerDialogProps {
+  open: boolean;
+  templates: BlockTemplate[];
+  selectedTemplateIds: string[];
+  onToggleTemplate: (blockTemplateId: string) => void;
+  onClose: () => void;
+}
+
+function ChainBlockPickerDialog(props: ChainBlockPickerDialogProps) {
+  return <ChainBlockPickerDialogBody {...props} />;
+}
+
 function ChainSimulationPanel({
   latestResult,
   blockOptions,
-  selectedTemplateId,
+  blockGroups,
+  selectedTemplateIds,
+  selectedTemplates,
+  searchTerm,
+  group1Filter,
+  group2Filter,
+  group1Options,
+  group2Options,
+  partialSupportEnabled,
+  minimumSupportRatio,
   chainStatus,
   statusMessage,
-  requestedQuantity,
+  requestedQuantitiesByTemplateId,
   preview,
+  variants,
+  selectedVariantId,
   chainHistory,
   latestChainItem,
   resultCreating,
   resultCalculationProgress,
-  onSelectTemplate,
+  onSearchTermChange,
+  onGroup1FilterChange,
+  onGroup2FilterChange,
+  onToggleTemplate,
+  onSelectVariant,
   onCalculate,
-  onCalculateRequested,
-  onRequestedQuantityChange,
+  onTemplateQuantityLimitChange,
+  onReorderSelectedTemplate,
+  onMoveSelectedTemplate,
   onConfirm,
+  onCancelPreview,
   onCreateResult,
   onClearSelection,
   onUndo
 }: {
   latestResult: TetrisWorkspace["recentResults"][number] | null;
   blockOptions: BlockTemplate[];
-  selectedTemplateId: string | null;
+  blockGroups: BlockGroup[];
+  selectedTemplateIds: string[];
+  selectedTemplates: BlockTemplate[];
+  searchTerm: string;
+  group1Filter: string;
+  group2Filter: string;
+  group1Options: BlockGroup[];
+  group2Options: BlockGroup[];
+  partialSupportEnabled: boolean;
+  minimumSupportRatio: number;
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
-  requestedQuantity: number;
+  requestedQuantitiesByTemplateId: Record<string, number | null>;
   preview: ChainSimulationOutput | null;
+  variants: MultiChainSimulationVariant[];
+  selectedVariantId: string | null;
   chainHistory: ChainHistoryItem[];
   latestChainItem: ChainHistoryItem | null;
   resultCreating: boolean;
   resultCalculationProgress: ResultCalculationProgressCopy;
-  onSelectTemplate: (blockTemplateId: string) => void;
+  onSearchTermChange: (searchTerm: string) => void;
+  onGroup1FilterChange: (groupName: string) => void;
+  onGroup2FilterChange: (groupName: string) => void;
+  onToggleTemplate: (blockTemplateId: string) => void;
+  onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
-  onCalculateRequested: () => void;
-  onRequestedQuantityChange: (quantity: number) => void;
+  onTemplateQuantityLimitChange: (blockTemplateId: string, quantity: number | null) => void;
+  onReorderSelectedTemplate: (sourceTemplateId: string, targetTemplateId: string) => void;
+  onMoveSelectedTemplate: (blockTemplateId: string, direction: -1 | 1) => void;
   onConfirm: () => void;
+  onCancelPreview: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
   onUndo: () => void;
 }) {
+  const [chainPickerOpen, setChainPickerOpen] = useState(false);
+  const [draggingTemplateId, setDraggingTemplateId] = useState<string | null>(null);
   const hasResult = Boolean(latestResult);
-  const canCalculate = hasResult && Boolean(selectedTemplateId) && chainStatus !== "calculating";
-  const canCalculateRequested = canCalculate && requestedQuantity >= 1;
+  const canCalculate = hasResult && selectedTemplateIds.length > 0 && chainStatus !== "calculating";
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
+  const partialSupportPercent = Math.round(minimumSupportRatio * 100);
+  const usePickerDialog = blockOptions.length > CHAIN_INLINE_OPTION_LIMIT;
+  const visibleBlockOptions = blockOptions.slice(0, CHAIN_INLINE_OPTION_LIMIT);
+  const hiddenBlockOptionCount = Math.max(0, blockOptions.length - visibleBlockOptions.length);
+  const selectedVariant = variants.find((variant) => variant.variantId === selectedVariantId) ?? null;
+  const hasNarrowingCondition = Boolean(searchTerm.trim() || group1Filter || group2Filter);
+  const blockGroupCount = blockGroups.length;
+  const hasQuantityLimits = selectedTemplates.some(
+    (template) => requestedQuantitiesByTemplateId[template.blockTemplateId]
+  );
+  const hasPrioritySettings = selectedTemplates.length > 1;
+  const chainCalculateDisabledReason = !hasResult
+    ? "결과를 먼저 생성하면 추가 적재를 시험할 수 있습니다."
+    : selectedTemplateIds.length === 0
+      ? "추가할 박스를 먼저 선택하세요."
+      : chainStatus === "calculating"
+        ? "추가 가능 수량을 계산하고 있습니다."
+        : null;
+  const chainConfirmDisabledReason = !hasResult
+    ? "결과를 먼저 생성하면 추가 결과를 반영할 수 있습니다."
+    : chainStatus === "empty"
+      ? "추가 가능한 결과가 있을 때 반영할 수 있습니다."
+      : !canConfirm
+        ? "추천 결과를 계산한 뒤 반영할 수 있습니다."
+        : null;
+  const chainUndoDisabledReason = latestChainItem
+    ? null
+    : "반영된 추가 결과가 있을 때 직전 추가를 취소할 수 있습니다.";
+  const chainRecreateResultTitle = resultCreating
+    ? "기준 결과를 다시 계산하고 있습니다."
+    : "기준 결과를 다시 계산해 추가 시뮬레이션을 이어갑니다.";
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -4407,9 +5957,9 @@ function ChainSimulationPanel({
           <span className="badge" data-tone={hasResult ? "green" : undefined}>
             기준 결과 잠금
           </span>
-          <h3 id="chain-simulation-title">추가 박스 시뮬레이션</h3>
+          <h3 id="chain-simulation-title">5. 추가 박스 시뮬레이션</h3>
           <p className="panel-subtitle">
-            현재 결과를 잠근 상태에서 남은 공간에 같은 유형 박스를 얼마나 더 넣을 수 있는지 확인합니다.
+            저장된 박스 중 최대 3개를 골라 현재 결과 위에 더 쌓을 수 있는 추천 결과를 비교합니다.
           </p>
         </div>
         <div className="chain-history-row" aria-label="체이닝 이력">
@@ -4431,29 +5981,129 @@ function ChainSimulationPanel({
         <div className="chain-panel-grid">
           <div>
             <strong className="chain-field-title">추가할 박스</strong>
-            <div className="chain-option-list" role="radiogroup" aria-label="추가할 박스 유형">
-              {blockOptions.length === 0 ? (
-                <p className="fine-print">현재 작업에 추가된 박스 유형이 없습니다.</p>
+            <label className="chain-search-field">
+              저장된 박스 검색
+              <input
+                aria-label="추가 시뮬레이션 박스 검색"
+                value={searchTerm}
+                placeholder="박스명, 그룹, 치수로 검색"
+                onChange={(event) => onSearchTermChange(event.target.value)}
+              />
+            </label>
+            <div className="chain-filter-row" aria-label="추가 시뮬레이션 그룹 필터">
+              <label>
+                상위그룹
+                <select
+                  aria-label="추가 시뮬레이션 상위그룹 필터"
+                  value={group1Filter}
+                  onChange={(event) => onGroup1FilterChange(event.target.value)}
+                >
+                  <option value="">전체 상위그룹</option>
+                  {group1Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                하위그룹
+                <select
+                  aria-label="추가 시뮬레이션 하위그룹 필터"
+                  value={group2Filter}
+                  onChange={(event) => onGroup2FilterChange(event.target.value)}
+                  disabled={!group1Filter}
+                >
+                  <option value="">전체 하위그룹</option>
+                  {group2Options.map((group) => (
+                    <option key={group.blockGroupId} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {blockGroupCount > 0 ? (
+              <p className="fine-print">등록된 그룹 {blockGroupCount}개 기준으로 좁혀 찾을 수 있습니다.</p>
+            ) : null}
+            <div className="chain-selection-summary" aria-label="추가 시뮬레이션 선택 상태">
+              <span className="badge" data-tone={selectedTemplateIds.length ? "green" : undefined}>
+                선택 {selectedTemplateIds.length}/{CHAIN_MAX_SELECTED_TEMPLATE_COUNT}
+              </span>
+              {selectedTemplates.length ? (
+                selectedTemplates.map((template) => (
+                  <span key={template.blockTemplateId} className="badge" data-tone="green">
+                    {template.name}
+                  </span>
+                ))
               ) : (
-                blockOptions.map((template) => (
+                <span className="fine-print">비슷하게 남는 공간을 시험할 박스를 선택하세요.</span>
+              )}
+            </div>
+            {blockOptions.length === 0 ? (
+              <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
+                <p className="fine-print">
+                  {hasNarrowingCondition ? "조건에 맞는 박스가 없습니다." : "저장된 박스가 없습니다."}
+                </p>
+              </div>
+            ) : usePickerDialog ? (
+              <div className="chain-picker-compact">
+                <button
+                  className="secondary-button"
+                  aria-haspopup="dialog"
+                  aria-controls="chain-block-picker-dialog"
+                  onClick={() => setChainPickerOpen(true)}
+                >
+                  <PackagePlus size={16} />
+                  저장된 박스 찾아 선택
+                </button>
+                <span className="fine-print">
+                  현재 조건 결과 {blockOptions.length}개 중 최대 {CHAIN_MAX_SELECTED_TEMPLATE_COUNT}개를 선택합니다.
+                </span>
+              </div>
+            ) : (
+              <div className="chain-option-list" role="group" aria-label="추가할 박스 유형">
+                {visibleBlockOptions.map((template) => (
                   <button
                     key={template.blockTemplateId}
                     className="chain-option-button"
-                    role="radio"
-                    aria-checked={selectedTemplateId === template.blockTemplateId}
-                    onClick={() => onSelectTemplate(template.blockTemplateId)}
+                    role="checkbox"
+                    aria-checked={selectedTemplateIds.includes(template.blockTemplateId)}
+                    onClick={() => onToggleTemplate(template.blockTemplateId)}
                   >
                     <strong>{template.name}</strong>
                     <span>
-                            {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                      {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                      {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
                     </span>
                   </button>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+            {hiddenBlockOptionCount > 0 ? (
+              <p className="fine-print">
+                검색 결과가 많습니다. 버튼을 눌러 전체 결과를 확인하거나 검색 조건을 좁혀보세요.
+              </p>
+            ) : null}
+            <ChainBlockPickerDialog
+              open={chainPickerOpen}
+              templates={blockOptions}
+              selectedTemplateIds={selectedTemplateIds}
+              onToggleTemplate={onToggleTemplate}
+              onClose={() => setChainPickerOpen(false)}
+            />
           </div>
 
           <div className="chain-result-panel">
+            <div className="chain-policy-notice" data-enabled={partialSupportEnabled}>
+              <strong>{partialSupportEnabled ? "부분 지지 허용 적용 중" : "부분 지지 허용 꺼짐"}</strong>
+              <span>
+                추가 박스도 현재 실행 전 확인 정책과 같은 기준으로 계산합니다.
+                {partialSupportEnabled
+                  ? ` 받침면 ${partialSupportPercent}% 이상을 허용합니다.`
+                  : " 받침면 전체가 안전하게 받쳐지는 경우만 계산합니다."}
+              </span>
+            </div>
             <div className="chain-status-box" data-tone={chainStatus} role="status">
               <strong>
                 {chainStatus === "preview"
@@ -4469,53 +6119,417 @@ function ChainSimulationPanel({
               <span>{statusMessage}</span>
             </div>
 
-            <div className="chain-quantity-control">
-              <label className="chain-quantity-field">
-                원하는 추가 수량(개)
-                <NumberFieldInput
-                  aria-label="추가할 수량"
-                  min={1}
-                  value={requestedQuantity}
-                  onValidValueChange={onRequestedQuantityChange}
-                />
-              </label>
-              <button className="secondary-button" onClick={onCalculateRequested} disabled={!canCalculateRequested}>
-                지정 수량 계산
-              </button>
+            {variants.length > 0 ? (
+              <div>
+                <strong className="chain-field-title">결과 비교</strong>
+                <div className="chain-variant-list" role="group" aria-label="추가 결과 선택">
+                  {variants.map((variant) => (
+                    <button
+                      key={variant.variantId}
+                      className="chain-variant-button"
+                      aria-pressed={selectedVariantId === variant.variantId}
+                      onClick={() => onSelectVariant(variant.variantId)}
+                    >
+                      <strong>{variant.label}</strong>
+                      <span>
+                        {variant.totalAddedQuantity}개 추가 · 남은 부피 {formatVolumeM3(variant.remainingVolumeM3)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {selectedVariant?.warnings.length ? (
+                  <div className="chain-policy-notice" data-enabled="false" role="status">
+                    <strong>계산 안내</strong>
+                    <span>{selectedVariant.warnings[0]}</span>
+                  </div>
+                ) : null}
+                {selectedVariant ? (
+                  <table className="chain-variant-quantity-table" aria-label={`${selectedVariant.label} 박스별 추가 수량`}>
+                    <thead>
+                      <tr>
+                        <th>박스</th>
+                        <th>추가 조건</th>
+                        <th>추가 가능</th>
+                        <th>상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedVariant.addedQuantities.map((item) => {
+                        const requestedQuantity = requestedQuantitiesByTemplateId[item.blockTemplateId] ?? null;
+                        const priority = createChainPriorityScoreForIndex(selectedTemplateIds.indexOf(item.blockTemplateId));
+                        const quantityStatus = createChainQuantityStatusCopy(item.addedQuantity, requestedQuantity);
+
+                        return (
+                          <tr key={item.blockTemplateId}>
+                            <td>{item.blockName}</td>
+                            <td>{createChainConditionCopy(requestedQuantity, priority)}</td>
+                            <td>{item.addedQuantity}개</td>
+                            <td>{quantityStatus}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <th scope="row">총 추가</th>
+                        <td>
+                          {hasQuantityLimits && hasPrioritySettings
+                            ? "수량+선택 순서 조건 포함"
+                            : hasQuantityLimits
+                              ? "지정 조건 포함"
+                              : hasPrioritySettings
+                                ? "선택 순서 조건 포함"
+                                : "최대 계산"}
+                        </td>
+                        <td>{selectedVariant.totalAddedQuantity}개</td>
+                        <td>남은 부피 {formatVolumeM3(selectedVariant.remainingVolumeM3)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : null}
+              </div>
+            ) : null}
+
+            {canConfirm || latestChainItem ? (
+              <div className="chain-apply-guidance" data-state={canConfirm ? "preview" : "applied"} role="status">
+                {canConfirm ? (
+                  <>
+                    <strong>반영 전 미리보기</strong>
+                    <span>
+                      아직 원본 결과에는 반영되지 않았습니다. 3D 화면에서 원본과 추가 결과를 비교한 뒤 이 결과 반영을 누르세요.
+                      적용하지 않으려면 미리보기 취소로 원본 화면으로 돌아갈 수 있습니다.
+                    </span>
+                  </>
+                ) : latestChainItem ? (
+                  <>
+                    <strong>직전 추가 반영됨</strong>
+                    <span>
+                      {latestChainItem.blockName ?? "선택 박스"} {latestChainItem.addedQuantity}개가 결과에 반영되었습니다.
+                      잘못 반영했다면 직전 추가를 취소할 수 있습니다.
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="chain-template-quantity-list" aria-label="추가 박스별 수량 조건">
+              <div>
+                <strong className="chain-field-title">박스별 추가 조건</strong>
+                <p className="fine-print">
+                  최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.
+                  박스를 선택한 순서가 추가 우선순위입니다. 먼저 선택한 박스가 1순위로 계산됩니다.
+                  순서는 카드를 드래그하거나 위/아래 버튼으로 바꿀 수 있습니다.
+                </p>
+              </div>
+              {selectedTemplates.length === 0 ? (
+                <p className="fine-print">박스를 선택하면 박스별 수량 조건을 조정할 수 있습니다.</p>
+              ) : (
+                selectedTemplates.map((template, index) => {
+                  const requestedQuantity = requestedQuantitiesByTemplateId[template.blockTemplateId] ?? null;
+                  const isFirstTemplate = index === 0;
+                  const isLastTemplate = index === selectedTemplates.length - 1;
+
+                  return (
+                    <div
+                      className="chain-template-quantity-row"
+                      key={template.blockTemplateId}
+                      data-dragging={draggingTemplateId === template.blockTemplateId}
+                      draggable={selectedTemplates.length > 1}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", template.blockTemplateId);
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggingTemplateId(template.blockTemplateId);
+                      }}
+                      onDragOver={(event) => {
+                        if (selectedTemplates.length > 1) {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const sourceTemplateId = event.dataTransfer.getData("text/plain");
+                        onReorderSelectedTemplate(sourceTemplateId, template.blockTemplateId);
+                        setDraggingTemplateId(null);
+                      }}
+                      onDragEnd={() => setDraggingTemplateId(null)}
+                    >
+                      <div className="chain-template-summary">
+                        <span className="chain-template-rank-badge">{index + 1}순위</span>
+                        <strong>{template.name}</strong>
+                        <span className="fine-print">{formatDimensions(template.dimensions)}</span>
+                      </div>
+                      <div className="chain-template-quantity-mode" role="group" aria-label={`${template.name} 수량 조건`}>
+                        <button
+                          className="secondary-button"
+                          aria-pressed={requestedQuantity === null}
+                          onClick={() => onTemplateQuantityLimitChange(template.blockTemplateId, null)}
+                        >
+                          최대
+                        </button>
+                        <button
+                          className="secondary-button"
+                          aria-pressed={requestedQuantity !== null}
+                          onClick={() => onTemplateQuantityLimitChange(template.blockTemplateId, requestedQuantity ?? 1)}
+                        >
+                          수량 지정
+                        </button>
+                      </div>
+                      <label className="chain-quantity-field">
+                        지정 수량(개)
+                        <NumberFieldInput
+                          aria-label={`${template.name} 지정 수량`}
+                          min={1}
+                          value={requestedQuantity ?? 1}
+                          disabled={requestedQuantity === null}
+                          onValidValueChange={(quantity) =>
+                            onTemplateQuantityLimitChange(template.blockTemplateId, quantity)
+                          }
+                        />
+                      </label>
+                      <div
+                        className="chain-template-order-control"
+                        role="group"
+                        aria-label={`${template.name} 추가 우선순위 조정`}
+                      >
+                        <span title="드래그 또는 버튼으로 순서 변경">
+                          <GripVertical size={14} aria-hidden="true" />
+                          순서 변경
+                        </span>
+                        <div>
+                          <button
+                            className="secondary-button"
+                            onClick={() => onMoveSelectedTemplate(template.blockTemplateId, -1)}
+                            disabled={isFirstTemplate}
+                          >
+                            <ArrowUp size={14} aria-hidden="true" />
+                            위로
+                          </button>
+                          <button
+                            className="secondary-button"
+                            onClick={() => onMoveSelectedTemplate(template.blockTemplateId, 1)}
+                            disabled={isLastTemplate}
+                          >
+                            <ArrowDown size={14} aria-hidden="true" />
+                            아래로
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="form-actions chain-actions">
-              <button className="primary-button" onClick={onCalculate} disabled={!canCalculate}>
+              <button
+                className="primary-button"
+                onClick={onCalculate}
+                disabled={!canCalculate}
+                title={chainCalculateDisabledReason ?? undefined}
+                aria-label={
+                  chainCalculateDisabledReason
+                    ? `추가 박스 계산 비활성: ${chainCalculateDisabledReason}`
+                    : "추가 박스 추천 결과 계산"
+                }
+              >
                 {chainStatus === "calculating"
                   ? "추가 가능 수량 계산 중..."
                   : chainStatus === "error"
                     ? "다시 계산"
-                    : "최대 적재 계산"}
+                    : createChainCalculateButtonLabel(hasQuantityLimits, hasPrioritySettings)}
               </button>
-              <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
+              <button
+                className="primary-button"
+                onClick={onConfirm}
+                disabled={!canConfirm}
+                title={chainConfirmDisabledReason ?? undefined}
+                aria-label={
+                  chainConfirmDisabledReason
+                    ? `추가 결과 반영 비활성: ${chainConfirmDisabledReason}`
+                    : "선택한 추가 결과 반영"
+                }
+              >
                 이 결과 반영
               </button>
+              {canConfirm ? (
+                <button className="secondary-button chain-preview-cancel-action" onClick={onCancelPreview}>
+                  미리보기 취소
+                </button>
+              ) : null}
               {chainStatus === "error" ? (
-                <button className="secondary-button" onClick={onCreateResult} disabled={resultCreating}>
+                <button
+                  className="secondary-button"
+                  onClick={onCreateResult}
+                  disabled={resultCreating}
+                  title={chainRecreateResultTitle}
+                  aria-label={resultCreating ? "기준 결과를 다시 계산하고 있습니다" : "기준 결과 다시 생성"}
+                >
                   {resultCreating ? resultCalculationProgress.buttonLabel : "결과 다시 생성"}
                 </button>
               ) : null}
-              <button className="secondary-button" onClick={onUndo} disabled={!latestChainItem}>
+              <button
+                className="secondary-button"
+                onClick={onUndo}
+                disabled={!latestChainItem}
+                title={chainUndoDisabledReason ?? undefined}
+                aria-label={
+                  chainUndoDisabledReason
+                    ? `직전 추가 취소 비활성: ${chainUndoDisabledReason}`
+                    : "직전 추가 결과 취소"
+                }
+              >
                 직전 추가 취소
               </button>
               {chainStatus === "empty" ? (
-                <button className="secondary-button" onClick={onClearSelection}>
+                <button
+                  className="secondary-button"
+                  onClick={onClearSelection}
+                  title="선택한 박스를 비우고 다른 박스로 다시 시험합니다."
+                  aria-label="추가 가능한 다른 박스를 선택하기 위해 선택 초기화"
+                >
                   다른 박스 선택
                 </button>
               ) : null}
             </div>
-            {!selectedTemplateId ? (
-              <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
+            {chainCalculateDisabledReason && chainStatus !== "calculating" ? (
+              <p className="fine-print review-cta-hint">{chainCalculateDisabledReason}</p>
             ) : null}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function ChainBlockPickerDialogBody({
+  open,
+  templates,
+  selectedTemplateIds,
+  onToggleTemplate,
+  onClose
+}: ChainBlockPickerDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [chainPickerPage, setChainPickerPage] = useState(1);
+  const chainPickerPageCount = Math.max(1, Math.ceil(templates.length / CHAIN_PICKER_PAGE_SIZE));
+  const currentChainPickerPage = Math.min(chainPickerPage, chainPickerPageCount);
+  const chainPickerPageStart = (currentChainPickerPage - 1) * CHAIN_PICKER_PAGE_SIZE;
+  const pagedTemplates = templates.slice(chainPickerPageStart, chainPickerPageStart + CHAIN_PICKER_PAGE_SIZE);
+
+  useEffect(() => {
+    setChainPickerPage(1);
+  }, [templates]);
+
+  useEffect(() => {
+    if (chainPickerPage > chainPickerPageCount) {
+      setChainPickerPage(chainPickerPageCount);
+    }
+  }, [chainPickerPage, chainPickerPageCount]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-chain-picker-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="chain-block-picker-dialog"
+      ref={dialogRef}
+      className="chain-picker-dialog"
+      aria-modal="true"
+      aria-labelledby="chain-block-picker-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="chain-picker-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="chain-block-picker-dialog-title">추가 시뮬레이션 박스 찾기</h2>
+            <p className="fine-print">
+              현재 검색/그룹 조건에 맞는 박스 중 최대 {CHAIN_MAX_SELECTED_TEMPLATE_COUNT}개를 선택합니다.
+            </p>
+          </div>
+          <button
+            className="icon-button"
+            data-chain-picker-close="true"
+            onClick={onClose}
+            aria-label="추가 시뮬레이션 박스 찾기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="chain-picker-dialog-body">
+          <p className="fine-print">
+            검색 결과 {templates.length}개 · 선택 {selectedTemplateIds.length}/{CHAIN_MAX_SELECTED_TEMPLATE_COUNT} · {currentChainPickerPage}/
+            {chainPickerPageCount} 페이지
+          </p>
+          <div className="chain-picker-dialog-list" role="group" aria-label="추가 시뮬레이션 박스 선택">
+            {templates.length === 0 ? (
+              <p className="fine-print">조건에 맞는 박스가 없습니다. 검색어나 그룹 필터를 바꿔보세요.</p>
+            ) : (
+              pagedTemplates.map((template) => (
+                <button
+                  key={template.blockTemplateId}
+                  className="chain-option-button"
+                  role="checkbox"
+                  aria-checked={selectedTemplateIds.includes(template.blockTemplateId)}
+                  onClick={() => onToggleTemplate(template.blockTemplateId)}
+                >
+                  <strong>{template.name}</strong>
+                  <span>
+                    {formatDimensions(template.dimensions)} · {template.fragile ? "깨짐주의" : "일반"}
+                    {template.group1 ? ` · ${template.group1}${template.group2 ? ` / ${template.group2}` : ""}` : ""}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="block-library-pagination" aria-label="추가 시뮬레이션 박스 페이지 이동">
+            <button
+              className="secondary-button"
+              onClick={() => setChainPickerPage((page) => Math.max(1, page - 1))}
+              disabled={currentChainPickerPage <= 1}
+            >
+              이전 페이지
+            </button>
+            <span>
+              {currentChainPickerPage} / {chainPickerPageCount}
+            </span>
+            <button
+              className="secondary-button"
+              onClick={() => setChainPickerPage((page) => Math.min(chainPickerPageCount, page + 1))}
+              disabled={currentChainPickerPage >= chainPickerPageCount}
+            >
+              다음 페이지
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
   );
 }
 
@@ -5121,65 +7135,71 @@ function SpaceForm({
   onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
 }) {
   return (
-    <div className="form-grid space-form">
-      <label>
-        공간명
-        <input value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />
-      </label>
-      <label>
-        가로(mm)
-        <NumberFieldInput
-          aria-label="공간 가로 mm"
-          min={1}
-          value={value.widthMm}
-          onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
-        />
-      </label>
-      <label>
-        세로(mm)
-        <NumberFieldInput
-          aria-label="공간 세로 mm"
-          min={1}
-          value={value.depthMm}
-          onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
-        />
-      </label>
-      <label>
-        높이(mm)
-        <NumberFieldInput
-          aria-label="공간 높이 mm"
-          min={1}
-          value={value.heightMm}
-          onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
-        />
-      </label>
-      <label>
-        안전 여유 가로(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 가로 mm"
-          min={0}
-          value={value.offsetWidthMm}
-          onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
-        />
-      </label>
-      <label>
-        안전 여유 세로(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 세로 mm"
-          min={0}
-          value={value.offsetDepthMm}
-          onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
-        />
-      </label>
-      <label>
-        안전 여유 높이(mm)
-        <NumberFieldInput
-          aria-label="안전 여유 높이 mm"
-          min={0}
-          value={value.offsetHeightMm}
-          onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
-        />
-      </label>
+    <div className="space-form-rows space-form">
+      <div className="form-row space-form-name-row">
+        <label>
+          공간명
+          <input value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />
+        </label>
+      </div>
+      <div className="form-row form-row-three space-form-dimension-row">
+        <label>
+          가로(mm)
+          <NumberFieldInput
+            aria-label="공간 가로 mm"
+            min={1}
+            value={value.widthMm}
+            onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
+          />
+        </label>
+        <label>
+          세로(mm)
+          <NumberFieldInput
+            aria-label="공간 세로 mm"
+            min={1}
+            value={value.depthMm}
+            onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
+          />
+        </label>
+        <label>
+          높이(mm)
+          <NumberFieldInput
+            aria-label="공간 높이 mm"
+            min={1}
+            value={value.heightMm}
+            onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
+          />
+        </label>
+      </div>
+      <div className="form-row form-row-three space-form-offset-row">
+        <label>
+          안전 여유 가로(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 가로 mm"
+            min={0}
+            value={value.offsetWidthMm}
+            onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
+          />
+        </label>
+        <label>
+          안전 여유 세로(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 세로 mm"
+            min={0}
+            value={value.offsetDepthMm}
+            onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
+          />
+        </label>
+        <label>
+          안전 여유 높이(mm)
+          <NumberFieldInput
+            aria-label="안전 여유 높이 mm"
+            min={0}
+            value={value.offsetHeightMm}
+            onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
+          />
+        </label>
+      </div>
     </div>
   );
 }
@@ -5188,12 +7208,14 @@ function NumberFieldInput({
   value,
   min,
   onValidValueChange,
-  "aria-label": ariaLabel
+  "aria-label": ariaLabel,
+  disabled = false
 }: {
   value: number;
   min: number;
   onValidValueChange: (value: number) => void;
   "aria-label": string;
+  disabled?: boolean;
 }) {
   const errorId = useId();
   const [draftValue, setDraftValue] = useState(() => formatNumberFieldDraftValue(value));
@@ -5244,6 +7266,7 @@ function NumberFieldInput({
         min={min}
         step="1"
         value={draftValue}
+        disabled={disabled}
         onBlur={handleBlur}
         onClick={selectNumberFieldValue}
         onFocus={selectNumberFieldValue}
@@ -5311,26 +7334,167 @@ function ImportConflictPanel({
   );
 }
 
-function createChainBlockOptions(blocks: BlockDefinition[]): BlockTemplate[] {
-  const templateMap = new Map<string, BlockTemplate>();
+function convertMultiChainVariantToPreview(
+  output: MultiChainSimulationOutput,
+  variant: MultiChainSimulationVariant
+): ChainSimulationOutput {
+  return {
+    runId: output.runId,
+    blockTemplateId: variant.priorityBlockTemplateId ?? variant.variantId,
+    blockName: variant.label,
+    addedQuantity: variant.totalAddedQuantity,
+    spaces: variant.spaces,
+    averageUtilizationRate: variant.averageUtilizationRate,
+    warnings: variant.warnings
+  };
+}
 
-  blocks.forEach((block) => {
-    if (templateMap.has(block.blockTemplateId)) {
-      return;
-    }
+function createTopBlockGroups(blockGroups: BlockGroup[]) {
+  return blockGroups
+    .filter((group) => group.parentGroupId === null)
+    .sort(compareBlockGroupNames);
+}
 
-    templateMap.set(block.blockTemplateId, {
-      blockTemplateId: block.blockTemplateId,
-      entityVersion: block.entityVersion,
-      name: block.name,
-      dimensions: block.dimensions,
-      fragile: block.fragile,
-      createdAt: block.createdAt,
-      updatedAt: block.updatedAt
-    });
-  });
+function createChildBlockGroups(blockGroups: BlockGroup[], parentGroupName: string) {
+  const parentGroup = createTopBlockGroups(blockGroups).find((group) => group.name === parentGroupName);
 
-  return Array.from(templateMap.values());
+  if (!parentGroup) {
+    return [];
+  }
+
+  return blockGroups
+    .filter((group) => group.parentGroupId === parentGroup.blockGroupId)
+    .sort(compareBlockGroupNames);
+}
+
+function compareBlockGroupNames(left: BlockGroup, right: BlockGroup) {
+  return left.name.localeCompare(right.name, "ko-KR");
+}
+
+function createBlockTemplateCardMeta(template: BlockTemplate) {
+  return [
+    formatDimensions(template.dimensions),
+    formatOptionalWeightDisplay(template.weightKg),
+    template.group1 ? `상위 ${template.group1}` : "상위그룹 없음",
+    template.group2 ? `하위 ${template.group2}` : "하위그룹 없음",
+    `v${template.entityVersion}`
+  ];
+}
+
+function createImportCandidateMeta(row: BlockTemplateImportCandidate) {
+  return [
+    `${row.rowNumber}행`,
+    formatDimensions(row.dimensions),
+    formatOptionalWeightDisplay(row.weightKg),
+    row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
+    row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
+  ].join(" · ");
+}
+
+function createDraftImportCandidateMeta(row: DraftBlockImportCandidate) {
+  return [
+    `${row.rowNumber}행`,
+    `${row.quantity}개`,
+    getDraftLoadPriorityLabel(row.loadPriority),
+    formatDimensions(row.dimensions),
+    formatOptionalWeightDisplay(row.weightKg),
+    row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
+    row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
+  ].join(" · ");
+}
+
+function createChainQuantityStatusCopy(addedQuantity: number, requestedQuantity: number | null) {
+  if (requestedQuantity === null) {
+    return addedQuantity > 0 ? "추가 가능" : "추가 없음";
+  }
+
+  if (addedQuantity >= requestedQuantity) {
+    return "요청 충족";
+  }
+
+  return addedQuantity > 0 ? "일부 가능" : "추가 없음";
+}
+
+function parseOptionalWeightKg(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function normalizeDraftLoadPriorityOptionValue(
+  value: number | null | undefined
+): DraftLoadPriorityOptionValue {
+  return normalizeLoadPriorityScore(value);
+}
+
+function createDraftLoadPrioritySummary(block: BlockDefinition) {
+  const priority = normalizeDraftLoadPriorityOptionValue(block.loadPriority);
+
+  if (priority <= 0) {
+    return null;
+  }
+
+  return `${block.name} ${block.quantity}개 · ${getDraftLoadPriorityLabel(priority)}`;
+}
+
+function getDraftLoadPriorityLabel(priority: DraftLoadPriorityOptionValue) {
+  return DRAFT_LOAD_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? "기본";
+}
+
+function createChainConditionCopy(
+  requestedQuantity: number | null,
+  priority: number
+) {
+  const quantityCopy = requestedQuantity ? `${requestedQuantity}개까지` : "최대";
+
+  return priority <= 0 ? quantityCopy : `${quantityCopy} · ${createChainPriorityLabel(priority)}`;
+}
+
+function createChainPriorityLabel(priority: number) {
+  const rank = CHAIN_MAX_SELECTED_TEMPLATE_COUNT - Math.round(priority / CHAIN_PRIORITY_SCORE_STEP) + 1;
+
+  return rank >= 1 && rank <= CHAIN_MAX_SELECTED_TEMPLATE_COUNT ? `${rank}순위` : "선택 순서";
+}
+
+function createChainPriorityScoreForIndex(index: number) {
+  return index >= 0 ? (CHAIN_MAX_SELECTED_TEMPLATE_COUNT - index) * CHAIN_PRIORITY_SCORE_STEP : 0;
+}
+
+function createChainSelectionOrderStatusMessage(selectedCount: number) {
+  return `${selectedCount}개 박스를 선택했습니다. 선택한 순서가 추가 우선순위입니다. 드래그하거나 위/아래 버튼으로 순서를 바꾼 뒤 결과를 계산하세요.`;
+}
+
+function createChainCalculateButtonLabel(hasQuantityLimits: boolean, hasPrioritySettings: boolean) {
+  if (hasQuantityLimits && hasPrioritySettings) {
+    return "조건 반영 결과 계산";
+  }
+
+  if (hasPrioritySettings) {
+    return "우선순위 결과 계산";
+  }
+
+  if (hasQuantityLimits) {
+    return "조건 반영 결과 계산";
+  }
+
+  return "추천 결과 계산";
+}
+
+function formatOptionalWeightFormValue(weightKg: number | null | undefined) {
+  return typeof weightKg === "number" && Number.isFinite(weightKg) ? String(weightKg) : "";
+}
+
+function formatOptionalWeightDisplay(weightKg: number | null | undefined) {
+  if (typeof weightKg !== "number" || !Number.isFinite(weightKg)) {
+    return "무게 미입력";
+  }
+
+  return `${weightKg}kg`;
 }
 
 function formatDimensions(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
@@ -5403,46 +7567,12 @@ function createClientId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+function normalizeTemplateLookupKey(name: string) {
+  return name.trim().toLocaleLowerCase("ko-KR");
+}
+
 function normalizeWorkspace(workspace: TetrisWorkspace): TetrisWorkspace {
-  const legacyWorkspace = workspace as unknown as TetrisWorkspace & {
-    blocks?: Array<BlockTemplate & { blockId?: string; quantity?: number }>;
-    draft?: TetrisWorkspace["draft"] & { blockIds?: string[] };
-  };
-
-  if (workspace.blockTemplates && workspace.draft.blockItems) {
-    return workspace;
-  }
-
-  const now = workspace.updatedAt ?? new Date().toISOString();
-  const blockTemplates =
-    legacyWorkspace.blocks?.map((block, index) => ({
-      blockTemplateId: block.blockTemplateId ?? block.blockId ?? `legacy-template-${index + 1}`,
-      entityVersion: block.entityVersion ?? 1,
-      name: block.name,
-      dimensions: block.dimensions,
-      fragile: block.fragile,
-      createdAt: block.createdAt ?? now,
-      updatedAt: block.updatedAt ?? now
-    })) ?? [];
-
-  return {
-    ...workspace,
-    blockTemplates,
-    draft: {
-      ...workspace.draft,
-      blockItems:
-        legacyWorkspace.draft?.blockIds?.map((blockId, index) => {
-          const block = legacyWorkspace.blocks?.find((candidate) => candidate.blockId === blockId);
-          return {
-            draftBlockItemId: `legacy-item-${blockId}-${index + 1}`,
-            blockTemplateId: blockId,
-            quantity: block?.quantity ?? 1,
-            createdAt: block?.createdAt ?? now,
-            updatedAt: block?.updatedAt ?? now
-          };
-        }) ?? []
-    }
-  };
+  return normalizeWorkspaceForV2(workspace);
 }
 
 function isWorkspaceSyncMessage(value: unknown): value is WorkspaceSyncMessage {
