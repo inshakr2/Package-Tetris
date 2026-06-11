@@ -187,7 +187,6 @@ import {
 } from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
-import { loadFieldDemoCurrentWork } from "@/lib/workspace/field-demo-workspace";
 import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -280,7 +279,7 @@ const CHAIN_INLINE_OPTION_LIMIT = 6;
 const CHAIN_PICKER_PAGE_SIZE = 10;
 const DRAFT_LOAD_PRIORITY_OPTIONS = [
   { value: 0, label: "기본" },
-  { value: 5, label: "먼저 바닥에" },
+  { value: 5, label: "먼저 바닥에", displayLabel: "먼저\n바닥에" },
   { value: 10, label: "맨 아래 우선" }
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
@@ -302,16 +301,9 @@ const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
 ] as const;
 
 const DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS = [
-  { name: "상위그룹", requirement: "선택", description: "저장 박스와 같은 그룹명을 쓰면 검색/필터에 바로 연결됩니다." },
-  { name: "하위그룹", requirement: "선택", description: "상위그룹이 있을 때만 입력합니다." },
-  { name: "박스명", requirement: "필수", description: "기존 저장 박스명과 같으면 치수와 깨짐주의가 같은지 확인 후 재사용합니다." },
-  { name: "가로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
-  { name: "세로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
-  { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
-  { name: "무게kg", requirement: "선택", description: "비워둘 수 있으며 저장 박스 정보에도 함께 반영됩니다." },
-  { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." },
-  { name: "수량", requirement: "필수", description: "이번 작업에 실을 수량입니다. 1 이상의 정수만 입력합니다." },
-  { name: "아래층우선", requirement: "선택", description: "기본, 먼저 바닥에, 맨 아래 우선 중 하나를 입력합니다." }
+  { name: "박스명", requirement: "필수", description: "2번 박스 등록에 저장된 박스명과 정확히 같아야 합니다." },
+  { name: "작업수량", requirement: "필수", description: "이번 작업에 실을 수량입니다. 1 이상의 정수만 입력합니다." },
+  { name: "아래층우선타입", requirement: "필수", description: "1=기본, 2=먼저바닥에, 3=맨아래우선 중 하나를 숫자로 입력합니다." }
 ] as const;
 
 const Result3DCanvas = dynamic(
@@ -1092,43 +1084,13 @@ export function TetrisWorkspaceApp() {
 
     updateWorkspace((current, now) => {
       let nextWorkspace = current;
-      const templateByName = new Map(
-        current.blockTemplates.map((template) => [normalizeTemplateLookupKey(template.name), template])
-      );
 
       for (const row of rows) {
-        const templateKey = normalizeTemplateLookupKey(row.name);
-        let template = templateByName.get(templateKey);
-
-        if (!template) {
-          const blockTemplateId = createClientId("template");
-
-          nextWorkspace = createBlockTemplate(nextWorkspace, {
-            blockTemplateId,
-            name: row.name,
-            dimensions: row.dimensions,
-            fragile: row.fragile,
-            weightKg: row.weightKg,
-            group1: row.group1,
-            group2: row.group2,
-            addToDraft: false,
-            now
-          });
-
-          template = nextWorkspace.blockTemplates.find((candidate) => candidate.blockTemplateId === blockTemplateId);
-
-          if (!template) {
-            continue;
-          }
-
-          templateByName.set(templateKey, template);
-        }
-
         const draftBlockItemId = createClientId("item");
 
         nextWorkspace = addBlockTemplateToDraft(nextWorkspace, {
           draftBlockItemId,
-          blockTemplateId: template.blockTemplateId,
+          blockTemplateId: row.blockTemplateId,
           quantity: row.quantity,
           now
         });
@@ -1274,22 +1236,6 @@ export function TetrisWorkspaceApp() {
     setResultCalculationStep("idle");
     setCreatingResult(false);
     setResetWorkDialogOpen(false);
-  }
-
-  function loadFieldDemoCurrentWorkIntoDraft() {
-    if (saveConflict) {
-      return;
-    }
-
-    updateWorkspace((current, now) => loadFieldDemoCurrentWork(current, now));
-    setPendingDraftUndo(null);
-    setResultFailure(null);
-    setResultCalculationStep("idle");
-    setCreatingResult(false);
-    window.setTimeout(() => {
-      currentWorkSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      currentWorkSectionRef.current?.focus({ preventScroll: true });
-    }, 0);
   }
 
   function createPackingResult() {
@@ -1853,13 +1799,10 @@ export function TetrisWorkspaceApp() {
               }
               importDisabled={isWorkspaceLocked}
               importDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 현재 작업 엑셀을 등록할 수 있습니다." : null}
-              demoDisabled={isWorkspaceLocked}
-              demoDisabledReason={isWorkspaceLocked ? "최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다." : null}
               onQuantityChange={updateCurrentQuantity}
               onLoadPriorityChange={updateCurrentLoadPriority}
               onDeleteRequest={requestDelete}
               onRequestResetCurrentWork={requestResetCurrentWork}
-              onLoadFieldDemo={loadFieldDemoCurrentWorkIntoDraft}
               onImportDraftBlocks={importDraftBlocks}
             />
             <ReviewCompactCard
@@ -2847,9 +2790,9 @@ function DraftBlockImportFormatDialog({
           <div className="block-template-format-callout">
             <strong>이번 작업 물량 자동화 기준</strong>
             <span>
-              저장 박스 컬럼에 수량과 아래층우선이 추가됩니다. 자동으로 엑셀을 만들 때는 열 순서를
-              바꾸지 말고 {DRAFT_BLOCK_XLSX_COLUMNS.join(" / ")} 순서로 내보내면 바로 현재 작업에
-              추가할 수 있습니다.
+              저장된 박스명을 기준으로 작업수량과 아래층우선타입만 가져옵니다. 자동으로 엑셀을 만들 때는
+              열 순서를 바꾸지 말고 {DRAFT_BLOCK_XLSX_COLUMNS.join(" / ")} 순서로 내보내세요.
+              아래층우선타입은 1=기본, 2=먼저바닥에, 3=맨아래우선 숫자만 사용할 수 있습니다.
             </span>
           </div>
           <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 열 설명">
@@ -2885,7 +2828,7 @@ function DraftBlockImportFormatDialog({
                 {DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.map((row) => (
                   <tr key={row.join("-")}>
                     {row.map((cell, index) => (
-                      <td key={`${row[2]}-${DRAFT_BLOCK_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
+                      <td key={`${row[0]}-${DRAFT_BLOCK_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
                     ))}
                   </tr>
                 ))}
@@ -3495,13 +3438,10 @@ function CurrentWorkBlocksPanel({
   resetDisabledReason,
   importDisabled,
   importDisabledReason,
-  demoDisabled,
-  demoDisabledReason,
   onQuantityChange,
   onLoadPriorityChange,
   onDeleteRequest,
   onRequestResetCurrentWork,
-  onLoadFieldDemo,
   onImportDraftBlocks
 }: {
   blocks: BlockDefinition[];
@@ -3511,8 +3451,6 @@ function CurrentWorkBlocksPanel({
   resetDisabledReason: string | null;
   importDisabled: boolean;
   importDisabledReason: string | null;
-  demoDisabled: boolean;
-  demoDisabledReason: string | null;
   onQuantityChange: (draftBlockItemId: string, quantity: number) => void;
   onLoadPriorityChange: (draftBlockItemId: string, loadPriority: DraftLoadPriorityOptionValue) => void;
   onDeleteRequest: (
@@ -3522,7 +3460,6 @@ function CurrentWorkBlocksPanel({
     trigger?: HTMLElement | null
   ) => void;
   onRequestResetCurrentWork: () => void;
-  onLoadFieldDemo: () => void;
   onImportDraftBlocks: (rows: DraftBlockImportCandidate[]) => void;
 }) {
   const draftImportInputRef = useRef<HTMLInputElement>(null);
@@ -3554,9 +3491,13 @@ function CurrentWorkBlocksPanel({
     try {
       const preview = await readDraftBlockXlsxFile(file, {
         existingTemplates: templates.map((template) => ({
+          blockTemplateId: template.blockTemplateId,
           name: template.name,
           dimensions: template.dimensions,
-          fragile: template.fragile
+          weightKg: template.weightKg,
+          fragile: template.fragile,
+          group1: template.group1,
+          group2: template.group2
         }))
       });
       setDraftImportPreview(preview);
@@ -3603,7 +3544,7 @@ function CurrentWorkBlocksPanel({
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 수량과 아래층 우선 값을 바꿔 등록하세요.");
+    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 박스명, 작업수량, 아래층우선타입을 바꿔 등록하세요.");
   };
 
   return (
@@ -3626,7 +3567,7 @@ function CurrentWorkBlocksPanel({
             onClick={() => setDraftImportFormatDialogOpen(true)}
           >
             <Eye size={16} />
-            현재 작업 포맷 보기
+            엑셀 포맷 보기
           </button>
           <button
             className="secondary-button current-work-import-action"
@@ -3636,7 +3577,7 @@ function CurrentWorkBlocksPanel({
             aria-describedby={importDisabled ? "current-work-import-disabled-reason" : undefined}
           >
             <FileUp size={16} />
-            {draftImportLoading ? "파일 확인 중" : "현재 작업 엑셀 등록"}
+            {draftImportLoading ? "파일 확인 중" : "엑셀로 등록하기"}
           </button>
           {importDisabled ? (
             <span id="current-work-import-disabled-reason" className="sr-only">
@@ -3650,21 +3591,6 @@ function CurrentWorkBlocksPanel({
             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={handleDraftImportFileChange}
           />
-          <button
-            className="secondary-button current-work-demo-action"
-            onClick={onLoadFieldDemo}
-            disabled={demoDisabled}
-            title={demoDisabledReason ?? undefined}
-            aria-describedby={demoDisabled ? "current-work-demo-disabled-reason" : undefined}
-          >
-            <Truck size={16} />
-            시연 예제 불러오기
-          </button>
-          {demoDisabled ? (
-            <span id="current-work-demo-disabled-reason" className="sr-only">
-              최신본을 불러온 뒤 시연 예제를 불러올 수 있습니다.
-            </span>
-          ) : null}
           <button
             className="secondary-button current-work-reset-action"
             onClick={onRequestResetCurrentWork}
@@ -3719,7 +3645,7 @@ function CurrentWorkBlocksPanel({
                         aria-pressed={normalizeDraftLoadPriorityOptionValue(block.loadPriority) === option.value}
                         onClick={() => onLoadPriorityChange(block.draftBlockItemId, option.value)}
                       >
-                        {option.label}
+                        {"displayLabel" in option ? option.displayLabel : option.label}
                       </button>
                     ))}
                   </div>

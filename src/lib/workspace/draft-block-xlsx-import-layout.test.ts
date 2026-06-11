@@ -13,8 +13,8 @@ describe("draft block xlsx import layout", () => {
 
     // When
     const hasActions =
-      source.includes("현재 작업 엑셀 등록") &&
-      source.includes("현재 작업 포맷 보기") &&
+      source.includes("엑셀로 등록하기") &&
+      source.includes("엑셀 포맷 보기") &&
       source.includes('accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"');
     const hasPreviewDialog =
       source.includes("현재 작업 엑셀 미리보기") &&
@@ -39,7 +39,7 @@ describe("draft block xlsx import layout", () => {
 
     // When
     const hasFormatAction =
-      source.includes("현재 작업 포맷 보기") &&
+      source.includes("엑셀 포맷 보기") &&
       source.includes('aria-controls="draft-block-import-format-dialog"') &&
       source.includes("setDraftImportFormatDialogOpen(true)");
     const hasFormatDialog =
@@ -51,17 +51,44 @@ describe("draft block xlsx import layout", () => {
       source.includes("DRAFT_BLOCK_IMPORT_SAMPLE_ROWS");
     const hasAutomationCopy =
       source.includes("이번 작업 물량 자동화 기준") &&
-      source.includes("저장 박스 컬럼에 수량과 아래층우선이 추가됩니다.") &&
+      source.includes("저장된 박스명을 기준으로 작업수량과 아래층우선타입만 가져옵니다.") &&
+      source.includes("1=기본, 2=먼저바닥에, 3=맨아래우선") &&
       source.includes("이 포맷으로 파일 선택");
     const hasFormatStyles =
       /\.block-template-format-callout\s*{[\s\S]*?display:\s*grid;[\s\S]*?background:\s*#f7fbff;[\s\S]*?}/.test(css) &&
       /\.block-template-format-table-wrap\s*{[\s\S]*?overflow:\s*auto;[\s\S]*?background:\s*white;[\s\S]*?}/.test(css);
+    const hasDraftFormatResponsiveTable =
+      /#draft-block-import-format-dialog\s+\.block-template-format-table\s*{[\s\S]*?min-width:\s*0;[\s\S]*?table-layout:\s*fixed;[\s\S]*?}/.test(
+        css
+      );
 
     // Then
     assert.ok(hasFormatAction, "current work xlsx import should expose a format guide before picking a file");
     assert.ok(hasFormatDialog, "current work format guide should render required headers and sample rows");
     assert.ok(hasAutomationCopy, "current work format guide should explain automation-friendly work order columns");
     assert.ok(hasFormatStyles, "format guide should reuse readable xlsx table styles");
+    assert.ok(hasDraftFormatResponsiveTable, "current work format table should fit the mobile dialog width");
+  });
+
+  it("현재 작업 영역은 시연 예제 버튼 없이 엑셀 등록과 새 작업 시작만 제공한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const removedDemoAction =
+      !source.includes("시연 예제 불러오기") &&
+      !source.includes("onLoadFieldDemo") &&
+      !source.includes("current-work-demo-action");
+    const actionButtonRules =
+      css.includes(".current-work-format-action,") &&
+      css.includes(".current-work-import-action,") &&
+      css.includes(".current-work-reset-action") &&
+      !css.includes(".current-work-demo-action");
+
+    // Then
+    assert.ok(removedDemoAction, "current work panel should no longer expose the field demo loader");
+    assert.ok(actionButtonRules, "current work action styles should target only remaining actions");
   });
 
   it("현재 작업 카드의 총 부피 타일과 제거 버튼은 좁은 화면에서도 그리드 밖으로 넘치지 않는다", () => {

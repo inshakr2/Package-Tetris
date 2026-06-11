@@ -19,7 +19,7 @@ describe("draft-block-priority-layout", () => {
     const hasFieldCopy =
       source.includes("아래층 우선") &&
       source.includes("기본") &&
-      source.includes("먼저 바닥에") &&
+      source.includes('displayLabel: "먼저\\n바닥에"') &&
       source.includes("맨 아래 우선");
     const hasAccessibleGroup =
       source.includes('className="draft-priority-control"') &&
