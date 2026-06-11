@@ -3075,6 +3075,7 @@ function BlockCreatePanel({
           <label>
             무게(kg)
             <input
+              aria-describedby="block-weight-help"
               aria-label="박스 무게 kg"
               inputMode="decimal"
               min="0"
@@ -3086,6 +3087,9 @@ function BlockCreatePanel({
               onFocus={selectNumberFieldValue}
               onChange={(event) => onChange({ ...form, weightKg: event.target.value })}
             />
+            <span className="fine-print" id="block-weight-help">
+              검색과 엑셀/백업용 정보입니다. 현재 적재 계산에는 반영하지 않습니다.
+            </span>
           </label>
         </div>
         <div className="form-row form-row-three block-template-dimension-row">

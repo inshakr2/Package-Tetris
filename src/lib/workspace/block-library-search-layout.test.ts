@@ -104,6 +104,24 @@ describe("block-library-search-layout", () => {
     assert.ok(hasPlaceholderName, "box name should use an example placeholder instead of prefilled text");
   });
 
+  it("무게 입력은 현재 적재 계산에 반영되지 않는 선택 정보임을 입력 근처에서 안내한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const hasAccessibleHelp =
+      source.includes('aria-describedby="block-weight-help"') &&
+      source.includes('id="block-weight-help"') &&
+      source.includes("검색과 엑셀/백업용 정보입니다. 현재 적재 계산에는 반영하지 않습니다.");
+    const helpAppearsNearWeightInput =
+      source.indexOf('aria-label="박스 무게 kg"') < source.indexOf('id="block-weight-help"') &&
+      source.indexOf('id="block-weight-help"') < source.indexOf('className="form-row form-row-three block-template-dimension-row"');
+
+    // Then
+    assert.ok(hasAccessibleHelp, "weight input should explain that weight is metadata only in V2");
+    assert.ok(helpAppearsNearWeightInput, "weight help should appear before dimension fields");
+  });
+
   it("저장된 박스는 대량 목록을 본문에 펼치지 않고 dialog에서 검색하고 선택한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
