@@ -40,4 +40,17 @@ describe("field demo user guide document", () => {
     assert.match(document, /3D와 공간 확인/);
     assert.doesNotMatch(document, /작업 지시서/);
   });
+
+  it("추가 박스 시뮬레이션 가이드는 선택 순서 기반 우선순위를 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /박스를 선택한 순서/);
+    assert.match(document, /1순위\/2순위\/3순위/);
+    assert.match(document, /드래그하거나 우측의 위로\/아래로 버튼/);
+    assert.match(document, /선택 순서 결과/);
+    assert.doesNotMatch(document, /먼저 추가 또는 `최우선 추가`/);
+    assert.doesNotMatch(document, /지정 우선 결과/);
+  });
 });

@@ -2,13 +2,13 @@
 
 ## Role Scope
 
-Package Tetris의 product-manager는 V1 프론트 단독 제품 범위를 지키면서 다음 증분을 선정하고, business-analyst, ui-designer, ui-ux-tester, code-reviewer, nextjs-developer 관점의 검토를 하나의 작업 사이클로 묶는다.
+Package Tetris의 product-manager는 V2 프론트 단독 제품 범위를 지키면서 다음 증분을 선정하고, business-analyst, ui-designer, ui-ux-tester, code-reviewer, nextjs-developer 관점의 검토를 하나의 작업 사이클로 묶는다.
 
-핵심 판단 기준은 현장 작업자가 태블릿 또는 PC 브라우저에서 실제 시연을 끝까지 수행할 수 있는지다. 서버, 계정, 여러 기기 자동 동기화는 V2 트리거가 확정되기 전까지 V1 범위에 넣지 않는다.
+핵심 판단 기준은 현장 작업자가 태블릿 또는 PC 브라우저에서 실제 시연을 끝까지 수행할 수 있는지다. 서버, 계정, 여러 기기 자동 동기화는 V2 현재 범위 밖이며, 별도 서버 도입 트리거가 확정될 때까지 넣지 않는다.
 
 ## Operating Model
 
-- 다음 증분은 사용자 피드백, V1 수용 기준, 남은 리스크, 현재 작업트리 상태를 함께 보고 선정한다.
+- 다음 증분은 사용자 피드백, V2 수용 기준, 남은 리스크, 현재 작업트리 상태를 함께 보고 선정한다.
 - 한 증분은 작게 유지한다. 저장 구조, 적재 엔진, 결과 UI, 문서/가이드처럼 변경 축이 다르면 가능한 한 분리한다.
 - 각 증분은 먼저 product-manager가 목적과 수용 기준을 정리한 뒤 nextjs-developer에게 구현 범위를 넘긴다.
 - 구현 후 business-analyst는 요구사항과 현장 업무 흐름을 검토한다.
@@ -24,7 +24,7 @@ Package Tetris의 product-manager는 V1 프론트 단독 제품 범위를 지키
 - 세 역할의 피드백을 product-manager가 정리한 뒤 nextjs-developer에게 전달한다.
 - 피드백이 기존 PM 판단과 다르면 product-manager는 단독 판단을 고집하지 않고 피드백을 반영해 UI 방향을 조정한다.
 
-## V1 Decision Rules
+## V2 Decision Rules
 
 - 현장 작업자에게 직접 보이는 UI는 기술어보다 작업 언어를 우선한다.
 - 공중에 떠 있는 박스, 공간 경계 초과, 박스 충돌, 깨짐주의 정책 위반은 제품 신뢰성 문제로 최우선 처리한다.

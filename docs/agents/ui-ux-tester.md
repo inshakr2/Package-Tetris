@@ -2,7 +2,7 @@
 
 ## Role Scope
 
-Package Tetris의 ui-ux-tester는 V1 범위에서 현장 작업자가 IT 도메인 지식 없이도 공간 선택, 박스 등록, 실행 전 확인, 결과 확인, 추가 적재 시뮬레이션, 백업 파일 만들기를 완료할 수 있는지 검토한다.
+Package Tetris의 ui-ux-tester는 V2 범위에서 현장 작업자가 IT 도메인 지식 없이도 공간 선택, 박스 등록, 실행 전 확인, 결과 확인, 추가 적재 시뮬레이션, 백업 파일 만들기를 완료할 수 있는지 검토한다.
 
 ## Device Matrix
 

@@ -27,7 +27,7 @@ describe("agent role memory", () => {
     assert.deepEqual(existingFiles, expectedFiles);
   });
 
-  it("각 역할 메모리는 Package Tetris V1과 현장 작업자 기준을 공유한다", () => {
+  it("각 역할 메모리는 Package Tetris V2와 현장 작업자 기준을 공유한다", () => {
     // Given
     const roleFiles = [
       "business-analyst.md",
@@ -44,7 +44,7 @@ describe("agent role memory", () => {
     // Then
     for (const doc of docs) {
       assert.match(doc, /Package Tetris/);
-      assert.match(doc, /V1/);
+      assert.match(doc, /V2/);
       assert.match(doc, /현장 작업자|현장 사용자|현장 기준/);
     }
   });
