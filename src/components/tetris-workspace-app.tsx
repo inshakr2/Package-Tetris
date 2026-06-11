@@ -5929,6 +5929,13 @@ function ChainSimulationPanel({
     (template) => requestedQuantitiesByTemplateId[template.blockTemplateId]
   );
   const hasPrioritySettings = selectedTemplates.length > 1;
+  const chainCalculateDisabledReason = !hasResult
+    ? "결과를 먼저 생성하면 추가 적재를 시험할 수 있습니다."
+    : selectedTemplateIds.length === 0
+      ? "추가할 박스를 먼저 선택하세요."
+      : chainStatus === "calculating"
+        ? "추가 가능 수량을 계산하고 있습니다."
+        : null;
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -6302,7 +6309,17 @@ function ChainSimulationPanel({
             </div>
 
             <div className="form-actions chain-actions">
-              <button className="primary-button" onClick={onCalculate} disabled={!canCalculate}>
+              <button
+                className="primary-button"
+                onClick={onCalculate}
+                disabled={!canCalculate}
+                title={chainCalculateDisabledReason ?? undefined}
+                aria-label={
+                  chainCalculateDisabledReason
+                    ? `추가 박스 계산 비활성: ${chainCalculateDisabledReason}`
+                    : "추가 박스 추천 결과 계산"
+                }
+              >
                 {chainStatus === "calculating"
                   ? "추가 가능 수량 계산 중..."
                   : chainStatus === "error"
@@ -6331,8 +6348,8 @@ function ChainSimulationPanel({
                 </button>
               ) : null}
             </div>
-            {selectedTemplateIds.length === 0 ? (
-              <p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>
+            {chainCalculateDisabledReason && chainStatus !== "calculating" ? (
+              <p className="fine-print review-cta-hint">{chainCalculateDisabledReason}</p>
             ) : null}
           </div>
         </div>

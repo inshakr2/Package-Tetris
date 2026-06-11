@@ -238,6 +238,29 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasStableConditionLayout, true);
   });
 
+  it("추가 박스 계산 버튼은 비활성 사유를 버튼과 안내 문구로 제공한다", () => {
+    // Given
+    const hasDisabledReasonCopy =
+      workspaceSource.includes("const chainCalculateDisabledReason =") &&
+      workspaceSource.includes("추가할 박스를 먼저 선택하세요.") &&
+      workspaceSource.includes("추가 가능 수량을 계산하고 있습니다.");
+    const exposesReasonOnButton =
+      workspaceSource.includes("title={chainCalculateDisabledReason ?? undefined}") &&
+      /aria-label={[\s\S]*?chainCalculateDisabledReason[\s\S]*?`추가 박스 계산 비활성: \$\{chainCalculateDisabledReason\}`[\s\S]*?"추가 박스 추천 결과 계산"[\s\S]*?}/.test(
+        workspaceSource
+      );
+    const rendersSingleGuidance =
+      workspaceSource.includes('{chainCalculateDisabledReason && chainStatus !== "calculating" ? (') &&
+      workspaceSource.includes("{chainCalculateDisabledReason}") &&
+      !workspaceSource.includes('<p className="fine-print review-cta-hint">박스를 선택해야 계산할 수 있습니다.</p>');
+
+    // When
+    const hasAccessibleDisabledCalculation = hasDisabledReasonCopy && exposesReasonOnButton && rendersSingleGuidance;
+
+    // Then
+    assert.equal(hasAccessibleDisabledCalculation, true);
+  });
+
   it("결과 변경 또는 선택 초기화 시 추가 박스별 수량 조건과 선택 순서를 함께 비운다", () => {
     // Given
     const latestResultEffect = workspaceSource.match(
