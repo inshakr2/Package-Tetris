@@ -198,30 +198,41 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasPriorityContract, true);
   });
 
-  it("추가 박스별 조건 행은 선택 후에도 좁은 결과 패널 안에서 카드형으로 접힌다", () => {
+  it("추가 박스별 조건 행은 순서 버튼을 우측에 고정해 카드 높이를 줄인다", () => {
     // Given
     const hasConditionCardMarkup =
       workspaceSource.includes('className="chain-template-summary"') &&
       workspaceSource.includes('className="chain-template-rank-badge"') &&
       workspaceSource.includes('className="chain-template-order-control"');
-    const hasSafeConditionCardGrid =
-      /\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?background:\s*white;[\s\S]*?}/.test(
+    const hasRightSideActionGrid =
+      /\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(104px,\s*auto\);[\s\S]*?grid-template-areas:[\s\S]*?"summary order"[\s\S]*?"quantity order"[\s\S]*?"field order"[\s\S]*?background:\s*white;[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-order-control\s*{[\s\S]*?grid-area:\s*order;[\s\S]*?align-self:\s*stretch;[\s\S]*?}/.test(
         styles
       );
     const hasWrappingControlGrid =
       /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       ) &&
-      /\.chain-template-order-control\s+>\s+div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+      /\.chain-template-order-control\s+>\s+div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
       );
     const hasReadablePriorityButton =
       /\.chain-template-order-control\s*{[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(styles) &&
       /\.chain-template-order-control\s+>\s+span\s*{[\s\S]*?font-size:\s*12px;[\s\S]*?}/.test(styles);
+    const hasMobileFallback =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?grid-template-areas:[\s\S]*?"summary"[\s\S]*?"quantity"[\s\S]*?"field"[\s\S]*?"order";[\s\S]*?}/.test(
+        styles
+      );
 
     // When
     const hasStableConditionLayout =
-      hasConditionCardMarkup && hasSafeConditionCardGrid && hasWrappingControlGrid && hasReadablePriorityButton;
+      hasConditionCardMarkup &&
+      hasRightSideActionGrid &&
+      hasWrappingControlGrid &&
+      hasReadablePriorityButton &&
+      hasMobileFallback;
 
     // Then
     assert.equal(hasStableConditionLayout, true);

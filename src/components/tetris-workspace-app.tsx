@@ -6257,9 +6257,9 @@ function ChainSimulationPanel({
                         role="group"
                         aria-label={`${template.name} 추가 우선순위 조정`}
                       >
-                        <span>
+                        <span title="드래그 또는 버튼으로 순서 변경">
                           <GripVertical size={14} aria-hidden="true" />
-                          드래그 또는 버튼으로 순서 변경
+                          순서 변경
                         </span>
                         <div>
                           <button

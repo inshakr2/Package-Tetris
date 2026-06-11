@@ -37,10 +37,10 @@ describe("chain-simulation-requested-quantity-layout", () => {
     // Given
     const hasBaseLayout =
       /\.chain-template-quantity-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
-      /\.chain-template-quantity-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?background:\s*white;[\s\S]*?}/.test(
+      /\.chain-template-quantity-row\s*{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(104px,\s*auto\);[\s\S]*?grid-template-areas:[\s\S]*?"summary order"[\s\S]*?"quantity order"[\s\S]*?"field order"[\s\S]*?background:\s*white;[\s\S]*?}/.test(
         styles
       ) &&
-      /\.chain-template-summary\s*{[\s\S]*?display:\s*grid;[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(
+      /\.chain-template-summary\s*{[\s\S]*?grid-area:\s*summary;[\s\S]*?display:\s*grid;[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(
         styles
       );
     const hasTouchTarget =
@@ -52,11 +52,11 @@ describe("chain-simulation-requested-quantity-layout", () => {
       /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       ) &&
-      /\.chain-template-order-control\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+      /\.chain-template-order-control\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
       );
     const hasMobileLayout =
-      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-order-control\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?grid-template-areas:[\s\S]*?"summary"[\s\S]*?"quantity"[\s\S]*?"field"[\s\S]*?"order";[\s\S]*?}/.test(
         styles
       );
 
