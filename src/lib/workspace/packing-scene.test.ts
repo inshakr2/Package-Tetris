@@ -77,6 +77,44 @@ describe("packing-scene", () => {
     );
   });
 
+  it("PackedBlock rotation으로 처음 입력한 높이 축의 3D 화살표 방향을 계산한다", () => {
+    // Given
+    const uprightBlock = createBlock({ rotation: "xyz" });
+    const widthSideBlock = createBlock({ rotation: "zxy" });
+    const depthSideBlock = createBlock({ rotation: "xzy" });
+
+    // When
+    const [uprightSceneBlock, widthSideSceneBlock, depthSideSceneBlock] = createPackingSceneBlocks(
+      [uprightBlock, widthSideBlock, depthSideBlock],
+      bounds
+    );
+
+    // Then
+    assert.deepEqual(uprightSceneBlock?.orientation.direction, { x: 0, y: 1, z: 0 });
+    assert.equal(uprightSceneBlock?.orientation.label, "입력 높이: 위쪽");
+
+    assert.deepEqual(widthSideSceneBlock?.orientation.direction, { x: 1, y: 0, z: 0 });
+    assert.equal(widthSideSceneBlock?.orientation.label, "입력 높이: 가로 방향");
+
+    assert.deepEqual(depthSideSceneBlock?.orientation.direction, { x: 0, y: 0, z: 1 });
+    assert.equal(depthSideSceneBlock?.orientation.label, "입력 높이: 깊이 방향");
+  });
+
+  it("방향 화살표는 블록 크기에 맞는 양수 길이를 가진다", () => {
+    // Given
+    const block = createBlock({
+      widthMm: 100,
+      depthMm: 80,
+      heightMm: 60
+    });
+
+    // When
+    const [sceneBlock] = createPackingSceneBlocks([block], bounds);
+
+    // Then
+    assert.equal(sceneBlock?.orientation.length, 0.468);
+  });
+
   it("블록 유형 색상은 2D 투영과 3D 렌더링에서 같은 값을 사용한다", () => {
     // Given
     const block = createBlock();

@@ -1860,6 +1860,10 @@ select:focus-visible {
   padding-bottom: 2px;
 }
 
+.result-orientation-toggle svg {
+  flex: 0 0 auto;
+}
+
 .chain-preview-notice {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3174,6 +3178,10 @@ select:focus-visible {
   }
 
   .three-camera-buttons .result-three-expand-button {
+    grid-column: 1 / -1;
+  }
+
+  .three-camera-buttons .result-orientation-toggle {
     grid-column: 1 / -1;
   }
 

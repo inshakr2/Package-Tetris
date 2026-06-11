@@ -19,7 +19,7 @@ describe("webgl-fallback-action-layout", () => {
       source.includes('className="secondary-button three-fallback-action"');
     const hasErrorOnlyRendering =
       source.includes('renderState === "error" && fallbackAction') &&
-      source.includes("3D가 뜨지 않아도 위/앞/옆 보기로 배치를 확인할 수 있습니다.");
+      source.includes("방향 화살표가 없어도 위/앞/옆 보기로 배치를 확인할 수 있습니다.");
 
     // Then
     assert.ok(hasFallbackContract, "3D canvas should expose an optional fallback action contract");

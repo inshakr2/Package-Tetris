@@ -3349,6 +3349,7 @@ const ResultStage = ({
   const [threeCameraPreset, setThreeCameraPreset] = useState<ThreeCameraPreset>("isometric");
   const [threeResetToken, setThreeResetToken] = useState(0);
   const [threeDialogOpen, setThreeDialogOpen] = useState(false);
+  const [showOrientationArrows, setShowOrientationArrows] = useState(true);
   const [selectedSpaceInstanceId, setSelectedSpaceInstanceId] = useState<string | null>(null);
   const [selectedBlockTemplateId, setSelectedBlockTemplateId] = useState<string | null>(null);
   const [selectedChainTemplateId, setSelectedChainTemplateId] = useState<string | null>(null);
@@ -4120,6 +4121,15 @@ const ResultStage = ({
                       </button>
                     ))}
                     <button
+                      className="secondary-button result-orientation-toggle"
+                      aria-label={showOrientationArrows ? "방향 화살표 숨기기" : "방향 화살표 표시하기"}
+                      aria-pressed={showOrientationArrows}
+                      onClick={() => setShowOrientationArrows((current) => !current)}
+                    >
+                      <Eye size={16} />
+                      방향 표시
+                    </button>
+                    <button
                       className="secondary-button result-three-expand-button"
                       aria-haspopup="dialog"
                       aria-expanded={threeDialogOpen}
@@ -4142,6 +4152,7 @@ const ResultStage = ({
                     chainPreviewBlockIds={chainPreviewBlockIds}
                     cameraPreset={threeCameraPreset}
                     resetToken={threeResetToken}
+                    showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
@@ -4160,11 +4171,13 @@ const ResultStage = ({
                     chainPreviewBlockIds={chainPreviewBlockIds}
                     cameraPreset={threeCameraPreset}
                     resetToken={threeResetToken}
+                    showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
                     spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · ${formatDimensions(usableSize)}`}
                     onSelectCameraPreset={setThreeCameraPreset}
                     onResetViewer={resetResultViewer}
+                    onToggleOrientationArrows={() => setShowOrientationArrows((current) => !current)}
                     onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
                     onOpenFallbackView={openTopFallbackFromExpanded}
@@ -4696,6 +4709,7 @@ function OffsetRecommendationPreviewDialog({
                     chainPreviewBlockIds={emptyPreviewBlockIds}
                     cameraPreset={cameraPreset}
                     resetToken={resetToken}
+                    showOrientationArrows={true}
                     spaceLabel={`추천 Space ${selectedPreviewSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPreviewSpace.utilizationRate * 100)}%`}
                     onSelectBlockTemplate={toggleSelectedPreviewBlock}
@@ -4739,11 +4753,13 @@ function ExpandedThreeViewDialog({
   chainPreviewBlockIds,
   cameraPreset,
   resetToken,
+  showOrientationArrows,
   spaceLabel,
   utilizationLabel,
   spaceDescription,
   onSelectCameraPreset,
   onResetViewer,
+  onToggleOrientationArrows,
   onSelectBlockTemplate,
   onClearSelection,
   onOpenFallbackView,
@@ -4756,11 +4772,13 @@ function ExpandedThreeViewDialog({
   chainPreviewBlockIds: Set<string>;
   cameraPreset: ThreeCameraPreset;
   resetToken: number;
+  showOrientationArrows: boolean;
   spaceLabel: string;
   utilizationLabel: string;
   spaceDescription: string;
   onSelectCameraPreset: (preset: ThreeCameraPreset) => void;
   onResetViewer: () => void;
+  onToggleOrientationArrows: () => void;
   onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
   onOpenFallbackView: () => void;
@@ -4846,6 +4864,15 @@ function ExpandedThreeViewDialog({
             <RotateCcw size={16} />
             처음
           </button>
+          <button
+            className="secondary-button result-orientation-toggle"
+            aria-label={showOrientationArrows ? "확대 3D 방향 화살표 숨기기" : "확대 3D 방향 화살표 표시하기"}
+            aria-pressed={showOrientationArrows}
+            onClick={onToggleOrientationArrows}
+          >
+            <Eye size={16} />
+            방향 표시
+          </button>
         </div>
 
         <div className="result-three-dialog-body">
@@ -4857,6 +4884,7 @@ function ExpandedThreeViewDialog({
               chainPreviewBlockIds={chainPreviewBlockIds}
               cameraPreset={cameraPreset}
               resetToken={resetToken}
+              showOrientationArrows={showOrientationArrows}
               spaceLabel={spaceLabel}
               utilizationLabel={utilizationLabel}
               onSelectBlockTemplate={onSelectBlockTemplate}
