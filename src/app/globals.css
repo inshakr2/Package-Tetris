@@ -917,13 +917,20 @@ select:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.block-template-name-row {
+  grid-template-columns: minmax(220px, 1.6fr) minmax(150px, 0.7fr);
+  align-items: start;
+}
+
 .form-grid label,
 .form-row label,
 .field-row label {
   display: grid;
   gap: 5px;
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .form-grid input,
@@ -3551,6 +3558,10 @@ select:focus-visible {
   .form-row-three,
   .space-form,
   .block-template-form {
+    grid-template-columns: 1fr;
+  }
+
+  .block-template-name-row {
     grid-template-columns: 1fr;
   }
 
