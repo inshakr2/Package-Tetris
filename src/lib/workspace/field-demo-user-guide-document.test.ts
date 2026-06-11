@@ -6,6 +6,18 @@ import { describe, it } from "node:test";
 const FIELD_GUIDE_PATH = join(process.cwd(), "docs/field-demo-user-guide.md");
 
 describe("field demo user guide document", () => {
+  it("시연 브랜치와 최종 검증 명령은 V2 기준을 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /main.*검증된 현장 시연 기준/);
+    assert.match(document, /v2.*다음 현장 피드백 개발 기준/);
+    assert.match(document, /npm run v2:verify/);
+    assert.doesNotMatch(document, /main` 브랜치 기준으로 프로젝트를 내려받으면 된다/);
+    assert.doesNotMatch(document, /시연 전 최종 확인[\s\S]*npm run v1:verify/);
+  });
+
   it("박스 .xlsx 일괄등록 흐름과 오류 수정 기준을 현장 언어로 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const PACKAGE_JSON_PATH = join(process.cwd(), "package.json");
-const FIELD_GUIDE_PATH = join(process.cwd(), "docs/field-demo-user-guide.md");
+const V1_READINESS_PATH = join(process.cwd(), "docs/v1-readiness.md");
 const DEVELOPMENT_DELIVERABLES_PATH = join(process.cwd(), "docs/development-deliverables.md");
 
 describe("v1 verification script", () => {
@@ -24,13 +24,13 @@ describe("v1 verification script", () => {
     assert.match(script, /npm run build/);
   });
 
-  it("현장 가이드와 개발 산출물 문서는 V1 마감 검증 명령을 안내한다", () => {
+  it("V1 역사 기준 문서와 개발 산출물 문서는 V1 마감 검증 명령을 안내한다", () => {
     // Given
-    const fieldGuide = readFileSync(FIELD_GUIDE_PATH, "utf8");
+    const v1Readiness = readFileSync(V1_READINESS_PATH, "utf8");
     const developmentDeliverables = readFileSync(DEVELOPMENT_DELIVERABLES_PATH, "utf8");
 
     // When / Then
-    assert.match(fieldGuide, /npm run v1:verify/);
+    assert.match(v1Readiness, /npm run v1:verify/);
     assert.match(developmentDeliverables, /npm run v1:verify/);
   });
 });
