@@ -4461,6 +4461,12 @@ const ResultStage = ({
     const isSelected = selectedChainTemplateIds.includes(blockTemplateId);
 
     if (!isSelected && selectedChainTemplateIds.length >= CHAIN_MAX_SELECTED_TEMPLATE_COUNT) {
+      if (chainStatus === "preview" && chainPreview) {
+        setChainStatus("preview");
+        setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다. 현재 미리보기는 유지됩니다.");
+        return;
+      }
+
       setChainStatus("error");
       setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
       return;

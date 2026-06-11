@@ -324,6 +324,29 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasAccessibleCancelContract, true);
   });
 
+  it("추가 결과 미리보기 중 4번째 박스 선택 시 기존 미리보기 상태를 유지한다", () => {
+    // Given
+    const toggleSelectionHandler =
+      workspaceSource.match(/function\s+toggleChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/)?.[0] ??
+      "";
+
+    const preservesActivePreview =
+      toggleSelectionHandler.includes("selectedChainTemplateIds.length >= CHAIN_MAX_SELECTED_TEMPLATE_COUNT") &&
+      toggleSelectionHandler.includes('chainStatus === "preview"') &&
+      toggleSelectionHandler.includes("chainPreview") &&
+      toggleSelectionHandler.includes('setChainStatus("preview");') &&
+      toggleSelectionHandler.includes("현재 미리보기는 유지됩니다.");
+    const stillBlocksWithoutPreview =
+      toggleSelectionHandler.includes('setChainStatus("error");') &&
+      toggleSelectionHandler.includes("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
+
+    // When
+    const hasPreviewPreservationContract = preservesActivePreview && stillBlocksWithoutPreview;
+
+    // Then
+    assert.equal(hasPreviewPreservationContract, true);
+  });
+
   it("다중 선택과 variant 영역은 태블릿/모바일에서 한 컬럼으로 접히고 버튼 터치 타깃을 유지한다", () => {
     // Given
     const hasSelectionSummary =
