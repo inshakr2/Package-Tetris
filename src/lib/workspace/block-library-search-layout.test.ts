@@ -137,6 +137,38 @@ describe("block-library-search-layout", () => {
     assert.ok(inlinePanelIsCompact, "inline saved-box area should stay compact for 200+ templates");
   });
 
+  it("저장된 박스는 .xlsx 파일을 선택하고 미리보기 dialog에서 확인한 뒤 일괄등록한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+
+    // When
+    const hasImportAction =
+      source.includes("엑셀로 박스 일괄등록") &&
+      source.includes('accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"') &&
+      source.includes("readBlockTemplateXlsxFile(file, {") &&
+      source.includes("existingTemplateNames: templates.map((template) => template.name)");
+    const hasPreviewDialog =
+      source.includes("function BlockTemplateImportDialog") &&
+      source.includes('id="block-template-import-dialog"') &&
+      source.includes('className="block-template-import-dialog"') &&
+      source.includes("가져올 박스") &&
+      source.includes("오류 행");
+    const hasExplicitCommit =
+      source.includes("preview.canImport") &&
+      source.includes("onImportTemplates(preview.rows)") &&
+      source.includes("일괄등록 적용");
+    const hasRowLevelFeedback =
+      source.includes("block-template-import-error-list") &&
+      source.includes("error.rowNumber ? `${error.rowNumber}행 · ` : \"\"") &&
+      source.includes("createImportCandidateMeta(row)");
+
+    // Then
+    assert.ok(hasImportAction, "saved-box panel should expose a .xlsx-only import action");
+    assert.ok(hasPreviewDialog, "xlsx import should use a preview dialog before saving");
+    assert.ok(hasExplicitCommit, "xlsx import should require an explicit apply action");
+    assert.ok(hasRowLevelFeedback, "xlsx import should show row-level errors and candidate summaries");
+  });
+
   it("저장된 박스 dialog는 불투명 배경, pagination, 모바일 48px 터치 타깃을 유지한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
@@ -170,6 +202,40 @@ describe("block-library-search-layout", () => {
     assert.ok(paginationRule, "saved-box pagination should keep field-friendly touch targets");
     assert.ok(inputRule, "search input and filters should keep field-friendly touch targets");
     assert.ok(mobileRule, "search input and filters should remain one column on mobile");
+  });
+
+  it(".xlsx 일괄등록 dialog는 불투명 배경, 스크롤 목록, 모바일 전체 화면을 유지한다", () => {
+    // Given
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const dialogRule =
+      /\.block-template-import-dialog\s*{[\s\S]*?width:\s*min\(820px,\s*calc\(100vw\s*-\s*24px\)\);[\s\S]*?max-height:\s*calc\(100dvh\s*-\s*24px\);[\s\S]*?background:\s*var\(--surface\);[\s\S]*?}/.test(
+        css
+      );
+    const backdropRule =
+      /\.block-template-import-dialog::backdrop\s*{[\s\S]*?background:\s*rgba\(15,\s*23,\s*42,\s*0\.42\);[\s\S]*?}/.test(
+        css
+      );
+    const listRule =
+      /\.block-template-import-list\s*{[\s\S]*?display:\s*grid;[\s\S]*?overflow:\s*auto;[\s\S]*?}/.test(
+        css
+      );
+    const actionRule =
+      /\.block-template-import-actions\s*{[\s\S]*?display:\s*flex;[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(
+        css
+      );
+    const mobileRule =
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.block-template-import-dialog\s*{[\s\S]*?width:\s*100vw;[\s\S]*?height:\s*100dvh;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(dialogRule, "xlsx import dialog should fit in the viewport with an opaque surface");
+    assert.ok(backdropRule, "xlsx import dialog should dim the background");
+    assert.ok(listRule, "xlsx import dialog should keep long previews scrollable");
+    assert.ok(actionRule, "xlsx import dialog actions should keep field-friendly touch targets");
+    assert.ok(mobileRule, "xlsx import dialog should become full-screen on mobile");
   });
 
   it("등록된 그룹 관리는 대량 그룹을 대비해 본문에 펼치지 않고 dialog에서 검색하고 삭제한다", () => {

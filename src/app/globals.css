@@ -575,6 +575,19 @@ select:focus-visible {
   min-width: 0;
 }
 
+.block-library-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.block-library-summary-actions .primary-button,
+.block-library-summary-actions .secondary-button {
+  min-height: 44px;
+}
+
 .block-library-search {
   display: grid;
   gap: 6px;
@@ -665,6 +678,96 @@ select:focus-visible {
 }
 
 .block-library-pagination .secondary-button {
+  min-height: 44px;
+}
+
+.block-template-import-dialog {
+  width: min(820px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.block-template-import-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.block-template-import-dialog-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+}
+
+.block-template-import-dialog-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.block-template-import-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.block-template-import-summary > div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 10px;
+  min-width: 0;
+}
+
+.block-template-import-error-list {
+  display: grid;
+  gap: 6px;
+  max-height: 132px;
+  overflow: auto;
+  border: 1px solid rgba(194, 65, 59, 0.28);
+  border-radius: 8px;
+  background: #fff6f5;
+  padding: 10px;
+  color: #8f231e;
+}
+
+.block-template-import-error-list p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.block-template-import-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.block-template-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 48px;
+}
+
+.block-template-import-actions .secondary-button,
+.block-template-import-actions .primary-button {
   min-height: 44px;
 }
 
@@ -3082,6 +3185,19 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .block-template-import-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .block-library-summary-actions {
+    justify-content: stretch;
+  }
+
+  .block-library-summary-actions .primary-button,
+  .block-library-summary-actions .secondary-button {
+    width: 100%;
+  }
+
   .block-library-dialog {
     width: 100vw;
     height: 100dvh;
@@ -3092,6 +3208,26 @@ select:focus-visible {
     max-height: 100dvh;
     border-radius: 0;
     padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .block-template-import-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .block-template-import-dialog-sheet {
+    max-height: 100dvh;
+    border-radius: 0;
+    padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+
+  .block-template-import-actions .primary-button,
+  .block-template-import-actions .secondary-button {
+    flex: 1 1 180px;
   }
 
   .block-group-management-dialog {

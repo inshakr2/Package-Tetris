@@ -75,6 +75,11 @@ import {
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
+  readBlockTemplateXlsxFile,
+  type BlockTemplateImportCandidate,
+  type BlockTemplateImportPreview
+} from "@/lib/workspace/block-template-xlsx-import";
+import {
   calculateBlockVolumeM3,
   hasPositiveDimensions,
   isValidBlockMeasurementInput
@@ -957,6 +962,35 @@ export function TetrisWorkspaceApp() {
     setBlockForm(DEFAULT_BLOCK_FORM);
   }
 
+  function importBlockTemplates(rows: BlockTemplateImportCandidate[]) {
+    if (rows.length === 0) {
+      return;
+    }
+
+    const rowsWithIds = rows.map((row) => ({
+      ...row,
+      blockTemplateId: createClientId("template")
+    }));
+
+    updateWorkspace((current, now) =>
+      rowsWithIds.reduce(
+        (nextWorkspace, row) =>
+          createBlockTemplate(nextWorkspace, {
+            blockTemplateId: row.blockTemplateId,
+            name: row.name,
+            dimensions: row.dimensions,
+            fragile: row.fragile,
+            weightKg: row.weightKg,
+            group1: row.group1,
+            group2: row.group2,
+            addToDraft: false,
+            now
+          }),
+        current
+      )
+    );
+  }
+
   function editBlockTemplate(template: BlockTemplate) {
     setEditingTemplateId(template.blockTemplateId);
     setBlockForm({
@@ -1655,6 +1689,7 @@ export function TetrisWorkspaceApp() {
                 blockGroups={workspace.blockGroups}
                 onAddToDraft={addTemplateToDraft}
                 onEdit={editBlockTemplate}
+                onImportTemplates={importBlockTemplates}
                 onDeleteRequest={requestDelete}
               />
             </div>
@@ -1928,12 +1963,14 @@ function BlockLibraryPanel({
   blockGroups,
   onAddToDraft,
   onEdit,
+  onImportTemplates,
   onDeleteRequest
 }: {
   templates: BlockTemplate[];
   blockGroups: BlockGroup[];
   onAddToDraft: (template: BlockTemplate, quantity?: number) => void;
   onEdit: (template: BlockTemplate) => void;
+  onImportTemplates: (rows: BlockTemplateImportCandidate[]) => void;
   onDeleteRequest: (
     kind: DeleteConfirmationKind,
     entityId: string,
@@ -1942,6 +1979,12 @@ function BlockLibraryPanel({
   ) => void;
 }) {
   const [blockLibraryDialogOpen, setBlockLibraryDialogOpen] = useState(false);
+  const blockImportInputRef = useRef<HTMLInputElement>(null);
+  const [blockImportDialogOpen, setBlockImportDialogOpen] = useState(false);
+  const [blockImportPreview, setBlockImportPreview] = useState<BlockTemplateImportPreview | null>(null);
+  const [blockImportFileName, setBlockImportFileName] = useState("");
+  const [blockImportLoading, setBlockImportLoading] = useState(false);
+  const [blockImportNotice, setBlockImportNotice] = useState<string | null>(null);
 
   const handleEdit = (template: BlockTemplate) => {
     setBlockLibraryDialogOpen(false);
@@ -1958,6 +2001,53 @@ function BlockLibraryPanel({
     onDeleteRequest(kind, entityId, name, trigger);
   };
 
+  const closeBlockImportDialog = () => {
+    setBlockImportDialogOpen(false);
+    setBlockImportPreview(null);
+    setBlockImportFileName("");
+  };
+
+  const handleBlockImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setBlockImportLoading(true);
+    setBlockImportNotice(null);
+    setBlockImportFileName(file.name);
+
+    try {
+      const preview = await readBlockTemplateXlsxFile(file, {
+        existingTemplateNames: templates.map((template) => template.name)
+      });
+      setBlockImportPreview(preview);
+    } catch (error) {
+      setBlockImportPreview({
+        rows: [],
+        errors: [{ message: toErrorMessage(error) }],
+        canImport: false
+      });
+    } finally {
+      setBlockImportLoading(false);
+      setBlockImportDialogOpen(true);
+    }
+  };
+
+  const applyBlockTemplateImport = () => {
+    const preview = blockImportPreview;
+
+    if (!preview || !preview.canImport) {
+      return;
+    }
+
+    onImportTemplates(preview.rows);
+    setBlockImportNotice(`${preview.rows.length}개 박스를 저장했습니다.`);
+    closeBlockImportDialog();
+  };
+
   return (
     <section className="rail-section block-template-library">
       <h3>저장된 박스</h3>
@@ -1967,17 +2057,35 @@ function BlockLibraryPanel({
           <strong>{templates.length === 0 ? "저장된 박스 0개" : `저장된 박스 ${templates.length}개`}</strong>
           <span className="fine-print">상위/하위 그룹과 검색으로 필요한 박스를 찾습니다.</span>
         </div>
-        <button
-          className="primary-button"
-          aria-haspopup="dialog"
-          aria-controls="block-library-dialog"
-          onClick={() => setBlockLibraryDialogOpen(true)}
-          disabled={templates.length === 0}
-        >
-          <PackagePlus size={16} />
-          저장된 박스 찾아 추가
-        </button>
+        <div className="block-library-summary-actions">
+          <button
+            className="primary-button"
+            aria-haspopup="dialog"
+            aria-controls="block-library-dialog"
+            onClick={() => setBlockLibraryDialogOpen(true)}
+            disabled={templates.length === 0}
+          >
+            <PackagePlus size={16} />
+            저장된 박스 찾아 추가
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => blockImportInputRef.current?.click()}
+            disabled={blockImportLoading}
+          >
+            <FileUp size={16} />
+            {blockImportLoading ? "파일 확인 중" : "엑셀로 박스 일괄등록"}
+          </button>
+          <input
+            ref={blockImportInputRef}
+            className="file-input"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleBlockImportFileChange}
+          />
+        </div>
       </div>
+      {blockImportNotice ? <p className="fine-print" role="status">{blockImportNotice}</p> : null}
       {templates.length === 0 ? (
         <p className="fine-print">저장된 박스가 없습니다. 왼쪽 입력 영역에서 첫 박스를 저장하세요.</p>
       ) : null}
@@ -1989,6 +2097,13 @@ function BlockLibraryPanel({
         onAddToDraft={onAddToDraft}
         onEdit={handleEdit}
         onDeleteRequest={handleDeleteRequest}
+      />
+      <BlockTemplateImportDialog
+        open={blockImportDialogOpen}
+        fileName={blockImportFileName}
+        preview={blockImportPreview}
+        onClose={closeBlockImportDialog}
+        onConfirm={applyBlockTemplateImport}
       />
     </section>
   );
@@ -2206,6 +2321,134 @@ function BlockLibraryDialog({
               disabled={currentBlockLibraryPage >= blockLibraryPageCount}
             >
               다음 페이지
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function BlockTemplateImportDialog({
+  open,
+  fileName,
+  preview,
+  onClose,
+  onConfirm
+}: {
+  open: boolean;
+  fileName: string;
+  preview: BlockTemplateImportPreview | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previewRows = preview?.rows ?? [];
+  const previewErrors = preview?.errors ?? [];
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-block-template-import-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="block-template-import-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog"
+      aria-modal="true"
+      aria-labelledby="block-template-import-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="block-template-import-dialog-title">엑셀 박스 일괄등록 미리보기</h2>
+            <p className="fine-print">{fileName || "선택한 파일"} 내용을 저장 전에 확인합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-block-template-import-close="true"
+            onClick={onClose}
+            aria-label="엑셀 박스 일괄등록 미리보기 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-import-summary">
+            <div>
+              <strong>가져올 박스 {previewRows.length}개</strong>
+              <span className="fine-print">오류가 없을 때만 저장할 수 있습니다.</span>
+            </div>
+            <div>
+              <strong>오류 행 {previewErrors.length}개</strong>
+              <span className="fine-print">행 번호와 사유를 확인한 뒤 엑셀을 수정하세요.</span>
+            </div>
+          </div>
+          {previewErrors.length > 0 ? (
+            <div className="block-template-import-error-list" role="alert">
+              {previewErrors.map((error, index) => (
+                <p key={`${error.rowNumber ?? "workbook"}-${error.field ?? "file"}-${index}`}>
+                  {error.rowNumber ? `${error.rowNumber}행 · ` : ""}
+                  {error.field ? `${error.field}: ` : ""}
+                  {error.message}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          <div className="block-template-import-list" aria-label="가져올 박스 미리보기">
+            {previewRows.length === 0 ? (
+              <p className="fine-print">가져올 수 있는 박스가 없습니다.</p>
+            ) : (
+              previewRows.map((row) => (
+                <article className="library-card" key={`${row.rowNumber}-${row.name}`}>
+                  <div className="card-heading">
+                    <strong>{row.name}</strong>
+                    {row.fragile ? (
+                      <span className="badge" data-tone="amber">
+                        깨짐주의
+                      </span>
+                    ) : (
+                      <span className="badge">일반</span>
+                    )}
+                  </div>
+                  <p className="meta">{createImportCandidateMeta(row)}</p>
+                </article>
+              ))
+            )}
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button className="primary-button" onClick={onConfirm} disabled={!preview || !preview.canImport}>
+              일괄등록 적용
             </button>
           </div>
         </div>
@@ -6036,6 +6279,16 @@ function createBlockTemplateCardMeta(template: BlockTemplate) {
     template.group2 ? `하위 ${template.group2}` : "하위그룹 없음",
     `v${template.entityVersion}`
   ];
+}
+
+function createImportCandidateMeta(row: BlockTemplateImportCandidate) {
+  return [
+    `${row.rowNumber}행`,
+    formatDimensions(row.dimensions),
+    formatOptionalWeightDisplay(row.weightKg),
+    row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
+    row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
+  ].join(" · ");
 }
 
 function parseOptionalWeightKg(value: string) {
