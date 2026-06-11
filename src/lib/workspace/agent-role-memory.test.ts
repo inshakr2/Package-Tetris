@@ -90,6 +90,9 @@ describe("agent role memory", () => {
     assert.match(uiUxTesterDoc, /768px/);
     assert.match(uiUxTesterDoc, /1280px/);
     assert.match(uiUxTesterDoc, /가로 넘침|horizontal overflow/);
+    assert.match(uiUxTesterDoc, /실제 브라우저/);
+    assert.match(uiUxTesterDoc, /좌표|bounding/);
+    assert.match(uiUxTesterDoc, /삭제 버튼|CTA|버튼/);
   });
 
   it("기획서와 UI 메모리는 구현된 3D 크게 보기와 치수 오버레이를 후속으로 남기지 않는다", () => {

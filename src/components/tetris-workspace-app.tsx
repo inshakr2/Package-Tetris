@@ -82,6 +82,8 @@ import {
   type BlockTemplateImportPreview
 } from "@/lib/workspace/block-template-xlsx-import";
 import {
+  DRAFT_BLOCK_IMPORT_SAMPLE_ROWS,
+  DRAFT_BLOCK_XLSX_COLUMNS,
   createDraftBlockImportSampleWorkbook,
   readDraftBlockXlsxFile,
   type DraftBlockImportCandidate,
@@ -297,6 +299,19 @@ const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
   { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
   { name: "무게kg", requirement: "선택", description: "소수 입력이 가능하며 비워둘 수 있습니다." },
   { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." }
+] as const;
+
+const DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS = [
+  { name: "상위그룹", requirement: "선택", description: "저장 박스와 같은 그룹명을 쓰면 검색/필터에 바로 연결됩니다." },
+  { name: "하위그룹", requirement: "선택", description: "상위그룹이 있을 때만 입력합니다." },
+  { name: "박스명", requirement: "필수", description: "기존 저장 박스명과 같으면 치수와 깨짐주의가 같은지 확인 후 재사용합니다." },
+  { name: "가로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "세로mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
+  { name: "무게kg", requirement: "선택", description: "비워둘 수 있으며 저장 박스 정보에도 함께 반영됩니다." },
+  { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." },
+  { name: "수량", requirement: "필수", description: "이번 작업에 실을 수량입니다. 1 이상의 정수만 입력합니다." },
+  { name: "아래층우선", requirement: "선택", description: "기본, 먼저 바닥에, 맨 아래 우선 중 하나를 입력합니다." }
 ] as const;
 
 const Result3DCanvas = dynamic(
@@ -2761,6 +2776,144 @@ function DraftBlockImportDialog({
   );
 }
 
+function DraftBlockImportFormatDialog({
+  open,
+  onClose,
+  onDownloadSample,
+  onPickFile
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDownloadSample: () => void;
+  onPickFile: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (open && !dialog.open) {
+      dialog.showModal();
+      window.setTimeout(() => {
+        dialog.querySelector<HTMLButtonElement>("[data-draft-block-format-close='true']")?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      id="draft-block-import-format-dialog"
+      ref={dialogRef}
+      className="block-template-import-dialog block-template-import-format-dialog"
+      aria-modal="true"
+      aria-labelledby="draft-block-import-format-dialog-title"
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="block-template-import-dialog-sheet">
+        <div className="space-form-dialog-head">
+          <div>
+            <h2 id="draft-block-import-format-dialog-title">현재 작업 엑셀 등록 포맷</h2>
+            <p className="fine-print">첫 행은 아래 열 이름과 동일해야 하며 .xlsx 파일만 지원합니다.</p>
+          </div>
+          <button
+            className="icon-button"
+            data-draft-block-format-close="true"
+            onClick={onClose}
+            aria-label="현재 작업 엑셀 등록 포맷 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="block-template-import-dialog-body">
+          <div className="block-template-format-callout">
+            <strong>이번 작업 물량 자동화 기준</strong>
+            <span>
+              저장 박스 컬럼에 수량과 아래층우선이 추가됩니다. 자동으로 엑셀을 만들 때는 열 순서를
+              바꾸지 말고 {DRAFT_BLOCK_XLSX_COLUMNS.join(" / ")} 순서로 내보내면 바로 현재 작업에
+              추가할 수 있습니다.
+            </span>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 열 설명">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  <th>열 이름</th>
+                  <th>구분</th>
+                  <th>입력 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS.map((column) => (
+                  <tr key={column.name}>
+                    <th scope="row">{column.name}</th>
+                    <td>{column.requirement}</td>
+                    <td>{column.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 샘플 행">
+            <table className="block-template-format-table">
+              <thead>
+                <tr>
+                  {DRAFT_BLOCK_XLSX_COLUMNS.map((column) => (
+                    <th key={column}>{column}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.map((row) => (
+                  <tr key={row.join("-")}>
+                    {row.map((cell, index) => (
+                      <td key={`${row[2]}-${DRAFT_BLOCK_XLSX_COLUMNS[index]}`}>{cell || "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="block-template-import-actions">
+            <button className="secondary-button" onClick={onClose}>
+              닫기
+            </button>
+            <button
+              className="secondary-button"
+              onClick={onDownloadSample}
+              aria-label="현재 작업 샘플 파일 다운로드"
+            >
+              <Download size={16} />
+              현재 작업 샘플 다운로드
+            </button>
+            <button className="primary-button" onClick={onPickFile}>
+              이 포맷으로 파일 선택
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 function BlockTemplateImportFormatDialog({
   open,
   onClose,
@@ -3374,6 +3527,7 @@ function CurrentWorkBlocksPanel({
 }) {
   const draftImportInputRef = useRef<HTMLInputElement>(null);
   const [draftImportDialogOpen, setDraftImportDialogOpen] = useState(false);
+  const [draftImportFormatDialogOpen, setDraftImportFormatDialogOpen] = useState(false);
   const [draftImportPreview, setDraftImportPreview] = useState<DraftBlockImportPreview | null>(null);
   const [draftImportFileName, setDraftImportFileName] = useState("");
   const [draftImportLoading, setDraftImportLoading] = useState(false);
@@ -3430,6 +3584,13 @@ function CurrentWorkBlocksPanel({
     closeDraftBlockImportDialog();
   };
 
+  const openDraftImportFilePicker = () => {
+    setDraftImportFormatDialogOpen(false);
+    window.setTimeout(() => {
+      draftImportInputRef.current?.click();
+    }, 0);
+  };
+
   const downloadDraftBlockImportSample = () => {
     const sample = createDraftBlockImportSampleWorkbook();
     const blob = new Blob([sample.bytes], { type: sample.mimeType });
@@ -3459,11 +3620,13 @@ function CurrentWorkBlocksPanel({
         </div>
         <div className="current-work-actions">
           <button
-            className="secondary-button current-work-sample-action"
-            onClick={downloadDraftBlockImportSample}
+            className="secondary-button current-work-format-action"
+            aria-haspopup="dialog"
+            aria-controls="draft-block-import-format-dialog"
+            onClick={() => setDraftImportFormatDialogOpen(true)}
           >
-            <Download size={16} />
-            현재 작업 샘플
+            <Eye size={16} />
+            현재 작업 포맷 보기
           </button>
           <button
             className="secondary-button current-work-import-action"
@@ -3566,7 +3729,7 @@ function CurrentWorkBlocksPanel({
                   <strong>{formatBlockVolumeM3(block)}</strong>
                 </div>
                 <button
-                  className="danger-button"
+                  className="danger-button draft-block-remove-action"
                   onClick={(event) =>
                     onDeleteRequest("draft-block", block.draftBlockItemId, block.name, event.currentTarget)
                   }
@@ -3586,6 +3749,12 @@ function CurrentWorkBlocksPanel({
         confirmDisabled={importDisabled}
         onClose={closeDraftBlockImportDialog}
         onConfirm={applyDraftBlockImport}
+      />
+      <DraftBlockImportFormatDialog
+        open={draftImportFormatDialogOpen}
+        onClose={() => setDraftImportFormatDialogOpen(false)}
+        onDownloadSample={downloadDraftBlockImportSample}
+        onPickFile={openDraftImportFilePicker}
       />
     </section>
   );

@@ -475,7 +475,7 @@ select:focus-visible {
   justify-content: end;
 }
 
-.current-work-sample-action,
+.current-work-format-action,
 .current-work-import-action,
 .current-work-demo-action,
 .current-work-reset-action {
@@ -1210,7 +1210,7 @@ select:focus-visible {
 
 .block-detail-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(260px, 1.4fr) minmax(140px, 0.75fr) minmax(150px, auto);
+  grid-template-columns: minmax(120px, 0.8fr) minmax(240px, 1.35fr) minmax(130px, 0.75fr);
   gap: 10px;
   align-items: end;
   min-width: 0;
@@ -1269,13 +1269,19 @@ select:focus-visible {
 }
 
 .draft-block-volume-tile {
-  min-width: 140px;
+  min-width: 130px;
   align-self: stretch;
 }
 
 .draft-block-volume-tile strong {
   white-space: normal;
   line-height: 1.2;
+}
+
+.draft-block-remove-action {
+  grid-column: 1 / -1;
+  min-height: 48px;
+  justify-content: center;
 }
 
 .checkbox-line {
@@ -3520,7 +3526,7 @@ select:focus-visible {
     justify-content: stretch;
   }
 
-  .current-work-sample-action,
+  .current-work-format-action,
   .current-work-import-action,
   .current-work-demo-action,
   .current-work-reset-action {
