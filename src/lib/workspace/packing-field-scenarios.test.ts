@@ -74,6 +74,24 @@ describe("packing-field-scenarios", () => {
     assert.ok(audit.totalElapsedMs < scenarioBudgetMs * scenarios.length);
     assert.ok(audit.totalPackedBlockCount >= 40);
   });
+
+  it("현장 audit는 V2 부분 지지와 추가 박스 시뮬레이션 안전 검증을 포함한다", () => {
+    // Given
+    const scenarios = createFieldPackingScenarios();
+
+    // When
+    const audit = runFieldPackingScenarioPerformanceAudit(scenarios, runPackingEngineV0);
+
+    // Then
+    assert.deepEqual(
+      audit.featureCheckResults.map((result) => [result.name, result.isSafe, result.isExpected]),
+      [
+        ["부분 지지 허용 55% 현장 검증", true, true],
+        ["추가 박스 시뮬레이션 현장 검증", true, true]
+      ]
+    );
+    assert.deepEqual(audit.failedFeatureCheckNames, []);
+  });
 });
 
 function createFakeClock(values: number[]) {

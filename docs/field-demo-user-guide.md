@@ -189,9 +189,9 @@ Get-ExecutionPolicy -List
 npm run field:audit
 ```
 
-`Package Tetris 현장 audit 통과`가 보이면 시연용 preset 기준 계산은 통과한 것이다.
+`Package Tetris 현장 audit 통과`가 보이면 시연용 preset 기준 계산과 V2 핵심 기능 검증이 통과한 것이다. 기능 검증에는 `부분 지지 허용 55% 현장 검증`과 `추가 박스 시뮬레이션 현장 검증`이 포함된다.
 
-`Package Tetris 현장 audit 확인 필요`가 보이면 표시된 시나리오 이름을 개발 담당자에게 전달하고, 해당 PC에서 바로 시연하지 않는다.
+`Package Tetris 현장 audit 확인 필요`가 보이면 표시된 시나리오 또는 기능 검증 이름을 개발 담당자에게 전달하고, 해당 PC에서 바로 시연하지 않는다.
 
 시연 전 최종 확인을 한 번에 끝내려면 아래 명령어를 실행한다.
 

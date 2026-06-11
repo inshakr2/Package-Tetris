@@ -1,7 +1,16 @@
 import type { OptimizationInput, OptimizationOutput } from "./engine-contract";
+import { runMultiChainSimulationV0 } from "./multi-chain-simulation";
 import { validatePackedSpace } from "./packed-result-validation";
 import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "./presets";
-import type { BlockDefinition, SpaceDefinition } from "./types";
+import {
+  DEFAULT_MINIMUM_SUPPORT_RATIO,
+  PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
+  type BlockDefinition,
+  type BlockTemplate,
+  type PackedBlock,
+  type ResultSummary,
+  type SpaceDefinition
+} from "./types";
 
 export interface FieldPackingScenario {
   name: string;
@@ -13,6 +22,13 @@ export interface FieldPackingScenarioAudit {
   totalPackedBlockCount: number;
   totalUsedSpaceCount: number;
   failedScenarioNames: string[];
+}
+
+export interface FieldFeatureCheckResult {
+  name: string;
+  detail: string;
+  isSafe: boolean;
+  isExpected: boolean;
 }
 
 export interface FieldPackingScenarioPerformanceResult {
@@ -29,6 +45,8 @@ export interface FieldPackingScenarioPerformanceAudit extends FieldPackingScenar
   totalElapsedMs: number;
   slowScenarioNames: string[];
   scenarioResults: FieldPackingScenarioPerformanceResult[];
+  failedFeatureCheckNames: string[];
+  featureCheckResults: FieldFeatureCheckResult[];
 }
 
 interface FieldPackingPerformanceAuditOptions {
@@ -107,6 +125,10 @@ export function runFieldPackingScenarioPerformanceAudit(
   const slowScenarioNames = scenarioResults
     .filter((result) => !result.isWithinBudget)
     .map((result) => result.name);
+  const featureCheckResults = runFieldFeatureChecks(runPackingEngine);
+  const failedFeatureCheckNames = featureCheckResults
+    .filter((result) => !result.isSafe || !result.isExpected)
+    .map((result) => result.name);
 
   const totalPackedBlockCount = scenarioResults.reduce((sum, result) => sum + result.packedBlockCount, 0);
   const totalUsedSpaceCount = scenarioResults.reduce((sum, result) => sum + result.usedSpaceCount, 0);
@@ -119,7 +141,125 @@ export function runFieldPackingScenarioPerformanceAudit(
     totalElapsedMs,
     failedScenarioNames,
     slowScenarioNames,
-    scenarioResults
+    scenarioResults,
+    failedFeatureCheckNames,
+    featureCheckResults
+  };
+}
+
+function runFieldFeatureChecks(runPackingEngine: PackingEngineRunner): FieldFeatureCheckResult[] {
+  return [
+    runPartialSupportFeatureCheck(runPackingEngine),
+    runAdditionalSimulationFeatureCheck()
+  ];
+}
+
+function runPartialSupportFeatureCheck(runPackingEngine: PackingEngineRunner): FieldFeatureCheckResult {
+  const space = createFeatureCheckSpace("field-partial-support-space", "부분 지지 검증 공간");
+  const supportBlock = {
+    ...createBlock(
+      "field-partial-support-base",
+      "55% 받침 기준 박스",
+      { widthMm: 600, depthMm: 1000, heightMm: 500 },
+      1
+    ),
+    loadPriority: 10
+  };
+  const topBlock = createBlock(
+    "field-partial-support-top",
+    "부분 지지 상단 박스",
+    { widthMm: 1000, depthMm: 1000, heightMm: 500 },
+    1
+  );
+  const offOutput = runPackingEngine({
+    runId: "field-partial-support-off",
+    space,
+    blocks: [supportBlock, topBlock],
+    policy: createFeaturePolicy(false)
+  });
+  const onOutput = runPackingEngine({
+    runId: "field-partial-support-on",
+    space,
+    blocks: [supportBlock, topBlock],
+    policy: createFeaturePolicy(true)
+  });
+  const usableSize = calculateUsableSize(space);
+  const onPolicy = createValidationPolicy(true);
+  const topPackedBlock = onOutput.spaces
+    .flatMap((packedSpace) => packedSpace.blocks)
+    .find((block) => block.blockTemplateId === topBlock.blockTemplateId);
+  const isSafe =
+    onOutput.spaces.length > 0 &&
+    onOutput.spaces.every((packedSpace) => validatePackedSpace(packedSpace, usableSize, onPolicy).isValid);
+  const isExpected =
+    offOutput.usedSpaceCount > onOutput.usedSpaceCount &&
+    onOutput.usedSpaceCount === 1 &&
+    onOutput.unloadedBlockCount === 0 &&
+    topPackedBlock?.zMm === 500;
+
+  return {
+    name: "부분 지지 허용 55% 현장 검증",
+    detail: `OFF ${offOutput.usedSpaceCount}공간, ON ${onOutput.usedSpaceCount}공간`,
+    isSafe,
+    isExpected
+  };
+}
+
+function runAdditionalSimulationFeatureCheck(): FieldFeatureCheckResult {
+  const space = createFeatureCheckSpace("field-additional-simulation-space", "추가 시뮬레이션 검증 공간");
+  const baseBlock = createPackedBlock("field-chain-base", "부분 지지 받침 박스", {
+    widthMm: 600,
+    depthMm: 1000,
+    heightMm: 500
+  });
+  const result: ResultSummary = {
+    resultId: "field-chain-result",
+    runId: "field-chain-base-run",
+    createdAt: TIMESTAMP,
+    spaceSnapshot: space,
+    usedSpaceCount: 1,
+    averageUtilizationRate: 0.3,
+    unloadedBlockCount: 0,
+    spaces: [
+      {
+        spaceInstanceId: "field-chain-space-1",
+        utilizationRate: 0.3,
+        blocks: [baseBlock]
+      }
+    ],
+    warnings: []
+  };
+  const additionalTemplate = createBlockTemplate(
+    "field-chain-top",
+    "부분 지지 추가 박스",
+    { widthMm: 1000, depthMm: 1000, heightMm: 500 }
+  );
+  const output = runMultiChainSimulationV0({
+    result,
+    blockTemplates: [additionalTemplate],
+    runId: "field-chain-partial-support",
+    policy: createValidationPolicy(true)
+  });
+  const recommended = output.variants.find((variant) => variant.mode === "recommended");
+  const usableSize = calculateUsableSize(space);
+  const onPolicy = createValidationPolicy(true);
+  const isSafe =
+    !!recommended &&
+    recommended.spaces.length > 0 &&
+    recommended.spaces.every((packedSpace) => validatePackedSpace(packedSpace, usableSize, onPolicy).isValid);
+  const addedBlock = recommended?.spaces
+    .flatMap((packedSpace) => packedSpace.blocks)
+    .find((block) => block.blockTemplateId === additionalTemplate.blockTemplateId);
+  const isExpected =
+    output.warnings.length === 0 &&
+    recommended?.totalAddedQuantity === 1 &&
+    addedBlock?.zMm === 500;
+
+  return {
+    name: "추가 박스 시뮬레이션 현장 검증",
+    detail: `추가 ${recommended?.totalAddedQuantity ?? 0}개, variant ${output.variants.length}개`,
+    isSafe,
+    isExpected
   };
 }
 
@@ -206,6 +346,78 @@ function createBlock(
     dimensions,
     quantity,
     fragile,
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP
+  };
+}
+
+function createFeatureCheckSpace(spaceId: string, name: string): SpaceDefinition {
+  return {
+    spaceId,
+    entityVersion: 1,
+    name,
+    type: "custom",
+    dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 1000 },
+    offset: { widthMm: 0, depthMm: 0, heightMm: 0 },
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP
+  };
+}
+
+function createFeaturePolicy(partialSupportEnabled: boolean): OptimizationInput["policy"] {
+  return {
+    fragileStackOnFragileAllowed: true,
+    nonFragileOnFragileAllowed: false,
+    rotation: "orthogonal-90deg",
+    partialSupportEnabled,
+    minimumSupportRatio: partialSupportEnabled
+      ? PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO
+      : DEFAULT_MINIMUM_SUPPORT_RATIO
+  };
+}
+
+function createValidationPolicy(partialSupportEnabled: boolean) {
+  return {
+    fragileStackOnFragileAllowed: true,
+    nonFragileOnFragileAllowed: false,
+    partialSupportEnabled,
+    minimumSupportRatio: partialSupportEnabled
+      ? PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO
+      : DEFAULT_MINIMUM_SUPPORT_RATIO
+  };
+}
+
+function createPackedBlock(
+  blockId: string,
+  name: string,
+  dimensions: { widthMm: number; depthMm: number; heightMm: number }
+): PackedBlock {
+  return {
+    blockId,
+    blockTemplateId: `template-${blockId}`,
+    name,
+    fragile: false,
+    xMm: 0,
+    yMm: 0,
+    zMm: 0,
+    widthMm: dimensions.widthMm,
+    depthMm: dimensions.depthMm,
+    heightMm: dimensions.heightMm,
+    rotation: "xyz"
+  };
+}
+
+function createBlockTemplate(
+  blockId: string,
+  name: string,
+  dimensions: BlockTemplate["dimensions"]
+): BlockTemplate {
+  return {
+    blockTemplateId: `template-${blockId}`,
+    entityVersion: 1,
+    name,
+    dimensions,
+    fragile: false,
     createdAt: TIMESTAMP,
     updatedAt: TIMESTAMP
   };

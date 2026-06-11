@@ -31,6 +31,8 @@ describe("development deliverables document", () => {
     assert.match(document, /부분 지지 허용/);
     assert.match(document, /\.xlsx 일괄등록/);
     assert.match(document, /선택 순서 기반 우선순위/);
+    assert.match(document, /부분 지지 허용 55% 현장 검증/);
+    assert.match(document, /추가 박스 시뮬레이션 현장 검증/);
     assert.match(document, /npm run v1:verify/);
     assert.match(document, /npm run v2:verify/);
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);

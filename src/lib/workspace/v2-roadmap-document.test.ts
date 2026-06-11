@@ -58,4 +58,14 @@ describe("v2 roadmap document", () => {
     assert.match(roadmap, /없는 박스명은 오류 행으로 안내/);
     assert.doesNotMatch(roadmap, /저장 박스에 없는 현재 작업 import 행은 저장 박스 템플릿을 만들고 바로 현재 작업에 추가한다/);
   });
+
+  it("V2 검증 기준은 field audit의 부분 지지와 추가 시뮬레이션 기능 검증을 안내한다", () => {
+    // Given
+    const roadmap = readFileSync(ROADMAP_PATH, "utf8");
+
+    // When / Then
+    assert.match(roadmap, /현장형 preset 대량 적재 3개 시나리오/);
+    assert.match(roadmap, /`부분 지지 허용 55% 현장 검증`/);
+    assert.match(roadmap, /`추가 박스 시뮬레이션 현장 검증`/);
+  });
 });

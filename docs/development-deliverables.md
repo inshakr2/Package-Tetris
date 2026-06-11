@@ -150,7 +150,7 @@ npm run v2:verify
 
 - `npm test`: Node test runner 기반 단위/문서/레이아웃 테스트
 - `npx tsc --noEmit`: TypeScript 타입 검사
-- `npm run field:audit`: 현장형 preset 대량 적재 audit
+- `npm run field:audit`: 현장형 preset 대량 적재 audit와 V2 핵심 기능 검증
 - `npm run build`: Next.js production build
 
 현장 audit 스크립트:
@@ -159,6 +159,8 @@ npm run v2:verify
 - 팔레트 기본 대량 혼합 박스
 - 20ft GP 장척 박스 혼합
 - 2.5톤반 낮은 짐칸 혼합
+- 부분 지지 허용 55% 현장 검증
+- 추가 박스 시뮬레이션 현장 검증
 
 UI 변경 시 추가 확인:
 

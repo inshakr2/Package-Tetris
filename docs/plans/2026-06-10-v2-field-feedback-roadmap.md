@@ -531,6 +531,12 @@ npm run field:audit
 npm run build
 ```
 
+`npm run field:audit` includes:
+
+- 현장형 preset 대량 적재 3개 시나리오
+- `부분 지지 허용 55% 현장 검증`
+- `추가 박스 시뮬레이션 현장 검증`
+
 UI phases must additionally verify:
 
 - 360px mobile

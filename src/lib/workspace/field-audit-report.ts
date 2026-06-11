@@ -7,7 +7,10 @@ export interface FieldAuditReport {
 }
 
 export function createFieldAuditReport(audit: FieldPackingScenarioPerformanceAudit): FieldAuditReport {
-  const hasFailure = audit.failedScenarioNames.length > 0 || audit.slowScenarioNames.length > 0;
+  const hasFailure =
+    audit.failedScenarioNames.length > 0 ||
+    audit.slowScenarioNames.length > 0 ||
+    audit.failedFeatureCheckNames.length > 0;
   const lines = [
     hasFailure ? "Package Tetris 현장 audit 확인 필요" : "Package Tetris 현장 audit 통과",
     "",
@@ -24,12 +27,24 @@ export function createFieldAuditReport(audit: FieldPackingScenarioPerformanceAud
     );
   });
 
+  if (audit.featureCheckResults.length > 0) {
+    lines.push(`- 기능 검증 ${audit.featureCheckResults.length}개`);
+    audit.featureCheckResults.forEach((result) => {
+      const status = result.isSafe && result.isExpected ? "통과" : "확인";
+      lines.push(`- ${result.name}: ${status}, ${result.detail}`);
+    });
+  }
+
   if (audit.failedScenarioNames.length > 0) {
     lines.push(`- 안전 확인 필요: ${audit.failedScenarioNames.join(", ")}`);
   }
 
   if (audit.slowScenarioNames.length > 0) {
     lines.push(`- 계산 지연: ${audit.slowScenarioNames.join(", ")}`);
+  }
+
+  if (audit.failedFeatureCheckNames.length > 0) {
+    lines.push(`- 기능 확인 필요: ${audit.failedFeatureCheckNames.join(", ")}`);
   }
 
   return {
