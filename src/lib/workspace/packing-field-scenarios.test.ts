@@ -87,7 +87,8 @@ describe("packing-field-scenarios", () => {
       audit.featureCheckResults.map((result) => [result.name, result.isSafe, result.isExpected]),
       [
         ["부분 지지 허용 55% 현장 검증", true, true],
-        ["추가 박스 시뮬레이션 현장 검증", true, true]
+        ["추가 박스 시뮬레이션 현장 검증", true, true],
+        ["현장 피드백 추가 적재 시뮬레이션 검증", true, true]
       ]
     );
     assert.deepEqual(audit.failedFeatureCheckNames, []);

@@ -150,7 +150,8 @@ export function runFieldPackingScenarioPerformanceAudit(
 function runFieldFeatureChecks(runPackingEngine: PackingEngineRunner): FieldFeatureCheckResult[] {
   return [
     runPartialSupportFeatureCheck(runPackingEngine),
-    runAdditionalSimulationFeatureCheck()
+    runAdditionalSimulationFeatureCheck(),
+    runFieldFeedbackAdditionalSimulationFeatureCheck(runPackingEngine)
   ];
 }
 
@@ -258,6 +259,87 @@ function runAdditionalSimulationFeatureCheck(): FieldFeatureCheckResult {
   return {
     name: "추가 박스 시뮬레이션 현장 검증",
     detail: `추가 ${recommended?.totalAddedQuantity ?? 0}개, variant ${output.variants.length}개`,
+    isSafe,
+    isExpected
+  };
+}
+
+function runFieldFeedbackAdditionalSimulationFeatureCheck(
+  runPackingEngine: PackingEngineRunner
+): FieldFeatureCheckResult {
+  const space = findPresetSpace(DEFAULT_PALLET_SPACE_ID);
+  const policy = createValidationPolicy(false);
+  const baseOutput = runPackingEngine({
+    runId: "field-feedback-base-pallet",
+    space,
+    blocks: [
+      createBlock("field-feedback-small", "소형 박스", { widthMm: 200, depthMm: 150, heightMm: 200 }, 60),
+      createBlock("field-feedback-large", "대형 박스", { widthMm: 1000, depthMm: 800, heightMm: 400 }, 5),
+      createBlock("field-feedback-long", "장척 박스", { widthMm: 965, depthMm: 300, heightMm: 200 }, 10),
+      createBlock("field-feedback-mid", "중형 박스", { widthMm: 600, depthMm: 250, heightMm: 150 }, 10)
+    ],
+    policy: createFeaturePolicy(false)
+  });
+  const result: ResultSummary = {
+    resultId: "field-feedback-result",
+    runId: baseOutput.runId,
+    createdAt: TIMESTAMP,
+    spaceSnapshot: space,
+    usedSpaceCount: baseOutput.usedSpaceCount,
+    averageUtilizationRate: baseOutput.averageUtilizationRate,
+    unloadedBlockCount: baseOutput.unloadedBlockCount,
+    spaces: baseOutput.spaces,
+    warnings: baseOutput.warnings
+  };
+  const largeTemplate = createBlockTemplate(
+    "field-feedback-chain-large",
+    "대형 추가 박스",
+    { widthMm: 1000, depthMm: 800, heightMm: 400 }
+  );
+  const longTemplate = createBlockTemplate(
+    "field-feedback-chain-long",
+    "장척 추가 박스",
+    { widthMm: 965, depthMm: 300, heightMm: 200 }
+  );
+  const midTemplate = createBlockTemplate(
+    "field-feedback-chain-mid",
+    "중형 추가 박스",
+    { widthMm: 600, depthMm: 250, heightMm: 150 }
+  );
+  const output = runMultiChainSimulationV0({
+    result,
+    blockTemplates: [largeTemplate, longTemplate, midTemplate],
+    runId: "field-feedback-chain",
+    policy,
+    requestedQuantitiesByTemplateId: {
+      [largeTemplate.blockTemplateId]: 6
+    },
+    priorityByTemplateId: {
+      [largeTemplate.blockTemplateId]: 3,
+      [longTemplate.blockTemplateId]: 2,
+      [midTemplate.blockTemplateId]: 1
+    }
+  });
+  const customPriority = output.variants.find((variant) => variant.mode === "custom-priority");
+  const addedQuantityByTemplateId = new Map(
+    customPriority?.addedQuantities.map((item) => [item.blockTemplateId, item.addedQuantity]) ?? []
+  );
+  const usableSize = calculateUsableSize(space);
+  const isSafe =
+    !!customPriority &&
+    customPriority.spaces.length === baseOutput.usedSpaceCount &&
+    customPriority.spaces.every((packedSpace) => validatePackedSpace(packedSpace, usableSize, policy).isValid);
+  const isExpected =
+    baseOutput.usedSpaceCount === 3 &&
+    baseOutput.unloadedBlockCount === 0 &&
+    (customPriority?.remainingVolumeM3 ?? Number.POSITIVE_INFINITY) <= 1.084 &&
+    (addedQuantityByTemplateId.get(largeTemplate.blockTemplateId) ?? 0) >= 2 &&
+    (addedQuantityByTemplateId.get(longTemplate.blockTemplateId) ?? 0) > 0 &&
+    (addedQuantityByTemplateId.get(midTemplate.blockTemplateId) ?? 0) > 0;
+
+  return {
+    name: "현장 피드백 추가 적재 시뮬레이션 검증",
+    detail: `기준 ${baseOutput.usedSpaceCount}공간, 추가 ${customPriority?.totalAddedQuantity ?? 0}개, 남은 부피 ${customPriority?.remainingVolumeM3 ?? 0}m3`,
     isSafe,
     isExpected
   };
