@@ -22,7 +22,7 @@ describe("chain-comparison-view-layout", () => {
       source.includes("원본 보기") &&
       source.includes("추가 결과 보기") &&
       source.includes("미리보기 취소") &&
-      source.includes("onClick={clearChainSelection}") &&
+      source.includes("onClick={cancelChainPreview}") &&
       source.includes('aria-pressed={chainComparisonMode === "original"}') &&
       source.includes('aria-pressed={chainComparisonMode === "preview"}');
 

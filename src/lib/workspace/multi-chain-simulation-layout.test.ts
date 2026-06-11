@@ -303,6 +303,27 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasApplyGuidanceContract, true);
   });
 
+  it("추가 결과 미리보기 취소는 선택 조건을 유지하고 추가 시뮬레이션 액션 영역에서도 제공한다", () => {
+    // Given
+    const cancelHandler = workspaceSource.match(/function\s+cancelChainPreview\(\)\s*{[\s\S]*?}\n/)?.[0] ?? "";
+    const passesCancelAction = workspaceSource.includes("onCancelPreview={cancelChainPreview}");
+    const hasPanelCancelAction =
+      /<button\s+className="secondary-button chain-preview-cancel-action"[\s\S]*?onClick={onCancelPreview}[\s\S]*?미리보기 취소[\s\S]*?<\/button>/.test(
+        workspaceSource
+      );
+    const keepsSelectionAndConditions =
+      cancelHandler.includes("clearChainPreviewState();") &&
+      cancelHandler.includes('setChainStatus("idle");') &&
+      cancelHandler.includes("추가 결과 미리보기를 취소했습니다. 선택한 박스와 조건은 유지됩니다.") &&
+      !/setSelectedChainTemplateIds\(\[\]\)|setChainRequestedQuantitiesByTemplateId\(\{\}\)/.test(cancelHandler);
+
+    // When
+    const hasAccessibleCancelContract = passesCancelAction && hasPanelCancelAction && keepsSelectionAndConditions;
+
+    // Then
+    assert.equal(hasAccessibleCancelContract, true);
+  });
+
   it("다중 선택과 variant 영역은 태블릿/모바일에서 한 컬럼으로 접히고 버튼 터치 타깃을 유지한다", () => {
     // Given
     const hasSelectionSummary =

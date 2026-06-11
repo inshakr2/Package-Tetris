@@ -4702,6 +4702,12 @@ const ResultStage = ({
     setChainStatusMessage("추가 결과를 반영했습니다.");
   }
 
+  function cancelChainPreview() {
+    clearChainPreviewState();
+    setChainStatus("idle");
+    setChainStatusMessage("추가 결과 미리보기를 취소했습니다. 선택한 박스와 조건은 유지됩니다.");
+  }
+
   function clearChainSelection() {
     setSelectedChainTemplateIds([]);
     setChainRequestedQuantitiesByTemplateId({});
@@ -4991,7 +4997,7 @@ const ResultStage = ({
                     >
                       원본 보기
                     </button>
-                    <button className="secondary-button chain-preview-cancel-action" onClick={clearChainSelection}>
+                    <button className="secondary-button chain-preview-cancel-action" onClick={cancelChainPreview}>
                       미리보기 취소
                     </button>
                   </div>
@@ -5238,6 +5244,7 @@ const ResultStage = ({
         onReorderSelectedTemplate={reorderSelectedChainTemplate}
         onMoveSelectedTemplate={moveSelectedChainTemplate}
         onConfirm={confirmChainPreview}
+        onCancelPreview={cancelChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
         onUndo={() => {
@@ -5858,6 +5865,7 @@ function ChainSimulationPanel({
   onReorderSelectedTemplate,
   onMoveSelectedTemplate,
   onConfirm,
+  onCancelPreview,
   onCreateResult,
   onClearSelection,
   onUndo
@@ -5894,6 +5902,7 @@ function ChainSimulationPanel({
   onReorderSelectedTemplate: (sourceTemplateId: string, targetTemplateId: string) => void;
   onMoveSelectedTemplate: (blockTemplateId: string, direction: -1 | 1) => void;
   onConfirm: () => void;
+  onCancelPreview: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
   onUndo: () => void;
@@ -6297,6 +6306,11 @@ function ChainSimulationPanel({
               <button className="primary-button" onClick={onConfirm} disabled={!canConfirm}>
                 이 결과 반영
               </button>
+              {canConfirm ? (
+                <button className="secondary-button chain-preview-cancel-action" onClick={onCancelPreview}>
+                  미리보기 취소
+                </button>
+              ) : null}
               {chainStatus === "error" ? (
                 <button className="secondary-button" onClick={onCreateResult} disabled={resultCreating}>
                   {resultCreating ? resultCalculationProgress.buttonLabel : "결과 다시 생성"}
