@@ -183,6 +183,8 @@ describe("block-library-search-layout", () => {
       source.includes("function BlockTemplateImportFormatDialog") &&
       source.includes('id="block-template-import-format-dialog"') &&
       source.includes("엑셀 박스 일괄등록 포맷") &&
+      source.includes("샘플 파일 다운로드") &&
+      source.includes("createBlockTemplateImportSampleWorkbook") &&
       source.includes("BLOCK_TEMPLATE_XLSX_COLUMNS.join") &&
       source.includes("BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS");
     const hasAutomationCopy =

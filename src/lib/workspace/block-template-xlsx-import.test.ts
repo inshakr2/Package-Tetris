@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   BLOCK_TEMPLATE_XLSX_COLUMNS,
+  BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS,
+  createBlockTemplateImportSampleWorkbook,
   createBlockTemplateImportPreview,
   isSupportedBlockTemplateImportFile
 } from "./block-template-xlsx-import";
+import { readSheet } from "read-excel-file/node";
 
 describe("block-template-xlsx-import", () => {
   it("정해진 컬럼의 첫 번째 sheet 행을 저장 전 미리보기 후보로 변환한다", () => {
@@ -106,5 +109,25 @@ describe("block-template-xlsx-import", () => {
     assert.equal(isSupportedBlockTemplateImportFile(xlsxFile), true);
     assert.equal(isSupportedBlockTemplateImportFile(oldExcelFile), false);
     assert.equal(isSupportedBlockTemplateImportFile(disguisedFile), false);
+  });
+
+  it("현장 사용자가 내려받는 샘플 .xlsx는 일괄등록 미리보기에서 그대로 읽힌다", async () => {
+    // Given
+    const sample = createBlockTemplateImportSampleWorkbook();
+
+    // When
+    const sheetRows = await readSheet(Buffer.from(sample.bytes));
+    const preview = createBlockTemplateImportPreview(sheetRows);
+
+    // Then
+    assert.equal(sample.fileName, "package-tetris-box-import-sample.xlsx");
+    assert.equal(sample.mimeType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    assert.deepEqual(sheetRows[0], Array.from(BLOCK_TEMPLATE_XLSX_COLUMNS));
+    assert.deepEqual(
+      sheetRows.slice(1).map((row) => row.map((cell) => cell ?? "")),
+      BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => Array.from(row))
+    );
+    assert.equal(preview.canImport, true);
+    assert.equal(preview.rows.length, BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.length);
   });
 });

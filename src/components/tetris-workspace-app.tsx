@@ -74,7 +74,9 @@ import {
   updateDraftBlockItemQuantity
 } from "@/lib/workspace/block-library";
 import {
+  BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS,
   BLOCK_TEMPLATE_XLSX_COLUMNS,
+  createBlockTemplateImportSampleWorkbook,
   readBlockTemplateXlsxFile,
   type BlockTemplateImportCandidate,
   type BlockTemplateImportPreview
@@ -289,11 +291,6 @@ const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
   { name: "높이mm", requirement: "필수", description: "1 이상의 정수만 입력합니다." },
   { name: "무게kg", requirement: "선택", description: "소수 입력이 가능하며 비워둘 수 있습니다." },
   { name: "깨짐주의", requirement: "선택", description: "예/아니오, Y/N, true/false 형식을 사용할 수 있습니다." }
-] as const;
-
-const BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS = [
-  ["금영", "스피커", "KMS-210 스피커 박스", "420", "360", "520", "18.5", "아니오"],
-  ["엔터그레인", "앰프", "EG-AMP 조합 박스", "500", "410", "220", "", "예"]
 ] as const;
 
 const Result3DCanvas = dynamic(
@@ -2120,6 +2117,21 @@ function BlockLibraryPanel({
     }, 0);
   };
 
+  const downloadBlockImportSample = () => {
+    const sample = createBlockTemplateImportSampleWorkbook();
+    const blob = new Blob([sample.bytes], { type: sample.mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = sample.fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setBlockImportNotice("샘플 파일을 다운로드했습니다. 값을 바꾼 뒤 엑셀로 박스 일괄등록을 진행하세요.");
+  };
+
   return (
     <section className="rail-section block-template-library">
       <h3>저장된 박스</h3>
@@ -2189,6 +2201,7 @@ function BlockLibraryPanel({
       <BlockTemplateImportFormatDialog
         open={blockImportFormatDialogOpen}
         onClose={() => setBlockImportFormatDialogOpen(false)}
+        onDownloadSample={downloadBlockImportSample}
         onPickFile={openBlockImportFilePicker}
       />
     </section>
@@ -2546,10 +2559,12 @@ function BlockTemplateImportDialog({
 function BlockTemplateImportFormatDialog({
   open,
   onClose,
+  onDownloadSample,
   onPickFile
 }: {
   open: boolean;
   onClose: () => void;
+  onDownloadSample: () => void;
   onPickFile: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -2659,6 +2674,14 @@ function BlockTemplateImportFormatDialog({
           <div className="block-template-import-actions">
             <button className="secondary-button" onClick={onClose}>
               닫기
+            </button>
+            <button
+              className="secondary-button"
+              onClick={onDownloadSample}
+              aria-label="박스 일괄등록 샘플 파일 다운로드"
+            >
+              <Download size={16} />
+              샘플 파일 다운로드
             </button>
             <button className="primary-button" onClick={onPickFile}>
               이 포맷으로 파일 선택
