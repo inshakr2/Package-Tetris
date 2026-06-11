@@ -75,6 +75,10 @@ describe("result-freshness", () => {
       ...baseInput,
       blocks: [createBlock({ quantity: 4 })]
     });
+    const priorityChanged = createResultInputFingerprint({
+      ...baseInput,
+      blocks: [createBlock({ loadPriority: 5 })]
+    });
     const spaceChanged = createResultInputFingerprint({
       ...baseInput,
       selectedSpace: createSpace({ offset: { widthMm: 50, depthMm: 20, heightMm: 50 } })
@@ -83,11 +87,38 @@ describe("result-freshness", () => {
       ...baseInput,
       fragileStackOnFragileAllowed: false
     });
+    const partialSupportPolicyChanged = createResultInputFingerprint({
+      ...baseInput,
+      partialSupportEnabled: true,
+      minimumSupportRatio: 0.55
+    });
 
     // Then
     assert.notEqual(baseFingerprint, quantityChanged);
+    assert.notEqual(baseFingerprint, priorityChanged);
     assert.notEqual(baseFingerprint, spaceChanged);
     assert.notEqual(baseFingerprint, policyChanged);
+    assert.notEqual(baseFingerprint, partialSupportPolicyChanged);
+  });
+
+  it("부분 지지 최소 비율이 비어 있으면 기본 55% 정책과 같은 fingerprint를 만든다", () => {
+    // Given
+    const baseInput = {
+      selectedSpace: createSpace(),
+      blocks: [createBlock()],
+      fragileStackOnFragileAllowed: true,
+      partialSupportEnabled: true
+    };
+
+    // When
+    const missingMinimumRatio = createResultInputFingerprint(baseInput);
+    const defaultMinimumRatio = createResultInputFingerprint({
+      ...baseInput,
+      minimumSupportRatio: 0.55
+    });
+
+    // Then
+    assert.equal(missingMinimumRatio, defaultMinimumRatio);
   });
 
   it("기존 결과에 fingerprint가 없으면 경고 없이 판정 보류 상태를 반환한다", () => {

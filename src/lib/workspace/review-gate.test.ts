@@ -147,6 +147,28 @@ describe("review-gate", () => {
     assert.equal(optimizationInput?.policy.nonFragileOnFragileAllowed, false);
   });
 
+  it("부분 지지 허용 정책을 엔진 입력에 포함한다", () => {
+    // Given
+    const selectedSpace = createSpace();
+    const blocks = [createBlock()];
+
+    // When
+    const review = reviewExecutionReadiness({
+      selectedSpace,
+      blocks,
+      fragileStackOnFragileAllowed: true,
+      partialSupportEnabled: true,
+      minimumSupportRatio: 0.55
+    });
+    const optimizationInput = createOptimizationInput(review, "run-partial-support");
+
+    // Then
+    assert.equal(review.status, "valid");
+    assert.ok(optimizationInput);
+    assert.equal(optimizationInput?.policy.partialSupportEnabled, true);
+    assert.equal(optimizationInput?.policy.minimumSupportRatio, 0.55);
+  });
+
   it("어떤 직교 회전으로도 공간에 들어가지 않는 블록이 있으면 error를 반환한다", () => {
     // Given
     const selectedSpace = createSpace({

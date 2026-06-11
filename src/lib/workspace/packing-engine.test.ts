@@ -224,6 +224,64 @@ describe("packing-engine v0", () => {
     assertStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space));
   });
 
+  it("부분 지지 허용 OFF에서는 55% 이상 받침면이어도 새 공간을 사용한다", () => {
+    // Given
+    const input = createPartialSupportInput({
+      partialSupportEnabled: false,
+      minimumSupportRatio: 1
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+
+    // Then
+    assert.equal(output.usedSpaceCount, 2);
+    assert.equal(output.unloadedBlockCount, 0);
+    output.spaces.forEach((space) => {
+      assertStablePackedBlocks(space.blocks, calculateUsableSize(input.space));
+    });
+  });
+
+  it("부분 지지 허용 ON에서는 받침면이 55% 이상이면 같은 공간에 배치한다", () => {
+    // Given
+    const input = createPartialSupportInput({
+      partialSupportEnabled: true,
+      minimumSupportRatio: 0.55
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+    const firstSpace = output.spaces[0];
+
+    // Then
+    assert.equal(output.usedSpaceCount, 1);
+    assert.equal(output.unloadedBlockCount, 0);
+    assert.ok(firstSpace);
+    assert.deepEqual(
+      firstSpace?.blocks.map((block) => ({
+        blockTemplateId: block.blockTemplateId,
+        xMm: block.xMm,
+        yMm: block.yMm,
+        zMm: block.zMm
+      })),
+      [
+        {
+          blockTemplateId: "template-support",
+          xMm: 0,
+          yMm: 0,
+          zMm: 0
+        },
+        {
+          blockTemplateId: "template-top",
+          xMm: 0,
+          yMm: 0,
+          zMm: 500
+        }
+      ]
+    );
+    assertPartiallyStablePackedBlocks(firstSpace?.blocks ?? [], calculateUsableSize(input.space), 0.55);
+  });
+
   it("90도 직교 회전을 적용해 들어갈 수 있는 방향을 선택한다", () => {
     // Given
     const input = createInput({
@@ -481,6 +539,39 @@ describe("packing-engine v0", () => {
   });
 });
 
+function createPartialSupportInput(
+  policyOverrides: Partial<OptimizationInput["policy"]> = {}
+): OptimizationInput {
+  return createInput({
+    blocks: [
+      {
+        ...createInput().blocks[0],
+        blockId: "block-support",
+        blockTemplateId: "template-support",
+        draftBlockItemId: "item-support",
+        name: "받침 박스",
+        dimensions: { widthMm: 600, depthMm: 1000, heightMm: 500 },
+        quantity: 1,
+        loadPriority: 10
+      },
+      {
+        ...createInput().blocks[0],
+        blockId: "block-top",
+        blockTemplateId: "template-top",
+        draftBlockItemId: "item-top",
+        name: "상단 박스",
+        dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 500 },
+        quantity: 1,
+        loadPriority: 1
+      }
+    ],
+    policy: {
+      ...createInput().policy,
+      ...policyOverrides
+    }
+  });
+}
+
 function assertStablePackedBlocks(
   blocks: PackedBlock[],
   bounds: { widthMm: number; depthMm: number; heightMm: number }
@@ -518,6 +609,47 @@ function assertStablePackedBlocks(
       supportedArea,
       block.widthMm * block.depthMm,
       `${block.blockId}는 바닥 또는 하부 박스에 전체 면적이 지지되어야 합니다.`
+    );
+  });
+}
+
+function assertPartiallyStablePackedBlocks(
+  blocks: PackedBlock[],
+  bounds: { widthMm: number; depthMm: number; heightMm: number },
+  minimumSupportRatio: number
+) {
+  blocks.forEach((block) => {
+    assert.ok(block.xMm >= 0);
+    assert.ok(block.yMm >= 0);
+    assert.ok(block.zMm >= 0);
+    assert.ok(block.xMm + block.widthMm <= bounds.widthMm);
+    assert.ok(block.yMm + block.depthMm <= bounds.depthMm);
+    assert.ok(block.zMm + block.heightMm <= bounds.heightMm);
+  });
+
+  blocks.forEach((block, index) => {
+    blocks.slice(index + 1).forEach((other) => {
+      assert.equal(overlaps3d(block, other), false, `${block.blockId}와 ${other.blockId}가 겹치면 안 됩니다.`);
+    });
+
+    if (block.zMm === 0) {
+      return;
+    }
+
+    const supportBlocks = blocks.filter((other) => {
+      return (
+        other.blockId !== block.blockId &&
+        other.zMm + other.heightMm === block.zMm &&
+        rangesOverlap(other.xMm, other.xMm + other.widthMm, block.xMm, block.xMm + block.widthMm) &&
+        rangesOverlap(other.yMm, other.yMm + other.depthMm, block.yMm, block.yMm + block.depthMm)
+      );
+    });
+
+    const supportedArea = supportBlocks.reduce((sum, supportBlock) => sum + intersectionArea2d(supportBlock, block), 0);
+
+    assert.ok(
+      supportedArea >= block.widthMm * block.depthMm * minimumSupportRatio,
+      `${block.blockId}는 바닥 또는 하부 박스에 최소 지지율만큼 지지되어야 합니다.`
     );
   });
 }

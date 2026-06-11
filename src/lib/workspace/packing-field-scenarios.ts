@@ -136,7 +136,9 @@ function runFieldPackingScenarioPerformance(
   const usableSize = calculateUsableSize(scenario.input.space);
   const policy = {
     fragileStackOnFragileAllowed: scenario.input.policy.fragileStackOnFragileAllowed,
-    nonFragileOnFragileAllowed: scenario.input.policy.nonFragileOnFragileAllowed
+    nonFragileOnFragileAllowed: scenario.input.policy.nonFragileOnFragileAllowed,
+    partialSupportEnabled: scenario.input.policy.partialSupportEnabled,
+    minimumSupportRatio: scenario.input.policy.minimumSupportRatio
   };
   const isSafe = output.spaces.every((space) => validatePackedSpace(space, usableSize, policy).isValid);
   const packedBlockCount = output.spaces.reduce((sum, space) => sum + space.blocks.length, 0);

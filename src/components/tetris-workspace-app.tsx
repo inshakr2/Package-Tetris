@@ -651,7 +651,9 @@ export function TetrisWorkspaceApp() {
     ? reviewExecutionReadiness({
         selectedSpace,
         blocks: draftBlocks,
-        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+        partialSupportEnabled: workspace.policy.partialSupportEnabled,
+        minimumSupportRatio: workspace.policy.minimumSupportRatio
       })
     : null;
   const latestResult = workspace?.recentResults[0] ?? null;
@@ -659,7 +661,9 @@ export function TetrisWorkspaceApp() {
     ? createResultInputFingerprint({
         selectedSpace,
         blocks: draftBlocks,
-        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+        fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+        partialSupportEnabled: workspace.policy.partialSupportEnabled,
+        minimumSupportRatio: workspace.policy.minimumSupportRatio
       })
     : null;
   const resultFreshnessState = createResultFreshnessState({
@@ -1205,7 +1209,9 @@ export function TetrisWorkspaceApp() {
           const inputFingerprint = createResultInputFingerprint({
             selectedSpace: optimizationInput.space,
             blocks: optimizationInput.blocks,
-            fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed
+            fragileStackOnFragileAllowed: workspace.policy.fragileStackOnFragileAllowed,
+            partialSupportEnabled: workspace.policy.partialSupportEnabled,
+            minimumSupportRatio: workspace.policy.minimumSupportRatio
           });
           const optimizationOutput = await runPackingEngineInWorker(optimizationInput);
           const resultWarnings = createPackingResultWarnings({
@@ -3538,7 +3544,9 @@ const ResultStage = ({
       const recommendationPolicy = {
         fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
         nonFragileOnFragileAllowed: false,
-        rotation: "orthogonal-90deg"
+        rotation: "orthogonal-90deg",
+        partialSupportEnabled: workspacePolicy.partialSupportEnabled,
+        minimumSupportRatio: workspacePolicy.minimumSupportRatio
       } as const;
 
       setOffsetRecommendation(null);
@@ -3817,7 +3825,9 @@ const ResultStage = ({
           runId: createClientId("chain-run"),
           policy: {
             fragileStackOnFragileAllowed: workspacePolicy.fragileStackOnFragileAllowed,
-            nonFragileOnFragileAllowed: false
+            nonFragileOnFragileAllowed: false,
+            partialSupportEnabled: workspacePolicy.partialSupportEnabled,
+            minimumSupportRatio: workspacePolicy.minimumSupportRatio
           },
           requestedQuantity
         });

@@ -29,7 +29,9 @@ export function runPackingEngineV0(input: OptimizationInput): OptimizationOutput
   const usableVolumeM3 = dimensionsVolumeM3(usableSize);
   const placementPolicy: PlacementPolicy = {
     fragileStackOnFragileAllowed: input.policy.fragileStackOnFragileAllowed,
-    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed
+    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed,
+    partialSupportEnabled: input.policy.partialSupportEnabled,
+    minimumSupportRatio: input.policy.minimumSupportRatio
   };
   const spaces: MutablePackedSpace[] = [];
   const warnings: string[] = [];
