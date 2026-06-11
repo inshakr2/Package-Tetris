@@ -76,4 +76,16 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /먼저 추가 또는 `최우선 추가`/);
     assert.doesNotMatch(document, /지정 우선 결과/);
   });
+
+  it("개발 시연의 오프라인 준비 상태는 자동 새로고침 방지 정책과 구분해서 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /npm run dev[\s\S]*자동 새로고침/);
+    assert.match(document, /서비스워커 등록을 끄므로[\s\S]*지원되지 않음/);
+    assert.match(document, /오류가 아닙니다/);
+    assert.match(document, /정적 빌드|배포|설치형 사용/);
+    assert.match(document, /준비됨/);
+  });
 });

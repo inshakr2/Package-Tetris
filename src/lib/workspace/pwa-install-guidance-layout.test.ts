@@ -42,4 +42,10 @@ describe("pwa-install-guidance-layout", () => {
     assert.match(fieldGuide, /앱 설치|홈 화면 추가/);
     assert.match(fieldGuide, /Chrome|Edge|Safari/);
   });
+
+  it("기획서와 현장 가이드는 개발 모드 서비스워커 비활성화 이유를 안내한다", () => {
+    // Given / When / Then
+    assert.match(planningDoc, /개발 모드[\s\S]*서비스워커[\s\S]*자동 새로고침/);
+    assert.match(fieldGuide, /개발 시연[\s\S]*서비스워커 등록을 끄므로[\s\S]*지원되지 않음/);
+  });
 });

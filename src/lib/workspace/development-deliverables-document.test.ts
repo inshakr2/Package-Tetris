@@ -25,6 +25,8 @@ describe("development deliverables document", () => {
     assert.match(document, /JSON 백업/);
     assert.match(document, /Web Worker/);
     assert.match(document, /Service Worker/);
+    assert.match(document, /개발 모드[\s\S]*서비스워커[\s\S]*자동 새로고침/);
+    assert.match(document, /src\/components\/pwa-service-worker-registrar\.tsx[\s\S]*개발 모드[\s\S]*정리/);
     assert.match(document, /Node test runner/);
     assert.match(document, /기본 파레트/);
     assert.match(document, /오버행 파레트/);

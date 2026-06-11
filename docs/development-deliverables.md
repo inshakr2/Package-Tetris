@@ -36,7 +36,7 @@ V2 현재 제외 범위:
 - IndexedDB: 같은 기기, 같은 브라우저의 작업본 자동저장
 - JSON 백업: 작업본 내보내기/가져오기와 기기 간 수동 이동
 - Web Worker: 적재 계산 중 UI 멈춤을 줄이는 계산 실행 경로
-- Service Worker: 앱 재진입과 오프라인 준비 상태 안내
+- Service Worker: 앱 재진입과 오프라인 준비 상태 안내. 개발 모드에서는 서비스워커를 등록하지 않아 HMR 자동 새로고침 충돌을 막는다.
 - Node test runner: 순수 유틸, 문서 기준, 레이아웃 문자열 검증
 - fake-indexeddb: IndexedDB 저장 로직 테스트
 - tsx 4.22.4: TypeScript 기반 field audit 스크립트 실행
@@ -51,7 +51,7 @@ V2 현재 제외 범위:
 - `src/app/globals.css`: 반응형 레이아웃, 현장형 터치 타깃, 결과 화면 스타일
 - `src/components/tetris-workspace-app.tsx`: 공간/박스/검토/결과/추가 시뮬레이션을 연결하는 메인 클라이언트 컴포넌트
 - `src/components/result-stage/result-3d-canvas.client.tsx`: Three.js client-only 3D 결과 렌더링
-- `src/components/pwa-service-worker-registrar.tsx`: Service Worker 등록
+- `src/components/pwa-service-worker-registrar.tsx`: production Service Worker 등록, 개발 모드 기존 등록 정리
 - `public/sw.js`: 정적 리소스 캐시와 오프라인 재진입 보조
 
 ## 도메인 모델과 작업본
