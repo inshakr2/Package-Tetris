@@ -117,7 +117,7 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
               requestedQuantitiesByTemplateId
             ).variant,
             variantId: `${input.runId}-custom-priority`,
-            label: "지정 우선 결과",
+            label: "선택 순서 결과",
             mode: "custom-priority" as const
           }
         ]

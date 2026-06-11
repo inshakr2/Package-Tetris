@@ -45,18 +45,18 @@ describe("chain-simulation-requested-quantity-layout", () => {
       );
     const hasTouchTarget =
       /\.chain-quantity-field\s+input\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(styles) &&
-      /\.chain-template-quantity-mode\s+button,[\s\S]*?\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
+      /\.chain-template-quantity-mode\s+button,[\s\S]*?\.chain-template-order-control\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
       );
     const hasFlexibleButtonLayout =
       /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       ) &&
-      /\.chain-template-priority-mode\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+      /\.chain-template-order-control\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       );
     const hasMobileLayout =
-      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-priority-mode\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
+      /@media\s*\(max-width:\s*767px\)\s*{[\s\S]*?\.chain-template-order-control\s*>\s*div\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?}/.test(
         styles
       );
 

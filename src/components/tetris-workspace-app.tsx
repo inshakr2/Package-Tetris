@@ -2,11 +2,14 @@
 
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Box,
   CheckCircle2,
   Download,
   Eye,
   FileUp,
+  GripVertical,
   HardDrive,
   Maximize2,
   PackagePlus,
@@ -277,17 +280,14 @@ const BLOCK_LIBRARY_PAGE_SIZE = 12;
 const BLOCK_GROUP_PAGE_SIZE = 10;
 const CHAIN_INLINE_OPTION_LIMIT = 6;
 const CHAIN_PICKER_PAGE_SIZE = 10;
+const CHAIN_MAX_SELECTED_TEMPLATE_COUNT = 3;
+const CHAIN_PRIORITY_SCORE_STEP = 10;
 const DRAFT_LOAD_PRIORITY_OPTIONS = [
   { value: 0, label: "기본" },
   { value: 5, label: "먼저 바닥에", displayLabel: "먼저\n바닥에" },
   { value: 10, label: "맨 아래 우선" }
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
-const CHAIN_TEMPLATE_PRIORITY_OPTIONS = [
-  { value: 0, label: "기본 계산", description: "추천 순서 유지" },
-  { value: 5, label: "먼저 계산", description: "이 박스를 먼저 추가 시도" },
-  { value: 10, label: "맨 먼저 계산", description: "가장 앞 순서로 추가 시도" }
-] as const;
 
 const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
   { name: "상위그룹", requirement: "선택", description: "예: 금영, 엔터그레인. 비워도 되지만 자동화 파일에서는 같은 표기를 유지하세요." },
@@ -4052,9 +4052,6 @@ const ResultStage = ({
   const [chainRequestedQuantitiesByTemplateId, setChainRequestedQuantitiesByTemplateId] = useState<
     Record<string, number | null>
   >({});
-  const [chainTemplatePrioritiesByTemplateId, setChainTemplatePrioritiesByTemplateId] = useState<
-    Record<string, DraftLoadPriorityOptionValue>
-  >({});
   const [offsetRecommendation, setOffsetRecommendation] = useState<ResultSpaceAdjustmentRecommendation | null>(null);
   const [offsetPreviewDialogOpen, setOffsetPreviewDialogOpen] = useState(false);
   const threeDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -4227,7 +4224,6 @@ const ResultStage = ({
         : "추가할 박스를 최대 3개까지 선택하세요."
     );
     setChainRequestedQuantitiesByTemplateId({});
-    setChainTemplatePrioritiesByTemplateId({});
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
 
@@ -4464,7 +4460,7 @@ const ResultStage = ({
   function toggleChainTemplateSelection(blockTemplateId: string) {
     const isSelected = selectedChainTemplateIds.includes(blockTemplateId);
 
-    if (!isSelected && selectedChainTemplateIds.length >= 3) {
+    if (!isSelected && selectedChainTemplateIds.length >= CHAIN_MAX_SELECTED_TEMPLATE_COUNT) {
       setChainStatus("error");
       setChainStatusMessage("추가 시뮬레이션 박스는 최대 3개까지 선택할 수 있습니다.");
       return;
@@ -4486,24 +4482,61 @@ const ResultStage = ({
 
       return next;
     });
-    setChainTemplatePrioritiesByTemplateId((current) => {
-      const next = { ...current };
-
-      if (isSelected) {
-        delete next[blockTemplateId];
-      } else if (!(blockTemplateId in next)) {
-        next[blockTemplateId] = 0;
-      }
-
-      return next;
-    });
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage(
       nextSelectedTemplateIds.length
-        ? `${nextSelectedTemplateIds.length}개 박스를 선택했습니다. 필요한 수량/우선순위를 정한 뒤 결과를 계산하세요.`
+        ? createChainSelectionOrderStatusMessage(nextSelectedTemplateIds.length)
         : "추가할 박스를 최대 3개까지 선택하세요."
     );
+  }
+
+  function updateSelectedChainTemplateOrder(nextSelectedTemplateIds: string[]) {
+    setSelectedChainTemplateIds(nextSelectedTemplateIds);
+
+    if (chainPreview) {
+      clearChainPreviewState();
+      setChainStatus("idle");
+      setChainStatusMessage("추가 우선순위가 바뀌었습니다. 다시 계산하세요.");
+      return;
+    }
+
+    setChainStatus("idle");
+    setChainStatusMessage(createChainSelectionOrderStatusMessage(nextSelectedTemplateIds.length));
+  }
+
+  function reorderSelectedChainTemplate(sourceTemplateId: string, targetTemplateId: string) {
+    if (sourceTemplateId === targetTemplateId) {
+      return;
+    }
+
+    const sourceIndex = selectedChainTemplateIds.indexOf(sourceTemplateId);
+    const targetIndex = selectedChainTemplateIds.indexOf(targetTemplateId);
+
+    if (sourceIndex < 0 || targetIndex < 0) {
+      return;
+    }
+
+    const nextSelectedTemplateIds = [...selectedChainTemplateIds];
+    const [movedTemplateId] = nextSelectedTemplateIds.splice(sourceIndex, 1);
+    nextSelectedTemplateIds.splice(targetIndex, 0, movedTemplateId);
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
+  }
+
+  function moveSelectedChainTemplate(blockTemplateId: string, direction: -1 | 1) {
+    const currentIndex = selectedChainTemplateIds.indexOf(blockTemplateId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= selectedChainTemplateIds.length) {
+      return;
+    }
+
+    const nextSelectedTemplateIds = [...selectedChainTemplateIds];
+    [nextSelectedTemplateIds[currentIndex], nextSelectedTemplateIds[nextIndex]] = [
+      nextSelectedTemplateIds[nextIndex],
+      nextSelectedTemplateIds[currentIndex]
+    ];
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
   }
 
   function calculateChainPreview() {
@@ -4539,21 +4572,6 @@ const ResultStage = ({
     setChainStatusMessage("추가 조건이 바뀌었습니다. 다시 계산하세요.");
   }
 
-  function changeChainTemplatePriority(blockTemplateId: string, priority: DraftLoadPriorityOptionValue) {
-    setChainTemplatePrioritiesByTemplateId((current) => ({
-      ...current,
-      [blockTemplateId]: priority
-    }));
-
-    if (!chainPreview) {
-      return;
-    }
-
-    clearChainPreviewState();
-    setChainStatus("idle");
-    setChainStatusMessage("추가 우선순위가 바뀌었습니다. 다시 계산하세요.");
-  }
-
   function createSelectedChainQuantityLimitMap() {
     return Object.fromEntries(
       selectedChainTemplates.flatMap((template) => {
@@ -4567,12 +4585,15 @@ const ResultStage = ({
   }
 
   function createSelectedChainPriorityMap() {
-    return Object.fromEntries(
-      selectedChainTemplates.flatMap((template) => {
-        const priority = chainTemplatePrioritiesByTemplateId[template.blockTemplateId] ?? 0;
+    if (selectedChainTemplateIds.length <= 1) {
+      return {};
+    }
 
-        return priority > 0 ? [[template.blockTemplateId, priority] as const] : [];
-      })
+    return Object.fromEntries(
+      selectedChainTemplateIds.map((templateId, index) => [
+        templateId,
+        createChainPriorityScoreForIndex(index)
+      ] as const)
     );
   }
 
@@ -4590,11 +4611,11 @@ const ResultStage = ({
     setChainStatus("calculating");
     setChainStatusMessage(
       hasQuantityLimits && hasPrioritySettings
-        ? "박스별 지정 수량과 추가 우선순위로 결과를 계산하고 있습니다."
+        ? "박스별 지정 수량과 선택 순서로 결과를 계산하고 있습니다."
         : hasQuantityLimits
         ? "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
         : hasPrioritySettings
-          ? "선택한 추가 우선순위로 결과를 계산하고 있습니다."
+          ? "선택 순서 결과를 계산하고 있습니다."
         : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
@@ -4642,11 +4663,11 @@ const ResultStage = ({
           setChainStatus("preview");
           setChainStatusMessage(
             hasQuantityLimits && hasPrioritySettings
-              ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+              ? `${selectedVariant.label}: 지정 수량과 선택 순서 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
               : hasQuantityLimits
               ? `${selectedVariant.label}: 지정 조건 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
               : hasPrioritySettings
-                ? `${selectedVariant.label}: 지정 우선순위 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
+                ? `${selectedVariant.label}: 선택 순서 기준 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
               : `${selectedVariant.label}: 총 ${selectedVariant.totalAddedQuantity}개 추가 가능`
           );
           return;
@@ -4655,11 +4676,11 @@ const ResultStage = ({
         setChainStatus("empty");
         setChainStatusMessage(
           hasQuantityLimits && hasPrioritySettings
-            ? `${selectedVariant.label}은 지정 수량과 우선순위 조건의 박스를 더 넣을 수 없습니다.`
+            ? `${selectedVariant.label}은 지정 수량과 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
             : hasQuantityLimits
             ? `${selectedVariant.label}은 지정 조건의 박스를 더 넣을 수 없습니다.`
             : hasPrioritySettings
-              ? `${selectedVariant.label}은 지정 우선순위 조건의 박스를 더 넣을 수 없습니다.`
+              ? `${selectedVariant.label}은 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
             : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
         );
       } catch {
@@ -4684,7 +4705,6 @@ const ResultStage = ({
   function clearChainSelection() {
     setSelectedChainTemplateIds([]);
     setChainRequestedQuantitiesByTemplateId({});
-    setChainTemplatePrioritiesByTemplateId({});
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage("추가 박스 선택과 조건을 모두 초기화했습니다.");
@@ -5198,7 +5218,6 @@ const ResultStage = ({
         chainStatus={chainStatus}
         statusMessage={chainStatusMessage}
         requestedQuantitiesByTemplateId={chainRequestedQuantitiesByTemplateId}
-        templatePrioritiesByTemplateId={chainTemplatePrioritiesByTemplateId}
         preview={chainPreview}
         variants={chainMultiPreview?.variants ?? []}
         selectedVariantId={selectedChainVariantId}
@@ -5216,7 +5235,8 @@ const ResultStage = ({
         onSelectVariant={selectChainVariant}
         onCalculate={calculateChainPreview}
         onTemplateQuantityLimitChange={changeChainTemplateQuantityLimit}
-        onTemplatePriorityChange={changeChainTemplatePriority}
+        onReorderSelectedTemplate={reorderSelectedChainTemplate}
+        onMoveSelectedTemplate={moveSelectedChainTemplate}
         onConfirm={confirmChainPreview}
         onCreateResult={onCreateResult}
         onClearSelection={clearChainSelection}
@@ -5821,7 +5841,6 @@ function ChainSimulationPanel({
   chainStatus,
   statusMessage,
   requestedQuantitiesByTemplateId,
-  templatePrioritiesByTemplateId,
   preview,
   variants,
   selectedVariantId,
@@ -5836,7 +5855,8 @@ function ChainSimulationPanel({
   onSelectVariant,
   onCalculate,
   onTemplateQuantityLimitChange,
-  onTemplatePriorityChange,
+  onReorderSelectedTemplate,
+  onMoveSelectedTemplate,
   onConfirm,
   onCreateResult,
   onClearSelection,
@@ -5857,7 +5877,6 @@ function ChainSimulationPanel({
   chainStatus: "idle" | "calculating" | "preview" | "empty" | "error";
   statusMessage: string;
   requestedQuantitiesByTemplateId: Record<string, number | null>;
-  templatePrioritiesByTemplateId: Record<string, DraftLoadPriorityOptionValue>;
   preview: ChainSimulationOutput | null;
   variants: MultiChainSimulationVariant[];
   selectedVariantId: string | null;
@@ -5872,13 +5891,15 @@ function ChainSimulationPanel({
   onSelectVariant: (variantId: string) => void;
   onCalculate: () => void;
   onTemplateQuantityLimitChange: (blockTemplateId: string, quantity: number | null) => void;
-  onTemplatePriorityChange: (blockTemplateId: string, priority: DraftLoadPriorityOptionValue) => void;
+  onReorderSelectedTemplate: (sourceTemplateId: string, targetTemplateId: string) => void;
+  onMoveSelectedTemplate: (blockTemplateId: string, direction: -1 | 1) => void;
   onConfirm: () => void;
   onCreateResult: () => void;
   onClearSelection: () => void;
   onUndo: () => void;
 }) {
   const [chainPickerOpen, setChainPickerOpen] = useState(false);
+  const [draggingTemplateId, setDraggingTemplateId] = useState<string | null>(null);
   const hasResult = Boolean(latestResult);
   const canCalculate = hasResult && selectedTemplateIds.length > 0 && chainStatus !== "calculating";
   const canConfirm = hasResult && chainStatus === "preview" && Boolean(preview?.addedQuantity);
@@ -5892,9 +5913,7 @@ function ChainSimulationPanel({
   const hasQuantityLimits = selectedTemplates.some(
     (template) => requestedQuantitiesByTemplateId[template.blockTemplateId]
   );
-  const hasPrioritySettings = selectedTemplates.some(
-    (template) => (templatePrioritiesByTemplateId[template.blockTemplateId] ?? 0) > 0
-  );
+  const hasPrioritySettings = selectedTemplates.length > 1;
 
   return (
     <section className="sub-panel chain-simulation-panel" aria-labelledby="chain-simulation-title">
@@ -5974,7 +5993,7 @@ function ChainSimulationPanel({
             ) : null}
             <div className="chain-selection-summary" aria-label="추가 시뮬레이션 선택 상태">
               <span className="badge" data-tone={selectedTemplateIds.length ? "green" : undefined}>
-                선택 {selectedTemplateIds.length}/3
+                선택 {selectedTemplateIds.length}/{CHAIN_MAX_SELECTED_TEMPLATE_COUNT}
               </span>
               {selectedTemplates.length ? (
                 selectedTemplates.map((template) => (
@@ -6004,7 +6023,7 @@ function ChainSimulationPanel({
                   저장된 박스 찾아 선택
                 </button>
                 <span className="fine-print">
-                  현재 조건 결과 {blockOptions.length}개 중 최대 3개를 선택합니다.
+                  현재 조건 결과 {blockOptions.length}개 중 최대 {CHAIN_MAX_SELECTED_TEMPLATE_COUNT}개를 선택합니다.
                 </span>
               </div>
             ) : (
@@ -6102,7 +6121,7 @@ function ChainSimulationPanel({
                     <tbody>
                       {selectedVariant.addedQuantities.map((item) => {
                         const requestedQuantity = requestedQuantitiesByTemplateId[item.blockTemplateId] ?? null;
-                        const priority = templatePrioritiesByTemplateId[item.blockTemplateId] ?? 0;
+                        const priority = createChainPriorityScoreForIndex(selectedTemplateIds.indexOf(item.blockTemplateId));
                         const quantityStatus = createChainQuantityStatusCopy(item.addedQuantity, requestedQuantity);
 
                         return (
@@ -6120,11 +6139,11 @@ function ChainSimulationPanel({
                         <th scope="row">총 추가</th>
                         <td>
                           {hasQuantityLimits && hasPrioritySettings
-                            ? "수량+우선순위 조건 포함"
+                            ? "수량+선택 순서 조건 포함"
                             : hasQuantityLimits
                               ? "지정 조건 포함"
                               : hasPrioritySettings
-                                ? "우선순위 조건 포함"
+                                ? "선택 순서 조건 포함"
                                 : "최대 계산"}
                         </td>
                         <td>{selectedVariant.totalAddedQuantity}개</td>
@@ -6163,20 +6182,45 @@ function ChainSimulationPanel({
                 <strong className="chain-field-title">박스별 추가 조건</strong>
                 <p className="fine-print">
                   최대는 공간이 허용하는 만큼 계산하고, 수량 지정은 해당 박스를 입력 수량까지만 계산합니다.
-                  추가 우선순위를 지정하면 결과 비교에 지정 우선 결과가 함께 표시됩니다.
-                  같은 우선순위는 박스명 순서로 계산합니다.
+                  박스를 선택한 순서가 추가 우선순위입니다. 먼저 선택한 박스가 1순위로 계산됩니다.
+                  순서는 카드를 드래그하거나 위/아래 버튼으로 바꿀 수 있습니다.
                 </p>
               </div>
               {selectedTemplates.length === 0 ? (
                 <p className="fine-print">박스를 선택하면 박스별 수량 조건을 조정할 수 있습니다.</p>
               ) : (
-                selectedTemplates.map((template) => {
+                selectedTemplates.map((template, index) => {
                   const requestedQuantity = requestedQuantitiesByTemplateId[template.blockTemplateId] ?? null;
-                  const templatePriority = templatePrioritiesByTemplateId[template.blockTemplateId] ?? 0;
+                  const isFirstTemplate = index === 0;
+                  const isLastTemplate = index === selectedTemplates.length - 1;
 
                   return (
-                    <div className="chain-template-quantity-row" key={template.blockTemplateId}>
+                    <div
+                      className="chain-template-quantity-row"
+                      key={template.blockTemplateId}
+                      data-dragging={draggingTemplateId === template.blockTemplateId}
+                      draggable={selectedTemplates.length > 1}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", template.blockTemplateId);
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggingTemplateId(template.blockTemplateId);
+                      }}
+                      onDragOver={(event) => {
+                        if (selectedTemplates.length > 1) {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const sourceTemplateId = event.dataTransfer.getData("text/plain");
+                        onReorderSelectedTemplate(sourceTemplateId, template.blockTemplateId);
+                        setDraggingTemplateId(null);
+                      }}
+                      onDragEnd={() => setDraggingTemplateId(null)}
+                    >
                       <div className="chain-template-summary">
+                        <span className="chain-template-rank-badge">{index + 1}순위</span>
                         <strong>{template.name}</strong>
                         <span className="fine-print">{formatDimensions(template.dimensions)}</span>
                       </div>
@@ -6209,24 +6253,31 @@ function ChainSimulationPanel({
                         />
                       </label>
                       <div
-                        className="chain-template-priority-mode"
+                        className="chain-template-order-control"
                         role="group"
-                        aria-label={`${template.name} 추가 우선순위`}
+                        aria-label={`${template.name} 추가 우선순위 조정`}
                       >
-                        <span>추가 우선순위</span>
+                        <span>
+                          <GripVertical size={14} aria-hidden="true" />
+                          드래그 또는 버튼으로 순서 변경
+                        </span>
                         <div>
-                          {CHAIN_TEMPLATE_PRIORITY_OPTIONS.map((option) => (
-                            <button
-                              key={option.value}
-                              className="secondary-button chain-priority-button"
-                              aria-pressed={templatePriority === option.value}
-                              aria-label={`${template.name} ${option.label}: ${option.description}`}
-                              onClick={() => onTemplatePriorityChange(template.blockTemplateId, option.value)}
-                            >
-                              <strong>{option.label}</strong>
-                              <span>{option.description}</span>
-                            </button>
-                          ))}
+                          <button
+                            className="secondary-button"
+                            onClick={() => onMoveSelectedTemplate(template.blockTemplateId, -1)}
+                            disabled={isFirstTemplate}
+                          >
+                            <ArrowUp size={14} aria-hidden="true" />
+                            위로
+                          </button>
+                          <button
+                            className="secondary-button"
+                            onClick={() => onMoveSelectedTemplate(template.blockTemplateId, 1)}
+                            disabled={isLastTemplate}
+                          >
+                            <ArrowDown size={14} aria-hidden="true" />
+                            아래로
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -6337,7 +6388,9 @@ function ChainBlockPickerDialogBody({
         <div className="space-form-dialog-head">
           <div>
             <h2 id="chain-block-picker-dialog-title">추가 시뮬레이션 박스 찾기</h2>
-            <p className="fine-print">현재 검색/그룹 조건에 맞는 박스 중 최대 3개를 선택합니다.</p>
+            <p className="fine-print">
+              현재 검색/그룹 조건에 맞는 박스 중 최대 {CHAIN_MAX_SELECTED_TEMPLATE_COUNT}개를 선택합니다.
+            </p>
           </div>
           <button
             className="icon-button"
@@ -6350,7 +6403,7 @@ function ChainBlockPickerDialogBody({
         </div>
         <div className="chain-picker-dialog-body">
           <p className="fine-print">
-            검색 결과 {templates.length}개 · 선택 {selectedTemplateIds.length}/3 · {currentChainPickerPage}/
+            검색 결과 {templates.length}개 · 선택 {selectedTemplateIds.length}/{CHAIN_MAX_SELECTED_TEMPLATE_COUNT} · {currentChainPickerPage}/
             {chainPickerPageCount} 페이지
           </p>
           <div className="chain-picker-dialog-list" role="group" aria-label="추가 시뮬레이션 박스 선택">
@@ -7314,15 +7367,25 @@ function getDraftLoadPriorityLabel(priority: DraftLoadPriorityOptionValue) {
 
 function createChainConditionCopy(
   requestedQuantity: number | null,
-  priority: DraftLoadPriorityOptionValue
+  priority: number
 ) {
   const quantityCopy = requestedQuantity ? `${requestedQuantity}개까지` : "최대";
 
   return priority <= 0 ? quantityCopy : `${quantityCopy} · ${createChainPriorityLabel(priority)}`;
 }
 
-function createChainPriorityLabel(priority: DraftLoadPriorityOptionValue) {
-  return CHAIN_TEMPLATE_PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? "기본";
+function createChainPriorityLabel(priority: number) {
+  const rank = CHAIN_MAX_SELECTED_TEMPLATE_COUNT - Math.round(priority / CHAIN_PRIORITY_SCORE_STEP) + 1;
+
+  return rank >= 1 && rank <= CHAIN_MAX_SELECTED_TEMPLATE_COUNT ? `${rank}순위` : "선택 순서";
+}
+
+function createChainPriorityScoreForIndex(index: number) {
+  return index >= 0 ? (CHAIN_MAX_SELECTED_TEMPLATE_COUNT - index) * CHAIN_PRIORITY_SCORE_STEP : 0;
+}
+
+function createChainSelectionOrderStatusMessage(selectedCount: number) {
+  return `${selectedCount}개 박스를 선택했습니다. 선택한 순서가 추가 우선순위입니다. 드래그하거나 위/아래 버튼으로 순서를 바꾼 뒤 결과를 계산하세요.`;
 }
 
 function createChainCalculateButtonLabel(hasQuantityLimits: boolean, hasPrioritySettings: boolean) {

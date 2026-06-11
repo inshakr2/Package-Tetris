@@ -2713,10 +2713,26 @@ select:focus-visible {
   padding: 10px;
 }
 
+.chain-template-quantity-row[data-dragging="true"] {
+  border-color: rgba(37, 99, 235, 0.45);
+  opacity: 0.68;
+}
+
 .chain-template-summary {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.chain-template-rank-badge {
+  width: fit-content;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #1d4f91;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .chain-template-quantity-mode {
@@ -2726,26 +2742,28 @@ select:focus-visible {
   min-width: 0;
 }
 
-.chain-template-priority-mode {
+.chain-template-order-control {
   display: grid;
   gap: 5px;
   min-width: 0;
 }
 
-.chain-template-priority-mode > span {
+.chain-template-order-control > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.chain-template-priority-mode > div {
+.chain-template-order-control > div {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 6px;
 }
 
-.chain-template-quantity-mode .secondary-button[aria-pressed="true"],
-.chain-template-priority-mode .secondary-button[aria-pressed="true"] {
+.chain-template-quantity-mode .secondary-button[aria-pressed="true"] {
   border-color: rgba(37, 99, 235, 0.55);
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.24);
 }
@@ -2764,29 +2782,19 @@ select:focus-visible {
 }
 
 .chain-template-quantity-mode button,
-.chain-template-priority-mode button {
+.chain-template-order-control button {
   min-width: 0;
   min-height: 48px;
   white-space: normal;
 }
 
-.chain-priority-button {
-  display: grid;
-  gap: 3px;
-  align-content: center;
-  justify-items: start;
-  text-align: left;
+.chain-template-order-control button {
+  gap: 5px;
 }
 
-.chain-priority-button strong {
-  line-height: 1.2;
-}
-
-.chain-priority-button span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
+.chain-template-order-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .chain-status-box {
@@ -3679,7 +3687,7 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .chain-template-priority-mode > div {
+  .chain-template-order-control > div {
     grid-template-columns: 1fr;
   }
 

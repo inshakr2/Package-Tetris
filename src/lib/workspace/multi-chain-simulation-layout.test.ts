@@ -130,54 +130,69 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasQuantityComparisonContract, true);
   });
 
-  it("추가 결과 비교 표와 계산 버튼은 사용자 지정 우선순위 적용 여부를 현장 문구로 유지한다", () => {
+  it("추가 결과 비교 표와 계산 버튼은 선택 순서 우선순위 적용 여부를 현장 문구로 유지한다", () => {
     // Given
     const hasConditionCopyHelper =
       workspaceSource.includes("createChainConditionCopy(") &&
       workspaceSource.includes("createChainPriorityLabel(");
     const hasPriorityAwareTable =
-      workspaceSource.includes("const priority = templatePrioritiesByTemplateId[item.blockTemplateId] ?? 0") &&
+      workspaceSource.includes("createChainPriorityScoreForIndex(selectedTemplateIds.indexOf(item.blockTemplateId))") &&
       workspaceSource.includes("createChainConditionCopy(requestedQuantity, priority)") &&
-      workspaceSource.includes("수량+우선순위 조건 포함");
+      workspaceSource.includes("수량+선택 순서 조건 포함");
     const hasPriorityAwareButton =
       workspaceSource.includes("createChainCalculateButtonLabel(") &&
       workspaceSource.includes("조건 반영 결과 계산") &&
       workspaceSource.includes("우선순위 결과 계산");
-    const hasTieBreakCopy = workspaceSource.includes("같은 우선순위는 박스명 순서로 계산합니다.");
+    const hasSelectionOrderCopy =
+      workspaceSource.includes("박스를 선택한 순서가 추가 우선순위입니다.") &&
+      workspaceSource.includes("먼저 선택한 박스가 1순위로 계산됩니다.");
 
     // When
     const keepsPriorityContext =
-      hasConditionCopyHelper && hasPriorityAwareTable && hasPriorityAwareButton && hasTieBreakCopy;
+      hasConditionCopyHelper && hasPriorityAwareTable && hasPriorityAwareButton && hasSelectionOrderCopy;
 
     // Then
     assert.equal(keepsPriorityContext, true);
   });
 
-  it("추가 박스 시뮬레이션은 선택 박스별 사용자 지정 우선순위를 제공한다", () => {
+  it("추가 박스 시뮬레이션은 박스를 누른 순서대로 우선순위를 계산하고 순서를 조정할 수 있다", () => {
     // Given
-    const hasPriorityState =
-      workspaceSource.includes("chainTemplatePrioritiesByTemplateId") &&
-      workspaceSource.includes("changeChainTemplatePriority") &&
+    const hasSelectionOrderPriority =
       workspaceSource.includes("createSelectedChainPriorityMap()");
+    const removesAmbiguousPriorityState =
+      !workspaceSource.includes("chainTemplatePrioritiesByTemplateId") &&
+      !workspaceSource.includes("changeChainTemplatePriority") &&
+      !workspaceSource.includes("CHAIN_TEMPLATE_PRIORITY_OPTIONS");
     const passesPriorityToEngine =
       workspaceSource.includes("const priorityByTemplateId = createSelectedChainPriorityMap();") &&
       workspaceSource.includes("priorityByTemplateId") &&
-      workspaceSource.includes("지정 우선 결과");
-    const hasPriorityControls =
-      workspaceSource.includes('className="chain-template-priority-mode"') &&
-      workspaceSource.includes('aria-label={`${template.name} 추가 우선순위`}') &&
-      workspaceSource.includes("먼저 계산") &&
-      workspaceSource.includes("맨 먼저 계산") &&
-      workspaceSource.includes("이 박스를 먼저 추가 시도") &&
-      workspaceSource.includes("가장 앞 순서로 추가 시도");
+      workspaceSource.includes("선택 순서 결과");
+    const hasPriorityScoreContract =
+      workspaceSource.includes("createChainPriorityScoreForIndex(index)") &&
+      workspaceSource.includes("(CHAIN_MAX_SELECTED_TEMPLATE_COUNT - index) * CHAIN_PRIORITY_SCORE_STEP");
+    const hasReorderControls =
+      workspaceSource.includes("onReorderSelectedTemplate") &&
+      workspaceSource.includes("onMoveSelectedTemplate") &&
+      workspaceSource.includes("draggable={selectedTemplates.length > 1}") &&
+      workspaceSource.includes("dataTransfer.setData") &&
+      workspaceSource.includes("dataTransfer.getData") &&
+      workspaceSource.includes("chain-template-rank-badge") &&
+      workspaceSource.includes("드래그 또는 버튼으로 순서 변경");
     const hasPriorityStyles =
-      /\.chain-template-priority-mode\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
-      /\.chain-template-priority-mode\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
+      /\.chain-template-order-control\s*{[\s\S]*?display:\s*grid;[\s\S]*?}/.test(styles) &&
+      /\.chain-template-order-control\s+button\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/.test(
         styles
-      );
+      ) &&
+      /\.chain-template-rank-badge\s*{[\s\S]*?border-radius:[\s\S]*?}/.test(styles);
 
     // When
-    const hasPriorityContract = hasPriorityState && passesPriorityToEngine && hasPriorityControls && hasPriorityStyles;
+    const hasPriorityContract =
+      hasSelectionOrderPriority &&
+      removesAmbiguousPriorityState &&
+      passesPriorityToEngine &&
+      hasPriorityScoreContract &&
+      hasReorderControls &&
+      hasPriorityStyles;
 
     // Then
     assert.equal(hasPriorityContract, true);
@@ -187,7 +202,8 @@ describe("multi-chain-simulation-layout", () => {
     // Given
     const hasConditionCardMarkup =
       workspaceSource.includes('className="chain-template-summary"') &&
-      workspaceSource.includes('className="secondary-button chain-priority-button"');
+      workspaceSource.includes('className="chain-template-rank-badge"') &&
+      workspaceSource.includes('className="chain-template-order-control"');
     const hasSafeConditionCardGrid =
       /\.chain-template-quantity-row\s*{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?background:\s*white;[\s\S]*?}/.test(
         styles
@@ -196,12 +212,12 @@ describe("multi-chain-simulation-layout", () => {
       /\.chain-template-quantity-mode\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       ) &&
-      /\.chain-template-priority-mode\s+>\s+div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
+      /\.chain-template-order-control\s+>\s+div\s*{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(118px,\s*1fr\)\);[\s\S]*?}/.test(
         styles
       );
     const hasReadablePriorityButton =
-      /\.chain-priority-button\s*{[\s\S]*?display:\s*grid;[\s\S]*?text-align:\s*left;[\s\S]*?}/.test(styles) &&
-      /\.chain-priority-button\s+span\s*{[\s\S]*?font-size:\s*11px;[\s\S]*?}/.test(styles);
+      /\.chain-template-order-control\s*{[\s\S]*?min-width:\s*0;[\s\S]*?}/.test(styles) &&
+      /\.chain-template-order-control\s+>\s+span\s*{[\s\S]*?font-size:\s*12px;[\s\S]*?}/.test(styles);
 
     // When
     const hasStableConditionLayout =
@@ -211,7 +227,7 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasStableConditionLayout, true);
   });
 
-  it("결과 변경 또는 선택 초기화 시 추가 박스별 수량과 우선순위 조건을 함께 비운다", () => {
+  it("결과 변경 또는 선택 초기화 시 추가 박스별 수량 조건과 선택 순서를 함께 비운다", () => {
     // Given
     const latestResultEffect = workspaceSource.match(
       /useEffect\(\(\)\s*=>\s*{[\s\S]*?},\s*\[latestResult\?\.resultId\]\);/
@@ -220,10 +236,9 @@ describe("multi-chain-simulation-layout", () => {
       latestResultEffect.includes("previousLatestResultIdRef.current") &&
       latestResultEffect.includes("setSelectedChainTemplateIds([]);") &&
       latestResultEffect.includes("setChainRequestedQuantitiesByTemplateId({});") &&
-      latestResultEffect.includes("setChainTemplatePrioritiesByTemplateId({});") &&
       latestResultEffect.includes("기준 결과가 바뀌어 추가 박스 선택과 조건을 초기화했습니다.");
     const clearSelectionHandler =
-      /function\s+clearChainSelection\(\)\s*{[\s\S]*?setSelectedChainTemplateIds\(\[\]\);[\s\S]*?setChainRequestedQuantitiesByTemplateId\(\{\}\);[\s\S]*?setChainTemplatePrioritiesByTemplateId\(\{\}\);[\s\S]*?clearChainPreviewState\(\);[\s\S]*?추가 박스 선택과 조건을 모두 초기화했습니다\.[\s\S]*?}/.test(
+      /function\s+clearChainSelection\(\)\s*{[\s\S]*?setSelectedChainTemplateIds\(\[\]\);[\s\S]*?setChainRequestedQuantitiesByTemplateId\(\{\}\);[\s\S]*?clearChainPreviewState\(\);[\s\S]*?추가 박스 선택과 조건을 모두 초기화했습니다\.[\s\S]*?}/.test(
         workspaceSource
       );
 
@@ -237,13 +252,13 @@ describe("multi-chain-simulation-layout", () => {
   it("추가 박스 시뮬레이션 상태 문구는 조건 설정과 계산 모델을 일관되게 안내한다", () => {
     // Given
     const hasSelectionPrompt = workspaceSource.includes(
-      "필요한 수량/우선순위를 정한 뒤 결과를 계산하세요."
+      "선택한 순서가 추가 우선순위입니다."
     );
     const hasQuantityCalculatingCopy = workspaceSource.includes(
       "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
     );
     const hasPriorityEmptyCopy = workspaceSource.includes(
-      "지정 우선순위 조건의 박스를 더 넣을 수 없습니다."
+      "선택 순서 조건의 박스를 더 넣을 수 없습니다."
     );
 
     // When
