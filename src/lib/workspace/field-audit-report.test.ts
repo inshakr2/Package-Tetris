@@ -18,9 +18,13 @@ describe("field-audit-report", () => {
     assert.match(report.text, /시나리오 3개/);
     assert.match(report.text, /총 적재 90개/);
     assert.match(report.text, /총 계산 시간 310ms/);
-    assert.match(report.text, /기능 검증 2개/);
+    assert.match(report.text, /기능 검증 6개/);
     assert.match(report.text, /부분 지지 허용 55% 현장 검증: 통과/);
+    assert.match(report.text, /오버행 파레트 추천 현장 검증: 통과/);
+    assert.match(report.text, /저장 박스 엑셀 일괄등록 현장 검증: 통과/);
+    assert.match(report.text, /현재 작업 엑셀 등록 현장 검증: 통과/);
     assert.match(report.text, /추가 박스 시뮬레이션 현장 검증: 통과/);
+    assert.match(report.text, /현장 피드백 추가 적재 시뮬레이션 검증: 통과/);
   });
 
   it("안전 실패나 지연 시나리오가 있으면 실패 코드와 확인 대상을 함께 보여준다", () => {
@@ -88,8 +92,32 @@ function createAudit(overrides: Partial<FieldPackingScenarioPerformanceAudit> = 
         isExpected: true
       },
       {
+        name: "오버행 파레트 추천 현장 검증",
+        detail: "기본 2공간, 오버행 1공간",
+        isSafe: true,
+        isExpected: true
+      },
+      {
+        name: "저장 박스 엑셀 일괄등록 현장 검증",
+        detail: "샘플 2행, 오류 0건",
+        isSafe: true,
+        isExpected: true
+      },
+      {
+        name: "현재 작업 엑셀 등록 현장 검증",
+        detail: "샘플 2행, 오류 0건",
+        isSafe: true,
+        isExpected: true
+      },
+      {
         name: "추가 박스 시뮬레이션 현장 검증",
         detail: "추가 결과 안전 검증 통과",
+        isSafe: true,
+        isExpected: true
+      },
+      {
+        name: "현장 피드백 추가 적재 시뮬레이션 검증",
+        detail: "기준 3공간, 추가 29개",
         isSafe: true,
         isExpected: true
       }

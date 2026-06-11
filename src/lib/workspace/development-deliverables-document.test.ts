@@ -35,7 +35,11 @@ describe("development deliverables document", () => {
     assert.match(document, /컬럼명 기준으로 값을 읽어 열 순서가 바뀌어도 동작/);
     assert.match(document, /선택 순서 기반 우선순위/);
     assert.match(document, /부분 지지 허용 55% 현장 검증/);
+    assert.match(document, /오버행 파레트 추천 현장 검증/);
+    assert.match(document, /저장 박스 엑셀 일괄등록 현장 검증/);
+    assert.match(document, /현재 작업 엑셀 등록 현장 검증/);
     assert.match(document, /추가 박스 시뮬레이션 현장 검증/);
+    assert.match(document, /현장 피드백 추가 적재 시뮬레이션 검증/);
     assert.match(document, /npm run v1:verify/);
     assert.match(document, /npm run v2:verify/);
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);

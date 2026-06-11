@@ -1,7 +1,17 @@
 import type { OptimizationInput, OptimizationOutput } from "./engine-contract";
+import {
+  BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS,
+  BLOCK_TEMPLATE_XLSX_COLUMNS,
+  createBlockTemplateImportPreview
+} from "./block-template-xlsx-import";
+import {
+  DRAFT_BLOCK_IMPORT_SAMPLE_ROWS,
+  DRAFT_BLOCK_XLSX_COLUMNS,
+  createDraftBlockImportPreview
+} from "./draft-block-xlsx-import";
 import { runMultiChainSimulationV0 } from "./multi-chain-simulation";
 import { validatePackedSpace } from "./packed-result-validation";
-import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "./presets";
+import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, OVERHANG_PALLET_SPACE_ID, PRESET_SPACES } from "./presets";
 import {
   DEFAULT_MINIMUM_SUPPORT_RATIO,
   PARTIAL_SUPPORT_MINIMUM_SUPPORT_RATIO,
@@ -150,6 +160,9 @@ export function runFieldPackingScenarioPerformanceAudit(
 function runFieldFeatureChecks(runPackingEngine: PackingEngineRunner): FieldFeatureCheckResult[] {
   return [
     runPartialSupportFeatureCheck(runPackingEngine),
+    runOverhangPalletRecommendationFeatureCheck(runPackingEngine),
+    runBlockTemplateXlsxImportFeatureCheck(),
+    runDraftBlockXlsxImportFeatureCheck(),
     runAdditionalSimulationFeatureCheck(),
     runFieldFeedbackAdditionalSimulationFeatureCheck(runPackingEngine)
   ];
@@ -203,6 +216,98 @@ function runPartialSupportFeatureCheck(runPackingEngine: PackingEngineRunner): F
     detail: `OFF ${offOutput.usedSpaceCount}공간, ON ${onOutput.usedSpaceCount}공간`,
     isSafe,
     isExpected
+  };
+}
+
+function runOverhangPalletRecommendationFeatureCheck(runPackingEngine: PackingEngineRunner): FieldFeatureCheckResult {
+  const basicPallet = findPresetSpace(DEFAULT_PALLET_SPACE_ID);
+  const overhangPallet = findPresetSpace(OVERHANG_PALLET_SPACE_ID);
+  const policy = createFeaturePolicy(false);
+  const blocks = [
+    createBlock("field-overhang-fit", "오버행 검토 박스", { widthMm: 575, depthMm: 575, heightMm: 1120 }, 2)
+  ];
+  const basicOutput = runPackingEngine({
+    runId: "field-overhang-basic-pallet",
+    space: basicPallet,
+    blocks,
+    policy
+  });
+  const overhangOutput = runPackingEngine({
+    runId: "field-overhang-overhang-pallet",
+    space: overhangPallet,
+    blocks,
+    policy
+  });
+  const validationPolicy = createValidationPolicy(false);
+  const isSafe =
+    overhangOutput.spaces.length > 0 &&
+    overhangOutput.spaces.every((packedSpace) =>
+      validatePackedSpace(packedSpace, calculateUsableSize(overhangPallet), validationPolicy).isValid
+    );
+  const isExpected =
+    basicOutput.usedSpaceCount === 2 &&
+    overhangOutput.usedSpaceCount === 1 &&
+    basicOutput.unloadedBlockCount === 0 &&
+    overhangOutput.unloadedBlockCount === 0;
+
+  return {
+    name: "오버행 파레트 추천 현장 검증",
+    detail: `기본 ${basicOutput.usedSpaceCount}공간, 오버행 ${overhangOutput.usedSpaceCount}공간`,
+    isSafe,
+    isExpected
+  };
+}
+
+function runBlockTemplateXlsxImportFeatureCheck(): FieldFeatureCheckResult {
+  const preview = createBlockTemplateImportPreview([
+    Array.from(BLOCK_TEMPLATE_XLSX_COLUMNS),
+    ...BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.map((row) => Array.from(row))
+  ]);
+  const hasExpectedRows =
+    preview.rows.length === BLOCK_TEMPLATE_IMPORT_SAMPLE_ROWS.length &&
+    preview.rows.some((row) => row.group1 === "금영" && row.group2 === "스피커" && row.weightKg === 18.5) &&
+    preview.rows.some((row) => row.fragile);
+
+  return {
+    name: "저장 박스 엑셀 일괄등록 현장 검증",
+    detail: `샘플 ${preview.rows.length}행, 오류 ${preview.errors.length}건`,
+    isSafe: preview.errors.length === 0,
+    isExpected: preview.canImport && hasExpectedRows
+  };
+}
+
+function runDraftBlockXlsxImportFeatureCheck(): FieldFeatureCheckResult {
+  const existingTemplates = [
+    createBlockTemplate(
+      "field-draft-xlsx-speaker",
+      "KMS-210 스피커 박스",
+      { widthMm: 420, depthMm: 360, heightMm: 520 },
+      { weightKg: 18.5, group1: "금영", group2: "스피커" }
+    ),
+    createBlockTemplate(
+      "field-draft-xlsx-amp",
+      "EG-AMP 조합 박스",
+      { widthMm: 500, depthMm: 410, heightMm: 220 },
+      { fragile: true, group1: "엔터그레인", group2: "앰프" }
+    )
+  ];
+  const preview = createDraftBlockImportPreview(
+    [
+      Array.from(DRAFT_BLOCK_XLSX_COLUMNS),
+      ...DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.map((row) => Array.from(row))
+    ],
+    { existingTemplates }
+  );
+  const hasExpectedRows =
+    preview.rows.length === DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.length &&
+    preview.rows.some((row) => row.quantity === 12 && row.loadPriority === 5) &&
+    preview.rows.some((row) => row.quantity === 4 && row.loadPriority === 10 && row.fragile);
+
+  return {
+    name: "현재 작업 엑셀 등록 현장 검증",
+    detail: `샘플 ${preview.rows.length}행, 오류 ${preview.errors.length}건`,
+    isSafe: preview.errors.length === 0,
+    isExpected: preview.canImport && hasExpectedRows
   };
 }
 
@@ -492,14 +597,23 @@ function createPackedBlock(
 function createBlockTemplate(
   blockId: string,
   name: string,
-  dimensions: BlockTemplate["dimensions"]
+  dimensions: BlockTemplate["dimensions"],
+  options: {
+    fragile?: boolean;
+    weightKg?: number | null;
+    group1?: string;
+    group2?: string;
+  } = {}
 ): BlockTemplate {
   return {
     blockTemplateId: `template-${blockId}`,
     entityVersion: 1,
     name,
     dimensions,
-    fragile: false,
+    fragile: options.fragile ?? false,
+    weightKg: options.weightKg ?? null,
+    group1: options.group1,
+    group2: options.group2,
     createdAt: TIMESTAMP,
     updatedAt: TIMESTAMP
   };

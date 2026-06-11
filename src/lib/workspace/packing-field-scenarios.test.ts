@@ -75,7 +75,7 @@ describe("packing-field-scenarios", () => {
     assert.ok(audit.totalPackedBlockCount >= 40);
   });
 
-  it("현장 audit는 V2 부분 지지와 추가 박스 시뮬레이션 안전 검증을 포함한다", () => {
+  it("현장 audit는 V2 핵심 기능 안전 검증을 포함한다", () => {
     // Given
     const scenarios = createFieldPackingScenarios();
 
@@ -87,6 +87,9 @@ describe("packing-field-scenarios", () => {
       audit.featureCheckResults.map((result) => [result.name, result.isSafe, result.isExpected]),
       [
         ["부분 지지 허용 55% 현장 검증", true, true],
+        ["오버행 파레트 추천 현장 검증", true, true],
+        ["저장 박스 엑셀 일괄등록 현장 검증", true, true],
+        ["현재 작업 엑셀 등록 현장 검증", true, true],
         ["추가 박스 시뮬레이션 현장 검증", true, true],
         ["현장 피드백 추가 적재 시뮬레이션 검증", true, true]
       ]
