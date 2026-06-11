@@ -7,26 +7,37 @@ const DEVELOPMENT_DELIVERABLES_PATH = join(process.cwd(), "docs/development-deli
 const NON_DEVELOPER_GUIDE_PATH = join(process.cwd(), "docs/non-developer-start-guide.md");
 
 describe("development deliverables document", () => {
-  it("개발 산출물 문서는 기술 스택, 구조, 검증, V1 범위를 추적 가능하게 정리한다", () => {
+  it("개발 산출물 문서는 기술 스택, 구조, 검증, V2 현재 범위를 추적 가능하게 정리한다", () => {
     // Given / When
     const exists = existsSync(DEVELOPMENT_DELIVERABLES_PATH);
     const document = exists ? readFileSync(DEVELOPMENT_DELIVERABLES_PATH, "utf8") : "";
 
     // Then
     assert.equal(exists, true);
+    assert.match(document, /V2 현재 산출물/);
+    assert.match(document, /현장 피드백 기반 V2/);
     assert.match(document, /Next\.js 16\.2\.7/);
     assert.match(document, /React 19\.2\.7/);
     assert.match(document, /Three\.js 0\.184\.0/);
     assert.match(document, /TypeScript 6\.0\.3/);
+    assert.match(document, /read-excel-file 9\.1\.1/);
     assert.match(document, /IndexedDB/);
     assert.match(document, /JSON 백업/);
     assert.match(document, /Web Worker/);
     assert.match(document, /Service Worker/);
     assert.match(document, /Node test runner/);
+    assert.match(document, /기본 파레트/);
+    assert.match(document, /오버행 파레트/);
+    assert.match(document, /부분 지지 허용/);
+    assert.match(document, /\.xlsx 일괄등록/);
+    assert.match(document, /선택 순서 기반 우선순위/);
     assert.match(document, /npm run v1:verify/);
+    assert.match(document, /npm run v2:verify/);
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);
     assert.match(document, /src\/lib\/workspace\/packing-engine\.ts/);
-    assert.match(document, /V1 제외 범위/);
+    assert.match(document, /V2 현재 제외 범위/);
+    assert.doesNotMatch(document, /V1 개발 과정/);
+    assert.doesNotMatch(document, /Package Tetris V1은/);
     assert.doesNotMatch(document, /작업 지시서/);
     assert.doesNotMatch(document, /배치 상세/);
     assert.doesNotMatch(document, /쌓는 순서/);
