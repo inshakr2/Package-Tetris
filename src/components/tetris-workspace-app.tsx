@@ -102,7 +102,10 @@ import {
   reviewExecutionReadiness,
   ReviewGateResult
 } from "@/lib/workspace/review-gate";
-import { type ChainSimulationOutput } from "@/lib/workspace/chain-simulation";
+import {
+  isFatalChainSimulationWarning,
+  type ChainSimulationOutput
+} from "@/lib/workspace/chain-simulation";
 import {
   runMultiChainSimulationV0,
   type MultiChainSimulationOutput,
@@ -4657,10 +4660,13 @@ const ResultStage = ({
           return;
         }
 
-        if (selectedVariant.warnings.length > 0 && selectedVariant.totalAddedQuantity === 0) {
+        const selectedVariantFatalWarnings = selectedVariant.warnings.filter(isFatalChainSimulationWarning);
+        const selectedVariantNotice = selectedVariant.warnings[0] ?? null;
+
+        if (selectedVariantFatalWarnings.length > 0 && selectedVariant.totalAddedQuantity === 0) {
           clearChainPreviewState();
           setChainStatus("error");
-          setChainStatusMessage(selectedVariant.warnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
+          setChainStatusMessage(selectedVariantFatalWarnings[0] ?? "추가 적재 계산에 실패했습니다. 결과를 다시 확인하세요.");
           return;
         }
 
@@ -4685,13 +4691,14 @@ const ResultStage = ({
 
         setChainStatus("empty");
         setChainStatusMessage(
-          hasQuantityLimits && hasPrioritySettings
+          selectedVariantNotice ??
+          (hasQuantityLimits && hasPrioritySettings
             ? `${selectedVariant.label}은 지정 수량과 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
             : hasQuantityLimits
             ? `${selectedVariant.label}은 지정 조건의 박스를 더 넣을 수 없습니다.`
             : hasPrioritySettings
               ? `${selectedVariant.label}은 선택 순서 조건의 박스를 더 넣을 수 없습니다.`
-            : "선택한 박스는 현재 결과에 더 들어가지 않습니다."
+            : "선택한 박스는 현재 결과에 더 들어가지 않습니다.")
         );
       } catch {
         clearChainPreviewState();

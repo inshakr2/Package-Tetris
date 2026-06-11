@@ -28,6 +28,15 @@ export interface ChainSimulationOutput {
   warnings: string[];
 }
 
+export const NO_STABLE_CHAIN_PLACEMENT_WARNING =
+  "부피는 남아 있어도 안전하게 받칠 바닥면이 부족하거나 빈 공간이 나뉘어 추가 적재가 멈췄습니다.";
+
+const NON_FATAL_CHAIN_SIMULATION_WARNINGS = new Set([NO_STABLE_CHAIN_PLACEMENT_WARNING]);
+
+export function isFatalChainSimulationWarning(warning: string) {
+  return !NON_FATAL_CHAIN_SIMULATION_WARNINGS.has(warning);
+}
+
 export function runChainSimulationV0(input: ChainSimulationInput): ChainSimulationOutput {
   const warnings: string[] = [];
 
@@ -103,6 +112,10 @@ export function runChainSimulationV0(input: ChainSimulationInput): ChainSimulati
       rotation: placement.position.rotation
     });
     addedQuantity += 1;
+  }
+
+  if (calculationLimit > addedQuantity) {
+    warnings.push(NO_STABLE_CHAIN_PLACEMENT_WARNING);
   }
 
   const outputSpaces = spaces.map((space) => ({

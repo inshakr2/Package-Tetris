@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { runChainSimulationV0 } from "./chain-simulation";
+import { NO_STABLE_CHAIN_PLACEMENT_WARNING, runChainSimulationV0 } from "./chain-simulation";
 import { BlockTemplate, PackedBlock, ResultSummary, SpaceDefinition } from "./types";
 
 const TIMESTAMP = "2026-06-08T00:00:00.000Z";
@@ -279,6 +279,32 @@ describe("chain-simulation v0", () => {
     assert.equal(addedBlock?.widthMm, 1000);
     assert.equal(addedBlock?.depthMm, 1000);
     assert.equal(addedBlock?.heightMm, 500);
+  });
+
+  it("부피는 남아도 안정적으로 받칠 바닥면이 부족하면 현장 안내를 반환한다", () => {
+    // Given
+    const result = createResult([
+      createPackedBlock({
+        blockId: "partial-floor",
+        widthMm: 600,
+        depthMm: 1000,
+        heightMm: 100
+      })
+    ]);
+
+    // When
+    const output = runChainSimulationV0({
+      result,
+      blockTemplate: createTemplate({
+        dimensions: { widthMm: 1000, depthMm: 1000, heightMm: 500 }
+      }),
+      runId: "chain-run-no-stable-placement",
+      policy: DEFAULT_POLICY
+    });
+
+    // Then
+    assert.equal(output.addedQuantity, 0);
+    assert.deepEqual(output.warnings, [NO_STABLE_CHAIN_PLACEMENT_WARNING]);
   });
 
   it("기존 결과에 공중에 떠 있는 블록이 있으면 추가 적재 계산을 거부한다", () => {
