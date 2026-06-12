@@ -87,6 +87,31 @@ describe("packing-output-safety", () => {
     assert.equal(safeOutput.unloadedBlockCount, 2);
     assert.deepEqual(safeOutput.warnings, ["기존 미적재 경고", UNSAFE_PACKING_RESULT_WARNING]);
   });
+
+  it("배치가 안전해도 수량이나 적재율 invariant가 맞지 않으면 좌표를 폐기한다", () => {
+    // Given
+    const input = createInput();
+    const output = createOutput(
+      [
+        createPackedBlock({ blockId: "floor-a", xMm: 0, yMm: 0 }),
+        createPackedBlock({ blockId: "floor-b", xMm: 500, yMm: 0 })
+      ],
+      {
+        usedSpaceCount: 2,
+        averageUtilizationRate: 0.1
+      }
+    );
+
+    // When
+    const safeOutput = ensureSafeOptimizationOutput(input, output);
+
+    // Then
+    assert.equal(safeOutput.usedSpaceCount, 0);
+    assert.equal(safeOutput.averageUtilizationRate, 0);
+    assert.equal(safeOutput.unloadedBlockCount, 2);
+    assert.deepEqual(safeOutput.spaces, []);
+    assert.deepEqual(safeOutput.warnings, [UNSAFE_PACKING_RESULT_WARNING]);
+  });
 });
 
 function createInput(overrides: Partial<OptimizationInput> = {}): OptimizationInput {
@@ -129,21 +154,32 @@ function createOutput(
   blocks: PackedBlock[],
   overrides: Partial<OptimizationOutput> = {}
 ): OptimizationOutput {
+  const utilizationRate = calculateUtilizationRate(blocks);
+
   return {
     runId: "run-a",
     usedSpaceCount: 1,
-    averageUtilizationRate: 0.5,
+    averageUtilizationRate: utilizationRate,
     unloadedBlockCount: 0,
     spaces: [
       {
         spaceInstanceId: "space-instance-a",
-        utilizationRate: 0.5,
+        utilizationRate,
         blocks
       }
     ],
     warnings: [],
     ...overrides
   };
+}
+
+function calculateUtilizationRate(blocks: PackedBlock[]) {
+  const packedVolume = blocks.reduce(
+    (sum, block) => sum + block.widthMm * block.depthMm * block.heightMm,
+    0
+  );
+
+  return packedVolume / 1_000_000_000;
 }
 
 function createPackedBlock(overrides: Partial<PackedBlock> = {}): PackedBlock {

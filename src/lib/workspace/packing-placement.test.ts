@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canPlaceAt, type PlacementBounds, type PositionCandidate } from "./packing-placement";
+import { canPlaceAt, findFirstStablePlacement, type PlacementBounds, type PositionCandidate } from "./packing-placement";
 import { PackedBlock } from "./types";
 
 const USABLE_SIZE: PlacementBounds = { widthMm: 1000, depthMm: 1000, heightMm: 1000 };
@@ -93,6 +93,114 @@ describe("packing-placement", () => {
 
     // Then
     assert.equal(canPlace, false);
+  });
+
+  it("기존 박스 끝에서 후보 크기를 뺀 좌표를 사용해 바람개비 빈칸을 찾는다", () => {
+    // Given
+    const usableSize: PlacementBounds = { widthMm: 1100, depthMm: 1100, heightMm: 1550 };
+    const blocks = [
+      createPackedBlock({ blockId: "pinwheel-a", xMm: 0, yMm: 0, widthMm: 690, depthMm: 370, heightMm: 580 }),
+      createPackedBlock({
+        blockId: "pinwheel-b",
+        xMm: 690,
+        yMm: 0,
+        widthMm: 370,
+        depthMm: 690,
+        heightMm: 580,
+        rotation: "yxz"
+      }),
+      createPackedBlock({
+        blockId: "pinwheel-c",
+        xMm: 0,
+        yMm: 370,
+        widthMm: 370,
+        depthMm: 690,
+        heightMm: 580,
+        rotation: "yxz"
+      })
+    ];
+
+    // When
+    const placement = findFirstStablePlacement(
+      blocks,
+      { widthMm: 690, depthMm: 370, heightMm: 580 },
+      false,
+      usableSize,
+      FULL_SUPPORT_POLICY
+    );
+
+    // Then
+    assert.deepEqual(placement && { xMm: placement.xMm, yMm: placement.yMm, zMm: placement.zMm }, {
+      xMm: 370,
+      yMm: 690,
+      zMm: 0
+    });
+  });
+
+  it("동일 높이와 바닥면 후보가 갈리면 다음 같은 층 배치를 남기는 회전을 고른다", () => {
+    // Given
+    const usableSize: PlacementBounds = { widthMm: 1100, depthMm: 1100, heightMm: 1550 };
+    const blocks = [
+      createPackedBlock({ blockId: "pinwheel-a", xMm: 0, yMm: 0, widthMm: 690, depthMm: 370, heightMm: 580 }),
+      createPackedBlock({
+        blockId: "pinwheel-b",
+        xMm: 690,
+        yMm: 0,
+        widthMm: 370,
+        depthMm: 690,
+        heightMm: 580,
+        rotation: "yxz"
+      })
+    ];
+
+    // When
+    const placement = findFirstStablePlacement(
+      blocks,
+      { widthMm: 690, depthMm: 370, heightMm: 580 },
+      false,
+      usableSize,
+      FULL_SUPPORT_POLICY
+    );
+
+    // Then
+    assert.deepEqual(
+      placement && {
+        rotation: placement.rotation,
+        xMm: placement.xMm,
+        yMm: placement.yMm,
+        zMm: placement.zMm,
+        widthMm: placement.widthMm,
+        depthMm: placement.depthMm
+      },
+      {
+        rotation: "yxz",
+        xMm: 0,
+        yMm: 370,
+        zMm: 0,
+        widthMm: 370,
+        depthMm: 690
+      }
+    );
+  });
+
+  it("작은 박스 lookahead는 같은 층 전체를 끝까지 채우지 않고 제한된 시간 안에 배치한다", () => {
+    // Given
+    const usableSize: PlacementBounds = { widthMm: 40, depthMm: 40, heightMm: 1 };
+    const startedAt = performance.now();
+
+    // When
+    const placement = findFirstStablePlacement(
+      [],
+      { widthMm: 1, depthMm: 1, heightMm: 1 },
+      false,
+      usableSize,
+      FULL_SUPPORT_POLICY
+    );
+    const elapsedMs = performance.now() - startedAt;
+
+    // Then
+    assert.ok(placement);
+    assert.ok(elapsedMs < 100, `bounded lookahead가 100ms 안에 끝나야 합니다. 실제 ${elapsedMs}ms`);
   });
 });
 

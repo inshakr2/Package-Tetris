@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { runPackingEngineV0 } from "./packing-engine";
+import { createPackedSpaceSignature } from "./packed-space-signature";
 import { OptimizationInput } from "./engine-contract";
-import { calculateUsableSize } from "./presets";
+import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, findPresetSpaceById } from "./presets";
 import { PackedBlock } from "./types";
 
 function createInput(overrides: Partial<OptimizationInput> = {}): OptimizationInput {
@@ -306,6 +307,53 @@ describe("packing-engine v0", () => {
     assert.equal(output.spaces[0]?.blocks[0]?.widthMm, 700);
     assert.equal(output.spaces[0]?.blocks[0]?.depthMm, 500);
     assert.equal(output.spaces[0]?.blocks[0]?.rotation, "yxz");
+  });
+
+  it("690 x 370 x 580mm 박스 8개는 기본 파레트에 바람개비 형태로 1공간 적재한다", () => {
+    // Given
+    const basicPallet = findPresetSpaceById(DEFAULT_PALLET_SPACE_ID);
+    assert.ok(basicPallet);
+    const input = createInput({
+      runId: "field-pinwheel",
+      space: basicPallet,
+      blocks: [
+        {
+          ...createInput().blocks[0],
+          blockId: "block-pinwheel",
+          blockTemplateId: "template-pinwheel",
+          draftBlockItemId: "item-pinwheel",
+          name: "바람개비 검증 박스",
+          dimensions: { widthMm: 690, depthMm: 370, heightMm: 580 },
+          quantity: 8
+        }
+      ],
+      policy: {
+        ...createInput().policy,
+        partialSupportEnabled: false,
+        minimumSupportRatio: 1
+      }
+    });
+
+    // When
+    const output = runPackingEngineV0(input);
+    const firstSpace = output.spaces[0];
+
+    // Then
+    assert.equal(output.usedSpaceCount, 1);
+    assert.equal(output.unloadedBlockCount, 0);
+    assert.ok(firstSpace);
+    assert.equal(firstSpace.blocks.length, 8);
+    assert.deepEqual(createPackedSpaceSignature(firstSpace), [
+      "z=0|y=0|x=0|rotation=xyz|w=690|d=370|h=580",
+      "z=0|y=0|x=690|rotation=yxz|w=370|d=690|h=580",
+      "z=0|y=370|x=0|rotation=yxz|w=370|d=690|h=580",
+      "z=0|y=690|x=370|rotation=xyz|w=690|d=370|h=580",
+      "z=580|y=0|x=0|rotation=xyz|w=690|d=370|h=580",
+      "z=580|y=0|x=690|rotation=yxz|w=370|d=690|h=580",
+      "z=580|y=370|x=0|rotation=yxz|w=370|d=690|h=580",
+      "z=580|y=690|x=370|rotation=xyz|w=690|d=370|h=580"
+    ]);
+    assertStablePackedBlocks(firstSpace.blocks, calculateUsableSize(basicPallet));
   });
 
   it("과거 cursor 방식에서 공중 배치되던 박스를 남은 바닥면으로 회전 배치한다", () => {

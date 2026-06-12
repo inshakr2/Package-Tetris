@@ -1,6 +1,5 @@
 import { OptimizationInput, OptimizationOutput } from "./engine-contract";
-import { validatePackedSpace } from "./packed-result-validation";
-import { calculateUsableSize } from "./presets";
+import { validateOptimizationOutputInvariants } from "./packing-engine-invariants";
 
 export const UNSAFE_PACKING_RESULT_WARNING =
   "계산 결과가 안전 기준에 맞지 않아 배치 좌표를 표시하지 않았습니다. 박스 크기와 수량을 확인한 뒤 다시 계산하세요.";
@@ -9,18 +8,9 @@ export function ensureSafeOptimizationOutput(
   input: OptimizationInput,
   output: OptimizationOutput
 ): OptimizationOutput {
-  const usableSize = calculateUsableSize(input.space);
-  const policy = {
-    fragileStackOnFragileAllowed: input.policy.fragileStackOnFragileAllowed,
-    nonFragileOnFragileAllowed: input.policy.nonFragileOnFragileAllowed,
-    partialSupportEnabled: input.policy.partialSupportEnabled,
-    minimumSupportRatio: input.policy.minimumSupportRatio
-  };
-  const hasUnsafeSpace = output.spaces.some((space) => {
-    return !validatePackedSpace(space, usableSize, policy).isValid;
-  });
+  const validation = validateOptimizationOutputInvariants(input, output);
 
-  if (!hasUnsafeSpace) {
+  if (validation.isValid) {
     return output;
   }
 

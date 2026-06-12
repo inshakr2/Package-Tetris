@@ -74,6 +74,6 @@ describe("v2 roadmap document", () => {
     assert.match(roadmap, /`저장 박스 엑셀 일괄등록 현장 검증`/);
     assert.match(roadmap, /`현재 작업 엑셀 등록 현장 검증`/);
     assert.match(roadmap, /`추가 박스 시뮬레이션 현장 검증`/);
-    assert.match(roadmap, /`현장 피드백 추가 적재 시뮬레이션 검증`/);
+    assert.match(roadmap, /`현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과`/);
   });
 });
