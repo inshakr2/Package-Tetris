@@ -26,8 +26,9 @@ describe("windows npm execution policy guide", () => {
     const nonDeveloperGuide = readFileSync(NON_DEVELOPER_GUIDE_PATH, "utf8");
 
     // When / Then
-    assert.match(nonDeveloperGuide, /docs\/field-demo-user-guide\.md/);
-    assert.match(nonDeveloperGuide, /docs\/windows-cmd-launch-guide\.md/);
+    assert.match(nonDeveloperGuide, /\[field-demo-user-guide\.md]\(field-demo-user-guide\.md\)/);
+    assert.match(nonDeveloperGuide, /\[windows-cmd-launch-guide\.md]\(windows-cmd-launch-guide\.md\)/);
+    assert.doesNotMatch(nonDeveloperGuide, /\]\(docs\//);
   });
 
   it("Windows CMD 가이드는 exe가 아니라 cmd 파일로 자동 실행하도록 안내한다", () => {

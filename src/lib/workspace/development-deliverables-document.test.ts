@@ -62,9 +62,10 @@ describe("development deliverables document", () => {
     // Then
     assert.equal(exists, true);
     assert.match(document, /개발 지식이 없는 사용자/);
-    assert.match(document, /docs\/field-demo-user-guide\.md/);
-    assert.match(document, /docs\/windows-cmd-launch-guide\.md/);
+    assert.match(document, /\[field-demo-user-guide\.md]\(field-demo-user-guide\.md\)/);
+    assert.match(document, /\[windows-cmd-launch-guide\.md]\(windows-cmd-launch-guide\.md\)/);
     assert.match(document, /scripts\/windows-start-package-tetris\.cmd/);
+    assert.doesNotMatch(document, /\]\(docs\//);
     assert.doesNotMatch(document, /작업 지시서/);
   });
 });
