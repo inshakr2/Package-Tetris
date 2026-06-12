@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  calculatePackedBlocksFootprint,
   createPackingSceneBlocks,
   createPackingSceneBounds,
   getSceneTemplateColor
@@ -75,6 +76,51 @@ describe("packing-scene", () => {
         }
       }
     );
+  });
+
+  it("현재 결과의 최대 사용 치수는 블록의 끝 좌표 기준으로 계산한다", () => {
+    // Given
+    const blocks = [
+      createBlock({
+        xMm: 80,
+        yMm: 40,
+        zMm: 0,
+        widthMm: 220,
+        depthMm: 100,
+        heightMm: 180
+      }),
+      createBlock({
+        blockId: "block-b",
+        xMm: 360,
+        yMm: 260,
+        zMm: 220,
+        widthMm: 140,
+        depthMm: 180,
+        heightMm: 90
+      })
+    ];
+
+    // When
+    const footprint = calculatePackedBlocksFootprint(blocks);
+
+    // Then
+    assert.deepEqual(footprint, {
+      widthMm: 500,
+      depthMm: 440,
+      heightMm: 310
+    });
+  });
+
+  it("현재 결과에 블록이 없으면 최대 사용 치수는 0으로 표시한다", () => {
+    // Given / When
+    const footprint = calculatePackedBlocksFootprint([]);
+
+    // Then
+    assert.deepEqual(footprint, {
+      widthMm: 0,
+      depthMm: 0,
+      heightMm: 0
+    });
   });
 
   it("PackedBlock rotation으로 처음 입력한 높이 축의 3D 화살표 방향을 계산한다", () => {

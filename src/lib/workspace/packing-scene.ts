@@ -91,6 +91,29 @@ export function createPackingSceneBlocks(
   });
 }
 
+export function calculatePackedBlocksFootprint(blocks: PackedBlock[]): PackingSceneBoundsInput {
+  if (blocks.length === 0) {
+    return {
+      widthMm: 0,
+      depthMm: 0,
+      heightMm: 0
+    };
+  }
+
+  return blocks.reduce(
+    (footprint, block) => ({
+      widthMm: Math.max(footprint.widthMm, block.xMm + block.widthMm),
+      depthMm: Math.max(footprint.depthMm, block.yMm + block.depthMm),
+      heightMm: Math.max(footprint.heightMm, block.zMm + block.heightMm)
+    }),
+    {
+      widthMm: 0,
+      depthMm: 0,
+      heightMm: 0
+    }
+  );
+}
+
 export function getSceneTemplateColor(blockTemplateId: string) {
   return getTemplateColor(blockTemplateId);
 }

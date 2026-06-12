@@ -29,6 +29,19 @@ describe("result-selection-clear-action-layout", () => {
     assert.equal(threeSource.includes("전체 보기"), false);
   });
 
+  it("3D 캔버스 클릭은 박스 강조를 켜지 않고 범례 선택만 강조 상태를 바꾼다", () => {
+    const canvasClickDoesNotSelect =
+      !threeSource.includes("onClick={handleClick}") &&
+      !threeSource.includes("function handleClick") &&
+      !threeSource.includes("onSelectBlockTemplate(hit.block.blockTemplateId)") &&
+      !threeSource.includes("onSelectBlockTemplate: (blockTemplateId: string) => void");
+    const legendStillControlsSelection =
+      workspaceSource.includes("aria-pressed={item.blockTemplateId === selectedBlockTemplateId}") &&
+      workspaceSource.includes("onClick={() => toggleSelectedBlockTemplate(item.blockTemplateId)}");
+
+    assert.equal(canvasClickDoesNotSelect && legendStillControlsSelection, true);
+  });
+
   it("강조 해제 버튼은 현장 터치 타깃과 모바일 줄바꿈을 유지한다", () => {
     const hasSharedTouchTarget =
       /\.selection-clear-action,\s*\.three-selection-clear-action\s*{[\s\S]*?min-height:\s*48px;[\s\S]*?white-space:\s*normal;[\s\S]*?}/

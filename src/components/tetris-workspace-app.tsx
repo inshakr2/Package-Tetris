@@ -132,6 +132,7 @@ import {
   getProjectionViewLabel,
   type ProjectionView
 } from "@/lib/workspace/projection-view";
+import { calculatePackedBlocksFootprint } from "@/lib/workspace/packing-scene";
 import {
   getResultViewTitle,
   isProjectionViewControlId,
@@ -4227,6 +4228,10 @@ const ResultStage = ({
 
     return createProjectedBlocks(selectedPackedSpace.blocks, projectionView, usableSize);
   }, [projectionView, selectedPackedSpace, usableSize]);
+  const selectedPackedSpaceFootprint = useMemo(
+    () => calculatePackedBlocksFootprint(selectedPackedSpace?.blocks ?? []),
+    [selectedPackedSpace?.blocks]
+  );
   const legendItems = useMemo(() => createProjectionLegendItems(projectedBlocks), [projectedBlocks]);
   const selectedLegendItem =
     legendItems.find((item) => item.blockTemplateId === selectedBlockTemplateId) ?? null;
@@ -5036,7 +5041,8 @@ const ResultStage = ({
                 <div>
                   <strong>{getResultViewTitle(resultViewMode)}</strong>
                   <span className="fine-print">
-                    {resultSpace?.name ?? "공간 미선택"} · {usableSize ? formatDimensions(usableSize) : "-"}
+                    {resultSpace?.name ?? "공간 미선택"} · 결과 최대치수{" "}
+                    {selectedPackedSpace ? formatDimensions(selectedPackedSpaceFootprint) : "-"}
                   </span>
                 </div>
                 <div className="view-buttons" aria-label="결과 보기 방식 선택">
@@ -5151,7 +5157,6 @@ const ResultStage = ({
                     showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
-                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
                     fallbackAction={{
                       label: "위 보기로 확인",
@@ -5170,11 +5175,10 @@ const ResultStage = ({
                     showOrientationArrows={showOrientationArrows}
                     spaceLabel={`Space ${selectedPackedSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPackedSpace.utilizationRate * 100)}%`}
-                    spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · ${formatDimensions(usableSize)}`}
+                    spaceDescription={`${resultSpace?.name ?? "공간 미선택"} · 결과 최대치수 ${formatDimensions(selectedPackedSpaceFootprint)}`}
                     onSelectCameraPreset={setThreeCameraPreset}
                     onResetViewer={resetResultViewer}
                     onToggleOrientationArrows={() => setShowOrientationArrows((current) => !current)}
-                    onSelectBlockTemplate={toggleSelectedBlockTemplate}
                     onClearSelection={clearSelectedBlockTemplate}
                     onOpenFallbackView={openTopFallbackFromExpanded}
                     onClose={closeExpandedThreeView}
@@ -5549,6 +5553,10 @@ function OffsetRecommendationPreviewDialog({
     () => new Map(previewSpaces.map((space) => [space.spaceInstanceId, createPackedSpaceLoadSummary(space)] as const)),
     [previewSpaces]
   );
+  const selectedPreviewSpaceFootprint = useMemo(
+    () => calculatePackedBlocksFootprint(selectedPreviewSpace?.blocks ?? []),
+    [selectedPreviewSpace?.blocks]
+  );
   const emptyPreviewBlockIds = useMemo(() => new Set<string>(), []);
 
   useEffect(() => {
@@ -5584,10 +5592,6 @@ function OffsetRecommendationPreviewDialog({
       dialog.close();
     }
   }, [open]);
-
-  function toggleSelectedPreviewBlock(blockTemplateId: string) {
-    setSelectedBlockTemplateId((current) => (current === blockTemplateId ? null : blockTemplateId));
-  }
 
   function resetPreviewViewer() {
     setCameraPreset("isometric");
@@ -5693,7 +5697,7 @@ function OffsetRecommendationPreviewDialog({
                       {selectedPreviewSpace ? `Space ${selectedPreviewSpaceIndex + 1}` : "미리보기 없음"}
                     </strong>
                     <span className="fine-print">
-                      추천 적재 가능 {formatDimensions(recommendation.usableSizeAfter)}
+                      결과 최대치수 {selectedPreviewSpace ? formatDimensions(selectedPreviewSpaceFootprint) : "-"}
                     </span>
                   </div>
                   <div className="view-buttons three-camera-buttons" aria-label="추천 미리보기 카메라 시점 선택">
@@ -5726,7 +5730,6 @@ function OffsetRecommendationPreviewDialog({
                     showOrientationArrows={true}
                     spaceLabel={`추천 Space ${selectedPreviewSpaceIndex + 1}`}
                     utilizationLabel={`적재율 ${Math.round(selectedPreviewSpace.utilizationRate * 100)}%`}
-                    onSelectBlockTemplate={toggleSelectedPreviewBlock}
                     onClearSelection={() => setSelectedBlockTemplateId(null)}
                   />
                 ) : (
@@ -5774,7 +5777,6 @@ function ExpandedThreeViewDialog({
   onSelectCameraPreset,
   onResetViewer,
   onToggleOrientationArrows,
-  onSelectBlockTemplate,
   onClearSelection,
   onOpenFallbackView,
   onClose
@@ -5793,7 +5795,6 @@ function ExpandedThreeViewDialog({
   onSelectCameraPreset: (preset: ThreeCameraPreset) => void;
   onResetViewer: () => void;
   onToggleOrientationArrows: () => void;
-  onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
   onOpenFallbackView: () => void;
   onClose: () => void;
@@ -5901,7 +5902,6 @@ function ExpandedThreeViewDialog({
               showOrientationArrows={showOrientationArrows}
               spaceLabel={spaceLabel}
               utilizationLabel={utilizationLabel}
-              onSelectBlockTemplate={onSelectBlockTemplate}
               onClearSelection={onClearSelection}
               fallbackAction={{
                 label: "위 보기로 확인",

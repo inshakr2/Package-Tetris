@@ -55,7 +55,7 @@
 | `웬만하면 맨위로` 같은 상단 선호 가능성 검토 | Phase 3, Tracking Risks | 단순 문구 변경으로 노출하지 않는다. 실제 엔진 정책을 구현할 때만 `위로 배치 선호`로 별도 승인 후 확장한다. | 보류 사유 명시 |
 | 실제 작업 대상 박스 중복 선택 방지 | Phase 1 | 같은 저장 박스를 다시 추가하면 새 카드가 생기지 않고 기존 카드 수량에 합산된다. | 반영됨 |
 | 3D 방향 화살표를 선분보다 면형 화살표로 개선 | Phase 4 | `THREE.ArrowHelper` 대신 얇은 mesh/shape 기반 화살표를 렌더링하고, raycast 대상에서 제외한다. | 반영됨 |
-| 3D 상단 공간 치수 대신 실제 결과 최대 가로/세로/높이 표시 | Phase 4 | 선택 공간의 실제 적재 bounding box를 `결과 최대치수`로 표시한다. | 반영됨 |
+| 3D 상단 공간 치수 대신 실제 결과 최대 가로/세로/높이 표시 | Phase 4 | 선택 공간에서 박스가 도달한 끝 좌표 기준 최대값을 `결과 최대치수`로 표시한다. | 반영됨 |
 | 3D 회전 후 클릭을 놓을 때 박스 강조가 켜지는 동작 제거 | Phase 4, Required Verification | 캔버스 클릭이 선택 상태를 만들지 않으며, 브라우저에서 pointer up/click 회귀를 확인한다. | 반영됨 |
 | 추가 박스 시뮬레이션 선택 카드 우측 상단에 선택 취소 버튼 추가 | Phase 5 | 선택 카드별 48px 삭제 버튼으로 선택 해제, 순위 재정렬, preview stale 처리를 수행한다. | 반영됨 |
 | `690 x 370 x 580mm` 8개 기본 파레트 1공간 적재 | Phase 0, Phase 2, Phase 5.1 | 실패 테스트를 먼저 고정하고, 구현 후 `usedSpaceCount=1`, `packedBlockCount=8`, invariant, `field:audit`를 통과한다. | 반영됨 |
@@ -351,8 +351,6 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 **Goal:** 결과 화면에서 실제 적재 크기와 방향을 더 직관적으로 확인하게 하고, 의도치 않은 클릭 강조를 제거한다.
 
 **Files:**
-- Create: `src/lib/workspace/packed-space-bounds.ts`
-- Create: `src/lib/workspace/packed-space-bounds.test.ts`
 - Modify: `src/lib/workspace/packing-scene.ts`
 - Modify: `src/lib/workspace/packing-scene.test.ts`
 - Modify: `src/components/result-stage/result-3d-canvas.client.tsx`
@@ -362,16 +360,16 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 - Modify: `src/app/globals.css`
 
 **Implementation Direction:**
-- `calculatePackedSpaceBounds(blocks)`를 추가한다.
-- 선택된 결과 공간의 `maxX - minX`, `maxY - minY`, `maxZ - minZ`를 `결과 최대치수`로 표시한다.
-- 블록이 없으면 `-`를 표시한다.
+- `calculatePackedBlocksFootprint(blocks)`를 추가한다.
+- 선택된 결과 공간에서 각 블록의 끝 좌표 `max(x + width)`, `max(y + depth)`, `max(z + height)`를 `결과 최대치수`로 표시한다.
+- 블록이 없으면 `0 / 0 / 0mm`를 표시한다.
 - 기존 `3D 공간 치수` aria-label은 `3D 결과 최대치수`로 바꾼다.
-- `결과 최대치수`는 현재 선택된 결과 공간 1건의 실제 적재 bounding box(mm)다. 원래 공간 치수는 공간 선택/공간 목록 쪽에서 계속 확인 가능하게 유지한다.
+- `결과 최대치수`는 현재 선택된 결과 공간 1건이 공간 원점 기준으로 실제 도달한 최대 치수(mm)다. 원래 공간 치수는 공간 선택/공간 목록 쪽에서 계속 확인 가능하게 유지한다.
 - 3D 캔버스 클릭으로 `onSelectBlockTemplate`을 호출하지 않는다.
-- 3D 캔버스 내부 opacity 기반 강조와 `강조 해제` 버튼은 제거한다.
-- 범례 또는 2D 보기에서의 식별 경로는 별도 피드백이 없으므로 유지한다.
+- 범례 또는 2D 보기에서의 식별 경로는 유지한다.
+- 범례로 선택한 강조 상태를 풀 수 있도록 `강조 해제` 버튼과 `Esc` 해제 경로는 유지한다.
 - 모바일/태블릿에서는 hover tooltip을 핵심 식별 수단으로 보지 않는다. 범례와 2D 보기만으로 박스 종류를 확인할 수 있어야 한다.
-- 3D는 회전/검토 전용으로 정리하고, 키보드 도움말과 ESC 안내에서 `강조 해제` 계약을 제거한다.
+- 3D는 회전/검토 전용으로 정리하되, 범례로 선택된 강조 상태를 3D 포커스에서도 해제할 수 있게 키보드 도움말의 `Esc 강조 해제` 계약은 유지한다.
 - 방향 화살표는 `THREE.ArrowHelper` 선분 대신 `THREE.ShapeGeometry` 또는 얇은 `THREE.Mesh` 기반의 납작한 면형 화살표로 교체한다.
 - 화살표는 블록 raycast 대상에 포함하지 않는다.
 - 화살표 mesh는 작은 박스에서도 보이도록 shaft와 head의 최소 크기를 가진다. 구현 시 `min(블록 짧은 축의 35%)`를 넘지 않게 하고, 화면상 뭉개지면 layout test 또는 screenshot 검증에서 실패로 본다.
@@ -383,7 +381,7 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 - 방향 화살표는 선분보다 면적으로 보이고, 입력 높이 방향 의미는 유지한다.
 - 모바일/태블릿에서 범례와 2D 보기만으로 박스 식별이 가능하다.
 - hover tooltip은 데스크톱 보조 기능으로만 남는다.
-- `강조 해제` 버튼, ESC 기반 강조 해제 안내, opacity 강조 상태 문구가 남아 있지 않다.
+- 3D 캔버스 클릭은 선택을 바꾸지 않고, 범례 선택/강조 해제만 강조 상태를 바꾼다.
 - WebGL fallback 문구는 유지된다.
 
 ## 10. Phase 5. Additional Simulation Selection UX
@@ -492,7 +490,7 @@ node --import tsx --test src/lib/workspace/multi-chain-simulation.test.ts
 ### 13.1 Business Analyst Re-review
 
 - 요구사항 누락은 없지만 placeholder 정책, 중복 합산 시 기존 카드 설정 유지, `결과 최대치수` 기준, 엔진 signature 강제 여부를 명확히 해야 한다고 보고했다.
-- PM 반영: 신규 치수 입력은 숫자 placeholder까지 제거한다. 현재 작업 중복 합산은 기존 카드 설정을 유지한다. `결과 최대치수`는 선택된 결과 공간의 bounding box로 확정한다. 좌표 signature는 대표 회귀 기준으로 쓰되 제품 완료 조건은 1공간/8개/invariant 통과로 둔다.
+- PM 반영: 신규 치수 입력은 숫자 placeholder까지 제거한다. 현재 작업 중복 합산은 기존 카드 설정을 유지한다. `결과 최대치수`는 선택된 결과 공간의 원점 기준 끝 좌표 최대값으로 확정한다. 좌표 signature는 대표 회귀 기준으로 쓰되 제품 완료 조건은 1공간/8개/invariant 통과로 둔다.
 
 ### 13.2 UI Designer Re-review
 

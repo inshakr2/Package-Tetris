@@ -2292,6 +2292,17 @@ select:focus-visible {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
 }
 
+.three-dimension-overlay .three-dimension-overlay-title {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  width: fit-content;
+  min-height: 28px;
+  align-items: center;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .three-dimension-overlay strong {
   color: var(--muted);
   font-size: 11px;
@@ -2399,8 +2410,8 @@ select:focus-visible {
   background: rgba(255, 255, 255, 0.94);
   color: var(--text);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  overflow-wrap: anywhere;
   pointer-events: none;
-  transform: translate(10px, 10px);
 }
 
 .three-tooltip strong {
