@@ -33,12 +33,33 @@
 
 - `690 x 370 x 580mm` 8개가 `기본 파레트 1100 x 1100 x 1550mm`에 1파레트로 들어간다는 현장 피드백은 V2 패치 목표로 채택한다.
 - 이 패턴은 내부 문서와 테스트에서는 `바람개비 배치(pinwheel)`로 부른다. 사용자 UI에서는 필요한 경우 `엇갈림 배치`처럼 설명형 문구를 함께 쓴다.
-- 박스 등록 치수 피드백은 placeholder 삭제가 아니라 `치수 기본 입력값 제거`로 정규화한다.
+- 박스 등록 치수 피드백은 `숫자 기본값 제거`와 `예시 숫자 placeholder 미사용`으로 정규화한다.
 - 박스명 중복은 화면만이 아니라 저장 유틸 계약에서 막는다.
 - 현재 작업 대상 박스 중복은 새 카드를 계속 만들지 않는다. 기본 동작은 기존 카드 수량에 합치고, 현장 사용자가 이해할 수 있는 상태 문구를 보여준다.
 - `먼저 바닥에`와 `맨 아래 우선`은 같은 의미로 보이므로 중복을 제거한다. 기본 패치는 `기본 / 아래 우선` 2단계로 정리하고, `위로 배치 선호`는 실제 엔진 정책까지 함께 구현하는 별도 승인안으로 둔다.
 - 3D 캔버스 클릭으로 박스 강조가 켜지는 동작은 제거한다. 박스 식별은 범례, hover tooltip, 2D 보기 중심으로 유지한다.
 - 3D 오버레이는 공간 원래 치수 대신 선택된 결과 공간의 실제 적재 최대 치수인 `결과 최대치수`를 표시한다.
+- 이 문서는 2026-06-12 현장 패치의 기준 작업 지시서다. 모든 구현은 `v2`에서 진행하고, 안정화 전에는 `main`에 직접 반영하지 않는다.
+- 신규 박스 치수 입력은 숫자 기본값과 예시 숫자 placeholder를 모두 제거한다. 단위와 입력 목적은 라벨, suffix, 오류 문구로만 전달한다.
+- 현재 작업에 동일 박스를 다시 선택하면 기존 카드 수량만 합산한다. 배치 우선, 깨짐주의, 회전 가능 같은 기존 카드 설정은 유지하고, 다른 설정이 필요하면 사용자가 해당 카드에서 직접 수정한다.
+- `690 x 370 x 580mm` 엔진 완료 조건은 `1공간 / 8개 / 미적재 0 / invariant 통과`를 1차 기준으로 둔다. 좌표 signature는 대표 회귀 기준이지만, 같은 안전 조건을 만족하는 다른 유효 배치가 나올 경우 PM과 code-reviewer 확인 후 기준 signature를 갱신할 수 있다.
+- 패치 완료 보고에는 자동 검증 결과와 현장 대표 케이스 재현 로그를 `docs/verification/` 아래에 남긴다.
+
+### 1.3 Field Feedback Coverage Check
+
+| 원문 피드백 | 계획 반영 위치 | 완료 기준 | 누락/보강 판단 |
+| --- | --- | --- | --- |
+| 박스 등록 가로/세로/높이 입력의 기본 문구 또는 기본값 제거 | Phase 1 | 신규 박스 등록 치수 입력이 빈 값으로 시작하고, 예시 숫자 placeholder 없이 라벨/단위/오류 문구로만 의미를 전달한다. | 반영됨 |
+| 신규 박스명이 기존 박스명과 같으면 중복 등록 방지 | Phase 1 | 수동 저장, 수정 저장, 저장 박스 `.xlsx` import가 같은 정규화 기준으로 중복명을 막는다. | 반영됨 |
+| `먼저 바닥에`와 `맨 아래 우선` 중복 제거 | Phase 3 | 같은 동작을 하는 두 버튼이 동시에 보이지 않고, 기존 데이터는 `아래 우선`으로 보정된다. | 반영됨 |
+| `웬만하면 맨위로` 같은 상단 선호 가능성 검토 | Phase 3, Tracking Risks | 단순 문구 변경으로 노출하지 않는다. 실제 엔진 정책을 구현할 때만 `위로 배치 선호`로 별도 승인 후 확장한다. | 보류 사유 명시 |
+| 실제 작업 대상 박스 중복 선택 방지 | Phase 1 | 같은 저장 박스를 다시 추가하면 새 카드가 생기지 않고 기존 카드 수량에 합산된다. | 반영됨 |
+| 3D 방향 화살표를 선분보다 면형 화살표로 개선 | Phase 4 | `THREE.ArrowHelper` 대신 얇은 mesh/shape 기반 화살표를 렌더링하고, raycast 대상에서 제외한다. | 반영됨 |
+| 3D 상단 공간 치수 대신 실제 결과 최대 가로/세로/높이 표시 | Phase 4 | 선택 공간의 실제 적재 bounding box를 `결과 최대치수`로 표시한다. | 반영됨 |
+| 3D 회전 후 클릭을 놓을 때 박스 강조가 켜지는 동작 제거 | Phase 4, Required Verification | 캔버스 클릭이 선택 상태를 만들지 않으며, 브라우저에서 pointer up/click 회귀를 확인한다. | 반영됨 |
+| 추가 박스 시뮬레이션 선택 카드 우측 상단에 선택 취소 버튼 추가 | Phase 5 | 선택 카드별 48px 삭제 버튼으로 선택 해제, 순위 재정렬, preview stale 처리를 수행한다. | 반영됨 |
+| `690 x 370 x 580mm` 8개 기본 파레트 1공간 적재 | Phase 0, Phase 2, Phase 5.1 | 실패 테스트를 먼저 고정하고, 구현 후 `usedSpaceCount=1`, `packedBlockCount=8`, invariant, `field:audit`를 통과한다. | 반영됨 |
+| 엔진 정합성 검사와 회귀 테스트를 확실히 매듭 | Phase 5.1, Required Verification | boundary, collision, support, fragile, partial support, determinism, utilization, 추가 시뮬레이션 variant invariant를 모두 검증한다. | 보강됨 |
 
 ## 2. Role Reports
 
@@ -114,7 +135,7 @@ flowchart TD
 **Steps:**
 1. `packed-space-signature.ts`를 추가해 `PackedSpace`의 블록을 `zMm`, `yMm`, `xMm`, `rotation`, `widthMm`, `depthMm`, `heightMm` 순으로 정렬한 문자열 signature로 만든다.
 2. `690 x 370 x 580mm` 8개 기본 파레트 케이스가 현재 2공간을 반환한다는 실패 테스트를 먼저 작성한다.
-3. 목표 signature는 한 레이어에 4개, 총 2레이어다.
+3. 대표 signature는 한 레이어에 4개, 총 2레이어다. 이 signature는 회귀 분석과 deterministic 비교를 위한 기준이며, 제품 완료 조건은 1공간 적재와 invariant 통과다.
 
 ```text
 z=0:
@@ -133,7 +154,9 @@ z=580:
 
 **Acceptance Criteria:**
 - 현재 엔진에서 `690 x 370 x 580mm` 8개 케이스가 실패하는 테스트가 먼저 생긴다.
+- 구현 후 해당 케이스는 `usedSpaceCount=1`, `blocks.length=8`, `unloadedBlockCount=0`을 만족한다.
 - 목표 배치는 공간 경계, 충돌, 지지면, 깨짐주의 정책을 모두 통과해야 한다.
+- 좌표 signature는 대표 회귀 기준으로 검증하되, 같은 안전 조건을 만족하는 다른 deterministic 배치가 나온 경우 테스트 expectation을 갱신하기 전에 PM과 code-reviewer가 배치 근거를 기록한다.
 
 ### 5.1 Engine Correctness Closure Gate
 
@@ -171,8 +194,13 @@ z=580:
 
 **Field audit rule:**
 - `npm run field:audit`는 `현장 바람개비 적재 검증` 기능 검증을 추가한다.
-- 이 기능 검증은 최소 `usedSpaceCount=1`, `packedBlockCount=8`, `unloadedBlockCount=0`, invariant 통과를 확인한다.
-- `field:audit` summary에는 이 검증 이름과 결과가 반드시 표시되어야 한다.
+- `field:audit` summary에는 아래 기능 검증 이름과 `usedSpaceCount`, `packedBlockCount`, `unloadedBlockCount`, invariant 통과 여부가 반드시 표시되어야 한다.
+  - `현장 바람개비 적재 검증 - 기본 8개`
+  - `현장 바람개비 적재 검증 - 치수 순서 변형`
+  - `현장 바람개비 적재 검증 - 9개 경계`
+  - `현장 바람개비 적재 검증 - 주변 치수`
+  - `현장 혼합 추가 시뮬레이션 variant 검증`
+- `field:audit`만 녹색이어도 위 항목 중 하나가 summary에서 빠지면 엔진 패치 완료로 보지 않는다.
 
 ## 6. Phase 1. Box Registration And Current Work Integrity
 
@@ -181,10 +209,15 @@ z=580:
 **Files:**
 - Modify: `src/lib/workspace/block-library.ts`
 - Modify: `src/lib/workspace/block-library.test.ts`
+- Modify: `src/lib/workspace/field-number-input.ts`
+- Modify: `src/lib/workspace/field-number-input.test.ts`
+- Modify: `src/lib/workspace/field-number-input-layout.test.ts`
 - Modify: `src/lib/workspace/block-template-xlsx-import.ts`
 - Modify: `src/lib/workspace/block-template-xlsx-import.test.ts`
 - Modify: `src/lib/workspace/draft-block-xlsx-import.ts`
 - Modify: `src/lib/workspace/draft-block-xlsx-import.test.ts`
+- Modify: `src/lib/workspace/result-freshness.ts`
+- Modify: `src/lib/workspace/result-freshness.test.ts`
 - Modify: `src/components/tetris-workspace-app.tsx`
 - Modify: `src/lib/workspace/block-library-search-layout.test.ts`
 - Modify: `src/lib/workspace/draft-block-xlsx-import-layout.test.ts`
@@ -192,19 +225,30 @@ z=580:
 **Implementation Direction:**
 - `normalizeBlockTemplateNameKey(name)`을 공통 유틸로 승격한다.
 - 수동 신규 저장은 같은 정규화 박스명이 있으면 저장하지 않고 오류 문구를 표시한다.
+- 박스명 중복 오류는 박스명 필드 아래 inline error와 저장 버튼 근처 error summary에 함께 보여준다.
 - 수정 저장은 자기 자신을 제외하고 같은 이름이 있으면 막는다.
 - 빈 이름을 `신규 박스`로 자동 치환하지 않는다. 박스명은 필수로 둔다.
 - 박스 치수 form state는 `number | ""`를 허용하고 신규 등록 기본값은 빈 값으로 둔다.
+- `number | ""`는 React form local state와 `NumberFieldInput` 계약 안에서만 허용한다. `BlockTemplate`, IndexedDB, JSON backup, import/export, packing input에는 빈 문자열을 흘리지 않는다.
+- 치수 입력에는 예시 숫자 placeholder를 넣지 않는다. 첫 진입은 오류 없는 중립 상태이고, blur 또는 저장 시도 후 필드명 포함 오류를 표시한다.
 - 저장 버튼은 박스명, 가로, 세로, 높이가 모두 유효할 때만 활성화한다.
+- 저장 시도 후 오류가 있으면 첫 오류 필드로 focus를 이동한다.
 - 현재 작업에 같은 `blockTemplateId`를 추가하면 새 카드 대신 기존 카드 수량에 합친다.
 - 수량 합산 시 기존 `loadPriority`를 유지하고, 합산 사실을 status 문구로 보여준다.
+- 수량 합산은 undo, result freshness fingerprint, JSON backup/restore 결과까지 같은 의미를 유지해야 한다.
+- 현재 작업 중복 추가 status는 해당 카드 근처에 `기존 카드에 {수량}개 합산됨`처럼 표시한다.
 - 현재 작업 `.xlsx` import에서 같은 박스명이 여러 행에 있으면 행 단위 오류 대신 수량 합산 미리보기를 보여준다. 잘못된 수량은 기존처럼 오류 행으로 남긴다.
+- `.xlsx` 합산 미리보기는 합산 전 수량, 추가 수량, 합산 후 수량을 표에 표시한다.
+- `.xlsx` 중복 행끼리 `적재위치타입`이 다르면 수량은 합산하되 기존 카드 정책을 유지하고, preview에 `기존 설정 유지` 경고를 표시한다.
 
 **Acceptance Criteria:**
 - 신규 박스 등록의 가로/세로/높이는 빈 입력으로 시작한다.
+- 신규 박스 등록의 가로/세로/높이는 예시 숫자 placeholder를 보여주지 않는다.
 - 중복 박스명은 수동 저장, 수정 저장, 저장 박스 `.xlsx` import 모두에서 같은 기준으로 막힌다.
+- 중복 박스명 오류는 사용자가 수정해야 할 필드와 해결 행동을 한 화면에서 알 수 있다.
 - 현재 작업에 같은 박스를 다시 추가해도 카드가 늘어나지 않는다.
 - 중복 추가는 수량 합산 또는 명확한 안내로 처리된다.
+- 수량 합산 시 기존 카드의 배치 우선, 깨짐주의, 회전 가능 설정은 유지된다.
 - 기존 백업/IndexedDB에서 숫자 치수는 그대로 로드된다.
 
 ## 7. Phase 2. Pinwheel Placement Engine Patch
@@ -291,11 +335,15 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 - 호환성 때문에 기존 `아래층우선타입` 컬럼은 계속 읽되, 문서와 샘플은 `적재위치타입`만 안내한다.
 - 2단계 기본안은 `1=기본`, `2=아래우선`을 안내한다.
 - `위로 배치 선호` 승인안은 `1=기본`, `2=아래우선`, `3=위로배치선호`를 안내한다.
+- 실행 전 확인 요약은 `아래 우선`으로 지정된 박스명, 수량, 적용 정책을 표시한다.
+- `아래 우선` 지정이 0개이면 `모두 기본 배치` 상태 문구를 표시하고 별도 경고로 보지 않는다.
+- `위로 배치 선호`는 PM 승인, 엔진 정렬 정책, import enum, 실행 전 요약, 사용자 가이드가 모두 같은 cycle에서 준비될 때만 노출한다.
 
 **Acceptance Criteria:**
 - 같은 동작을 하는 두 버튼이 동시에 보이지 않는다.
 - 기존 작업본의 `먼저 바닥에`/`맨 아래 우선` 설정은 `아래 우선`으로 안전하게 보정된다.
 - 2단계 기본안에서는 실행 전 확인 요약이 `아래 우선` 지정 수를 보여준다.
+- 실행 전 확인 요약은 `아래 우선` 지정 수만이 아니라 박스명과 수량을 함께 보여준다.
 - `위로 배치 선호` 승인안에서는 `위로 배치 선호`로 지정한 박스가 가능한 조건에서 다른 일반 박스보다 늦게 배치되는 테스트가 있다.
 
 ## 9. Phase 4. Result 3D Interpretation Patch
@@ -318,17 +366,24 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 - 선택된 결과 공간의 `maxX - minX`, `maxY - minY`, `maxZ - minZ`를 `결과 최대치수`로 표시한다.
 - 블록이 없으면 `-`를 표시한다.
 - 기존 `3D 공간 치수` aria-label은 `3D 결과 최대치수`로 바꾼다.
+- `결과 최대치수`는 현재 선택된 결과 공간 1건의 실제 적재 bounding box(mm)다. 원래 공간 치수는 공간 선택/공간 목록 쪽에서 계속 확인 가능하게 유지한다.
 - 3D 캔버스 클릭으로 `onSelectBlockTemplate`을 호출하지 않는다.
 - 3D 캔버스 내부 opacity 기반 강조와 `강조 해제` 버튼은 제거한다.
-- 범례 또는 2D 보기에서의 선택/강조는 별도 피드백이 없으므로 유지한다.
+- 범례 또는 2D 보기에서의 식별 경로는 별도 피드백이 없으므로 유지한다.
+- 모바일/태블릿에서는 hover tooltip을 핵심 식별 수단으로 보지 않는다. 범례와 2D 보기만으로 박스 종류를 확인할 수 있어야 한다.
+- 3D는 회전/검토 전용으로 정리하고, 키보드 도움말과 ESC 안내에서 `강조 해제` 계약을 제거한다.
 - 방향 화살표는 `THREE.ArrowHelper` 선분 대신 `THREE.ShapeGeometry` 또는 얇은 `THREE.Mesh` 기반의 납작한 면형 화살표로 교체한다.
 - 화살표는 블록 raycast 대상에 포함하지 않는다.
+- 화살표 mesh는 작은 박스에서도 보이도록 shaft와 head의 최소 크기를 가진다. 구현 시 `min(블록 짧은 축의 35%)`를 넘지 않게 하고, 화면상 뭉개지면 layout test 또는 screenshot 검증에서 실패로 본다.
+- 위/앞/옆/자유시점 전환과 크게 보기에서도 화살표가 박스 밖으로 과도하게 삐져나오거나 잘리지 않아야 한다.
 
 **Acceptance Criteria:**
 - 3D를 회전하다 클릭을 놓아도 박스 강조 상태가 생기지 않는다.
 - 3D 오버레이는 공간 치수가 아니라 실제 결과 최대치수를 보여준다.
 - 방향 화살표는 선분보다 면적으로 보이고, 입력 높이 방향 의미는 유지한다.
-- hover tooltip과 범례는 계속 사용할 수 있다.
+- 모바일/태블릿에서 범례와 2D 보기만으로 박스 식별이 가능하다.
+- hover tooltip은 데스크톱 보조 기능으로만 남는다.
+- `강조 해제` 버튼, ESC 기반 강조 해제 안내, opacity 강조 상태 문구가 남아 있지 않다.
 - WebGL fallback 문구는 유지된다.
 
 ## 10. Phase 5. Additional Simulation Selection UX
@@ -344,14 +399,22 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 **Implementation Direction:**
 - 선택된 추가 박스 순위 카드 우측 상단에 삭제 버튼을 둔다.
 - 삭제 버튼은 `aria-label="{박스명} 추가 시뮬레이션 선택 해제"`를 사용한다.
+- 삭제 버튼은 X 아이콘과 `해제` 텍스트를 함께 사용한다. 360px에서도 의미가 보이지 않으면 X만 남기지 않는다.
 - 삭제 시 선택 순서, 지정 수량, preview 결과를 함께 갱신한다.
+- 삭제 후 preview는 자동 재계산하지 않고 `조건이 바뀌었습니다. 다시 계산하세요.` 상태로 명확히 표시한다.
+- 삭제 후 focus는 다음 선택 카드의 삭제 버튼으로 이동하고, 다음 카드가 없으면 `저장된 박스 찾아 선택` 버튼으로 이동한다.
+- 삭제 후 live status로 `{박스명} 선택을 해제했습니다.`를 알린다.
 - 3개 카드가 모두 있을 때도 카드 높이가 과도하게 커지지 않도록 우측 액션 컬럼 안에 배치한다.
+- 삭제 버튼 hit area는 최소 48px이고, 순위 이동 버튼과 최소 8px 이상 떨어져야 한다.
 - 360px에서는 삭제 버튼이 카드 제목 줄 오른쪽에 남고, 순위 이동 버튼은 다음 줄에서 2열 이하로 접는다.
+- 같은 박스가 이미 선택되어 있으면 검색/목록에서 다시 선택할 수 없게 하거나 `이미 선택됨` 상태로 표시한다. 삭제 후에는 다시 선택 가능해야 한다.
 
 **Acceptance Criteria:**
 - 선택한 추가 박스를 한 번에 해제할 수 있다.
 - 삭제 후 남은 카드 순위가 1부터 다시 정렬된다.
 - 추가 결과 preview는 삭제 후 stale 상태가 되거나 자동 재계산 기준이 명확히 표시된다.
+- 같은 추가 박스를 중복 선택할 수 없다.
+- 삭제 후 재선택해도 지정 수량과 순위가 새 선택 기준으로 초기화된다.
 - 360px, 390px, 768px, 1280px에서 카드가 가로 넘치지 않는다.
 
 ## 11. Phase 6. Documentation And Verification
@@ -397,9 +460,14 @@ UI가 바뀐 cycle은 추가로 브라우저에서 아래 폭을 확인한다.
 - 박스 등록 치수 입력이 부모 그리드를 넘지 않음
 - 현재 작업 카드 총 부피/삭제 버튼이 그리드를 넘지 않음
 - 추가 시뮬레이션 선택 카드 우측 삭제 버튼이 순위 버튼과 겹치지 않음
+- 저장된 박스 검색 모달이 360px, 390px, 768px, 1280px에서 배경/레이어/스크롤을 유지함
+- 저장 박스 `.xlsx` 포맷 보기와 현재 작업 `.xlsx` 포맷 보기 모달이 360px에서 가로 넘침 없이 읽힘
+- 현장 전달 전 점검과 백업 CTA가 모바일에서 sticky action 또는 3D canvas에 가리지 않음
 - 3D 캔버스 nonblank
+- 인라인 3D와 크게 보기 3D에서 `drag -> release over box`, `tap only`, `hover tooltip`, `범례 식별`, `2D 보기`를 각각 확인함
 - 3D 회전 후 pointer up/click으로 강조 상태가 생기지 않음
 - 결과 최대치수 오버레이가 캔버스 조작을 막지 않음
+- WebGL fallback 상태에서도 결과 확인과 다음 행동이 남아 있음
 
 엔진이 바뀐 cycle은 추가로 아래를 확인한다.
 
@@ -412,12 +480,52 @@ node --import tsx --test src/lib/workspace/multi-chain-simulation.test.ts
 엔진 정합성 수동 점검:
 
 - `690 x 370 x 580mm` 8개 기본 파레트 결과가 1공간인지 확인한다.
-- 해당 결과의 좌표/회전 signature가 Phase 0 목표 signature와 일치하는지 확인한다.
+- 해당 결과의 좌표/회전 signature가 Phase 0 대표 signature 또는 PM 승인 signature와 일치하는지 확인한다.
 - 결과 전체에 대해 boundary, collision, support, fragile policy invariant가 통과하는지 확인한다.
 - 추가 박스 시뮬레이션 variant 전체가 같은 invariant를 통과하는지 확인한다.
+- `field:audit` summary가 Phase 5.1의 세부 검증 이름을 모두 출력하는지 확인한다.
 - 후보 좌표 확장 후 `field:audit` 총 계산 시간이 이전 기준 대비 2배 이상 늘면 원인을 분석하고 commit하지 않는다.
+- 패치 완료 보고에는 자동 검증 output과 대표 현장 케이스 재현 로그를 `docs/verification/` 아래에 남긴다.
 
-## 13. Tracking Risks
+## 13. Phase Review Feedback And PM Final Decisions
+
+### 13.1 Business Analyst Re-review
+
+- 요구사항 누락은 없지만 placeholder 정책, 중복 합산 시 기존 카드 설정 유지, `결과 최대치수` 기준, 엔진 signature 강제 여부를 명확히 해야 한다고 보고했다.
+- PM 반영: 신규 치수 입력은 숫자 placeholder까지 제거한다. 현재 작업 중복 합산은 기존 카드 설정을 유지한다. `결과 최대치수`는 선택된 결과 공간의 bounding box로 확정한다. 좌표 signature는 대표 회귀 기준으로 쓰되 제품 완료 조건은 1공간/8개/invariant 통과로 둔다.
+
+### 13.2 UI Designer Re-review
+
+- 빈 입력과 저장 비활성만으로는 현장 사용자가 막힌 이유를 알기 어렵다고 보고했다.
+- 중복 오류와 수량 합산은 메시지 위치와 어조가 달라야 한다고 보고했다.
+- 3D 클릭 강조 제거 후에는 hover가 아니라 범례/2D 보기를 터치 환경의 대체 식별 경로로 명시해야 한다고 보고했다.
+- PM 반영: Phase 1에 필드 inline error, error summary, 첫 오류 focus 이동을 추가했다. Phase 4에 모바일/태블릿 식별 경로와 `강조 해제` 계약 제거를 추가했다. Phase 5에 삭제 후 focus/live status/preview stale 처리를 추가했다.
+
+### 13.3 UI/UX Tester Re-review
+
+- 메인 화면 overflow 외에도 `.xlsx` 미리보기, 저장된 박스 검색 모달, 확대 3D, 현장 전달 전 점검, 백업 CTA까지 브라우저 실측이 필요하다고 보고했다.
+- 추가 시뮬레이션에서 같은 박스를 두 번 선택하는 플로우와 삭제 후 재선택 플로우가 빠져 있다고 보고했다.
+- `field:audit`가 pinwheel 기본 8개만이 아니라 permutation, 9개 경계, off-by-one, 혼합 추가 시뮬레이션 variant까지 summary에 올려야 한다고 보고했다.
+- PM 반영: Required Verification에 모달/확대 3D/WebGL fallback 실측을 추가했다. Phase 5에 추가 시뮬레이션 중복 선택 방지와 삭제 후 재선택 기준을 추가했다. Phase 5.1에 세부 audit 항목을 추가했다.
+
+### 13.4 Next.js Developer Re-review
+
+- `number | ""`는 form state까지만 허용하고 영속 타입에는 흘리지 말아야 한다고 보고했다.
+- `NumberFieldInput`, `field-number-input` 테스트, `result-freshness`, undo, `field-audit-report.test.ts`가 파일 범위에 빠져 있다고 보고했다.
+- 후보 좌표 확장은 방향이 맞지만 candidate 수 폭증과 multi-chain 비용 증가를 성능 위험으로 보고했다.
+- PM 반영: Phase 1 파일 범위와 타입 경계를 보강했다. Phase 2와 Required Verification에 성능 기준과 candidate ranking 검증을 유지했다.
+
+## 14. Final Self Review
+
+| 점검 항목 | 결과 |
+| --- | --- |
+| 모든 현장 피드백이 계획상 Phase와 acceptance에 매핑되는가 | 예. 1.3 Coverage Check에서 1:1 추적한다. |
+| visible UI 결정이 PM 단독으로 확정되지 않았는가 | 예. BA, UI Designer, UI/UX Tester, Next.js Developer 재검토를 반영했다. |
+| V2 전용 작업임이 명시되었는가 | 예. 문서 header와 PM 결정안에 `v2` 기준을 명시했다. |
+| 엔진 정합성 이슈가 단일 fixture로 축소되지 않았는가 | 예. invariant gate, field audit 세부 항목, 주변 치수 matrix를 포함했다. |
+| 구현자가 다음 cycle에서 바로 작업 순서를 잡을 수 있는가 | 예. Phase, 파일 범위, acceptance, verification, commit plan을 포함했다. |
+
+## 15. Tracking Risks
 
 - `위로 배치 선호`는 현장 요구와 맞을 수 있지만, 실제 엔진에서는 “늦게 배치” 휴리스틱이다. 현장 기대가 “무조건 최상단”이면 후속 정책이 필요하므로 기본 패치에는 넣지 않는다.
 - `690 x 370 x 580mm` 케이스는 동일 SKU 반복에 대한 작은 휴리스틱으로 해결한다. 혼합 SKU 전체 최적화 solver 도입은 V2 현재 범위를 넘는다.
@@ -425,7 +533,7 @@ node --import tsx --test src/lib/workspace/multi-chain-simulation.test.ts
 - 3D 클릭 강조 제거 후 일부 사용자는 캔버스에서 직접 박스를 찾는 기능이 줄어든다고 느낄 수 있다. 범례와 hover tooltip을 유지해 보완한다.
 - 저장 박스 import와 현재 작업 import는 둘 다 중복 관련 정책이 바뀐다. 샘플 파일, 포맷 보기 모달, 문서 테스트를 함께 바꾸지 않으면 현장 자동화 파일과 UI 안내가 어긋난다.
 
-## 14. Suggested Commit Plan
+## 16. Suggested Commit Plan
 
 1. `docs: add v2 field patch plan`
 2. `test: lock field pinwheel packing regression`
