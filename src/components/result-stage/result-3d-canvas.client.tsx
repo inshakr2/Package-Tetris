@@ -434,7 +434,7 @@ export function Result3DCanvas({
             {formatThreeDimensionMm(occupiedSize.widthMm)}
           </span>
           <span>
-            <strong>깊이</strong>
+            <strong>세로</strong>
             {formatThreeDimensionMm(occupiedSize.depthMm)}
           </span>
           <span>
