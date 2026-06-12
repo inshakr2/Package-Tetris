@@ -7,19 +7,43 @@ const V2_VERIFICATION_REPORT_PATH = join(
   process.cwd(),
   "docs/verification/2026-06-13-v2-field-patch-verification.md"
 );
+const V2_VERIFICATION_METADATA_PATH = join(
+  process.cwd(),
+  "docs/verification/2026-06-13-v2-field-patch-verification.meta.json"
+);
+
+interface V2VerificationMetadata {
+  verifiedImplementationCommit: string;
+  npmTestPassCount: number;
+}
 
 describe("v2 verification report document", () => {
   it("V2 현장 패치 검증 리포트는 자동 검증과 대표 현장 케이스를 추적 가능하게 남긴다", () => {
     // Given / When
     const exists = existsSync(V2_VERIFICATION_REPORT_PATH);
+    const metadataExists = existsSync(V2_VERIFICATION_METADATA_PATH);
     const document = exists ? readFileSync(V2_VERIFICATION_REPORT_PATH, "utf8") : "";
+    const metadata = metadataExists
+      ? (JSON.parse(readFileSync(V2_VERIFICATION_METADATA_PATH, "utf8")) as V2VerificationMetadata)
+      : null;
 
     // Then
     assert.equal(exists, true);
+    assert.equal(metadataExists, true);
+    assert.ok(metadata);
+    assert.match(metadata.verifiedImplementationCommit, /^[0-9a-f]{7,40}$/);
+    assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
+    assert.ok(metadata.npmTestPassCount > 0);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
-    assert.match(document, /커밋[\s\S]*`1418a37`/);
-    assert.match(document, /npm test[\s\S]*431개 테스트[\s\S]*통과/);
+    assert.match(
+      document,
+      new RegExp(`제품 구현 검증 기준 커밋[\\s\\S]*\`${metadata.verifiedImplementationCommit}\``)
+    );
+    assert.doesNotMatch(document, /기준 커밋:\s*`1418a37`/);
+    assert.doesNotMatch(document, /431개 테스트/);
+    assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
+    assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
     assert.match(document, /npx tsc --noEmit[\s\S]*통과/);
     assert.match(document, /npm run field:audit[\s\S]*Package Tetris 현장 audit 통과/);
     assert.match(document, /npm run build[\s\S]*Compiled successfully/);
