@@ -27,6 +27,10 @@ describe("v2 roadmap document", () => {
     // When / Then
     assert.match(roadmap, /선택 순서가 추가 우선순위/);
     assert.match(roadmap, /드래그하거나 위\/아래 버튼/);
+    assert.match(roadmap, /선택 해제/);
+    assert.match(roadmap, /지정 수량 조건/);
+    assert.match(roadmap, /n순위로 이동됨/);
+    assert.match(roadmap, /다시 계산/);
     assert.match(roadmap, /선택 순서 결과/);
     assert.match(roadmap, /부피는 남아 있어도 안전하게 받칠 바닥면이 부족하거나 빈 공간이 나뉘면 추가 가능 0개 안내로 보여준다/);
     assert.match(roadmap, /기존 결과 안전 검증 실패와 구분해 계산 실패로 처리하지 않는다/);

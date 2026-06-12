@@ -36,6 +36,10 @@ describe("development deliverables document", () => {
     assert.match(document, /중복 행은 오류가 아니라 합산 미리보기/);
     assert.match(document, /적재위치타입이 다르면 기존 설정 유지 경고/);
     assert.match(document, /선택 순서 기반 우선순위/);
+    assert.match(document, /선택 해제/);
+    assert.match(document, /지정 수량 조건/);
+    assert.match(document, /순위로 이동됨/);
+    assert.match(document, /다시 계산/);
     assert.match(document, /부분 지지 허용 55% 현장 검증/);
     assert.match(document, /오버행 파레트 추천 현장 검증/);
     assert.match(document, /저장 박스 엑셀 일괄등록 현장 검증/);

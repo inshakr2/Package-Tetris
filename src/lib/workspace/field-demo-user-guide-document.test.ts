@@ -84,6 +84,10 @@ describe("field demo user guide document", () => {
     assert.match(document, /박스를 선택한 순서/);
     assert.match(document, /1순위\/2순위\/3순위/);
     assert.match(document, /드래그하거나 우측의 위로\/아래로 버튼/);
+    assert.match(document, /선택 해제/);
+    assert.match(document, /지정 수량 조건/);
+    assert.match(document, /순위로 이동됨/);
+    assert.match(document, /다시 계산/);
     assert.match(document, /선택 순서 결과/);
     assert.doesNotMatch(document, /먼저 추가 또는 `최우선 추가`/);
     assert.doesNotMatch(document, /지정 우선 결과/);
