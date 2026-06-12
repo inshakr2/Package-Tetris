@@ -18,6 +18,20 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /시연 전 최종 확인[\s\S]*npm run v1:verify/);
   });
 
+  it("V2 최종 검증 실패 시 자동 생성 파일과 오류 전달 기준을 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /npm run v2:verify/);
+    assert.match(document, /next-env\.d\.ts/);
+    assert.match(document, /자동 생성 파일/);
+    assert.match(document, /화면 기능 불량이 아니라/);
+    assert.match(document, /터미널 마지막 오류/);
+    assert.match(document, /변경된 파일명/);
+    assert.match(document, /개발 담당자/);
+  });
+
   it("박스 .xlsx 일괄등록 흐름과 오류 수정 기준을 현장 언어로 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");

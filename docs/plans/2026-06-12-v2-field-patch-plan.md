@@ -437,6 +437,7 @@ type PlacementPreference = "normal" | "floor-first" | "top-preferred";
 
 ```bash
 git status --short --branch
+npx next typegen
 npm test
 npx tsc --noEmit
 npm run field:audit

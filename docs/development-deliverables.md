@@ -148,11 +148,14 @@ npm run v2:verify
 
 위 명령은 아래 작업을 순서대로 실행한다.
 
+- `npx next typegen`: Next.js 자동 생성 타입 파일 준비
 - `npm test`: Node test runner 기반 단위/문서/레이아웃 테스트
 - `npx tsc --noEmit`: TypeScript 타입 검사
 - `npm run field:audit`: 현장형 preset 대량 적재 audit와 V2 핵심 기능 검증
 - `npm run build`: Next.js production build
 - `git diff --check`: 커밋 전 공백 오류 검사
+
+`next-env.d.ts`는 Next.js가 `next dev`, `next build`, `next typegen` 과정에서 다시 만드는 자동 생성 파일이므로 저장소에서는 추적하지 않는다. 검증 스크립트는 타입 검사 전에 `next typegen`을 실행해 깨끗한 checkout에서도 타입 기준을 먼저 준비한다.
 
 현장 audit 스크립트:
 

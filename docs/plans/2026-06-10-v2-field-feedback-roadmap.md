@@ -531,10 +531,12 @@ npm run v2:verify
 `npm run v2:verify` runs:
 
 ```bash
+npx next typegen
 npm test
 npx tsc --noEmit
 npm run field:audit
 npm run build
+git diff --check
 ```
 
 `npm run field:audit` includes:
