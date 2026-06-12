@@ -575,40 +575,72 @@ function createBlockOrientationArrow(
     block.orientation.direction.y,
     block.orientation.direction.z
   ).normalize();
-  const origin = direction.clone().multiplyScalar(-block.orientation.length / 2);
-  const arrow = new THREE.ArrowHelper(
-    direction,
-    origin,
+  const shortestSide = Math.max(Math.min(block.size.width, block.size.height, block.size.depth), 0.01);
+  const maxArrowWidth = Math.max(shortestSide * 0.35, 0.02);
+  const shaftWidth = Math.min(Math.max(block.orientation.length * 0.22, 0.055), maxArrowWidth);
+  const headWidth = Math.max(
+    shaftWidth,
+    Math.min(Math.max(block.orientation.length * 0.44, shaftWidth * 1.8), maxArrowWidth)
+  );
+  const headLength = Math.min(Math.max(block.orientation.length * 0.28, 0.08), block.orientation.length * 0.45);
+  const plateThickness = Math.min(Math.max(shortestSide * 0.035, 0.012), maxArrowWidth * 0.16);
+  const geometry = createFlatOrientationArrowGeometry(
     block.orientation.length,
-    previewState === "new" ? 0x166534 : 0x111827,
-    Math.max(block.orientation.length * 0.24, 0.12),
-    Math.max(block.orientation.length * 0.16, 0.08)
+    shaftWidth,
+    headLength,
+    headWidth,
+    plateThickness
   );
   const opacity = isSelected ? 0.96 : 0.48;
 
+  const material = new THREE.MeshBasicMaterial({
+    color: previewState === "new" ? 0x166534 : 0x111827,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity,
+    depthTest: false,
+    depthWrite: false
+  });
+  const arrow = new THREE.Mesh(geometry, material);
+
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.renderOrder = 3;
   arrow.name = "처음 입력한 높이 방향";
   arrow.userData.orientationLabel = block.orientation.label;
-  arrow.traverse((object) => {
-    object.renderOrder = 3;
-
-    if ("material" in object) {
-      const material = object.material;
-      const materials = Array.isArray(material) ? material : [material];
-
-      materials.forEach((item) => {
-        if (!item) {
-          return;
-        }
-
-        item.transparent = true;
-        item.opacity = opacity;
-        item.depthTest = false;
-        item.depthWrite = false;
-      });
-    }
-  });
+  arrow.userData.isOrientationArrow = true;
 
   return arrow;
+}
+
+function createFlatOrientationArrowGeometry(
+  length: number,
+  shaftWidth: number,
+  headLength: number,
+  headWidth: number,
+  plateThickness: number
+) {
+  const halfLength = length / 2;
+  const neckY = halfLength - headLength;
+  const shape = new THREE.Shape();
+
+  shape.moveTo(-shaftWidth / 2, -halfLength);
+  shape.lineTo(shaftWidth / 2, -halfLength);
+  shape.lineTo(shaftWidth / 2, neckY);
+  shape.lineTo(headWidth / 2, neckY);
+  shape.lineTo(0, halfLength);
+  shape.lineTo(-headWidth / 2, neckY);
+  shape.lineTo(-shaftWidth / 2, neckY);
+  shape.lineTo(-shaftWidth / 2, -halfLength);
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    bevelEnabled: false,
+    depth: plateThickness,
+    steps: 1
+  });
+
+  geometry.translate(0, 0, -plateThickness / 2);
+  return geometry;
 }
 
 function createSpaceFrame(bounds: ReturnType<typeof createPackingSceneBounds>) {
