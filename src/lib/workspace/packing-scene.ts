@@ -141,7 +141,7 @@ function createPackingSceneBlockOrientation(
   if (heightAxisIndex === 1) {
     return {
       direction: { x: 0, y: 0, z: 1 },
-      label: "입력 높이: 깊이 방향",
+      label: "입력 높이: 세로 방향",
       length
     };
   }

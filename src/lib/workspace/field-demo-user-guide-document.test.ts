@@ -93,6 +93,15 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /지정 우선 결과/);
   });
 
+  it("현장 시연 순서는 공간 치수를 가로/세로/높이 용어로 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /가로, 세로, 높이, 안전 여유/);
+    assert.doesNotMatch(document, /폭, 깊이, 높이, 안전 여유/);
+  });
+
   it("개발 시연의 오프라인 준비 상태는 자동 새로고침 방지 정책과 구분해서 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");

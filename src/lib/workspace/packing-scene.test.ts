@@ -143,7 +143,7 @@ describe("packing-scene", () => {
     assert.equal(widthSideSceneBlock?.orientation.label, "입력 높이: 가로 방향");
 
     assert.deepEqual(depthSideSceneBlock?.orientation.direction, { x: 0, y: 0, z: 1 });
-    assert.equal(depthSideSceneBlock?.orientation.label, "입력 높이: 깊이 방향");
+    assert.equal(depthSideSceneBlock?.orientation.label, "입력 높이: 세로 방향");
   });
 
   it("방향 화살표는 블록 크기에 맞는 양수 길이를 가진다", () => {
