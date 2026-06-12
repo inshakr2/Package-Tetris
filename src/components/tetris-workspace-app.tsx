@@ -4148,6 +4148,7 @@ const ResultStage = ({
   const [chainComparisonMode, setChainComparisonMode] = useState<ChainComparisonMode>("preview");
   const [chainStatus, setChainStatus] = useState<"idle" | "calculating" | "preview" | "empty" | "error">("idle");
   const [chainStatusMessage, setChainStatusMessage] = useState("추가할 박스를 최대 3개까지 선택하세요.");
+  const [recentlyMovedChainTemplateId, setRecentlyMovedChainTemplateId] = useState<string | null>(null);
   const [chainRequestedQuantitiesByTemplateId, setChainRequestedQuantitiesByTemplateId] = useState<
     Record<string, number | null>
   >({});
@@ -4157,6 +4158,7 @@ const ResultStage = ({
   const offsetPreviewDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previousLatestResultIdRef = useRef<string | null | undefined>(undefined);
   const previousChainPolicyKeyRef = useRef<string | null>(null);
+  const chainMoveFeedbackTimeoutRef = useRef<number | null>(null);
   const packedSpaces = latestResult?.spaces ?? [];
   const chainBlockOptions = useMemo(() => blockTemplates, [blockTemplates]);
   const chainGroup1Options = useMemo(() => createTopBlockGroups(blockGroups), [blockGroups]);
@@ -4327,8 +4329,15 @@ const ResultStage = ({
         : "추가할 박스를 최대 3개까지 선택하세요."
     );
     setChainRequestedQuantitiesByTemplateId({});
+    clearChainReorderFeedback();
     setOffsetPreviewDialogOpen(false);
   }, [latestResult?.resultId]);
+
+  useEffect(() => () => {
+    if (chainMoveFeedbackTimeoutRef.current) {
+      window.clearTimeout(chainMoveFeedbackTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (
@@ -4618,6 +4627,7 @@ const ResultStage = ({
       delete next[blockTemplateId];
       return next;
     });
+    clearChainReorderFeedback();
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage(
@@ -4636,8 +4646,28 @@ const ResultStage = ({
     }, 0);
   }
 
-  function updateSelectedChainTemplateOrder(nextSelectedTemplateIds: string[]) {
+  function clearChainReorderFeedback() {
+    if (chainMoveFeedbackTimeoutRef.current) {
+      window.clearTimeout(chainMoveFeedbackTimeoutRef.current);
+      chainMoveFeedbackTimeoutRef.current = null;
+    }
+
+    setRecentlyMovedChainTemplateId(null);
+  }
+
+  function showChainReorderFeedback(movedTemplateId: string) {
+    clearChainReorderFeedback();
+    setRecentlyMovedChainTemplateId(movedTemplateId);
+
+    chainMoveFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setRecentlyMovedChainTemplateId((current) => (current === movedTemplateId ? null : current));
+      chainMoveFeedbackTimeoutRef.current = null;
+    }, 1400);
+  }
+
+  function updateSelectedChainTemplateOrder(nextSelectedTemplateIds: string[], movedTemplateId: string) {
     setSelectedChainTemplateIds(nextSelectedTemplateIds);
+    showChainReorderFeedback(movedTemplateId);
 
     if (chainPreview) {
       clearChainPreviewState();
@@ -4665,7 +4695,7 @@ const ResultStage = ({
     const nextSelectedTemplateIds = [...selectedChainTemplateIds];
     const [movedTemplateId] = nextSelectedTemplateIds.splice(sourceIndex, 1);
     nextSelectedTemplateIds.splice(targetIndex, 0, movedTemplateId);
-    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds, sourceTemplateId);
   }
 
   function moveSelectedChainTemplate(blockTemplateId: string, direction: -1 | 1) {
@@ -4681,7 +4711,7 @@ const ResultStage = ({
       nextSelectedTemplateIds[nextIndex],
       nextSelectedTemplateIds[currentIndex]
     ];
-    updateSelectedChainTemplateOrder(nextSelectedTemplateIds);
+    updateSelectedChainTemplateOrder(nextSelectedTemplateIds, blockTemplateId);
   }
 
   function calculateChainPreview() {
@@ -4860,6 +4890,7 @@ const ResultStage = ({
   function clearChainSelection() {
     setSelectedChainTemplateIds([]);
     setChainRequestedQuantitiesByTemplateId({});
+    clearChainReorderFeedback();
     clearChainPreviewState();
     setChainStatus("idle");
     setChainStatusMessage("추가 박스 선택과 조건을 모두 초기화했습니다.");
@@ -5362,6 +5393,7 @@ const ResultStage = ({
         blockGroups={blockGroups}
         selectedTemplateIds={selectedChainTemplateIds}
         selectedTemplates={selectedChainTemplates}
+        recentlyMovedTemplateId={recentlyMovedChainTemplateId}
         searchTerm={chainSearchTerm}
         group1Filter={chainGroup1Filter}
         group2Filter={chainGroup2Filter}
@@ -5983,6 +6015,7 @@ function ChainSimulationPanel({
   blockGroups,
   selectedTemplateIds,
   selectedTemplates,
+  recentlyMovedTemplateId,
   searchTerm,
   group1Filter,
   group2Filter,
@@ -6021,6 +6054,7 @@ function ChainSimulationPanel({
   blockGroups: BlockGroup[];
   selectedTemplateIds: string[];
   selectedTemplates: BlockTemplate[];
+  recentlyMovedTemplateId: string | null;
   searchTerm: string;
   group1Filter: string;
   group2Filter: string;
@@ -6376,6 +6410,7 @@ function ChainSimulationPanel({
                       className="chain-template-quantity-row"
                       key={template.blockTemplateId}
                       data-dragging={draggingTemplateId === template.blockTemplateId}
+                      data-reorder-feedback={recentlyMovedTemplateId === template.blockTemplateId}
                       draggable={selectedTemplates.length > 1}
                       onDragStart={(event) => {
                         event.dataTransfer.setData("text/plain", template.blockTemplateId);
@@ -6409,7 +6444,14 @@ function ChainSimulationPanel({
                           <X size={14} aria-hidden="true" />
                           선택 해제
                         </button>
-                        <span className="fine-print">{formatDimensions(template.dimensions)}</span>
+                        <span className="fine-print">
+                          {formatDimensions(template.dimensions)}
+                          {recentlyMovedTemplateId === template.blockTemplateId ? (
+                            <span className="chain-template-move-feedback" role="status">
+                              {`${index + 1}순위로 이동됨`}
+                            </span>
+                          ) : null}
+                        </span>
                       </div>
                       <div className="chain-template-quantity-mode" role="group" aria-label={`${template.name} 수량 조건`}>
                         <button

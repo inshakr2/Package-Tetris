@@ -270,6 +270,67 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasDirectRemoveContract, true);
   });
 
+  it("추가 박스 선택 해제는 남아 있는 순서 변경 완료 피드백도 정리한다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+clearChainReorderFeedback/
+      )?.[0] ?? "";
+    const clearsTransientFeedback =
+      removeHandler.includes("clearChainReorderFeedback();") &&
+      removeHandler.includes("clearChainPreviewState();") &&
+      removeHandler.includes("setChainStatus(\"idle\");");
+
+    // When
+    const clearsFeedbackOnRemove = clearsTransientFeedback;
+
+    // Then
+    assert.equal(clearsFeedbackOnRemove, true);
+  });
+
+  it("추가 박스 우선순위 변경은 이동한 카드에 짧은 완료 피드백을 표시한다", () => {
+    // Given
+    const hasMovedFeedbackState =
+      workspaceSource.includes("recentlyMovedChainTemplateId") &&
+      workspaceSource.includes("showChainReorderFeedback") &&
+      workspaceSource.includes("chainMoveFeedbackTimeoutRef");
+    const feedbackUsesSharedReorderPath =
+      /function\s+updateSelectedChainTemplateOrder\(nextSelectedTemplateIds:\s*string\[\],\s*movedTemplateId:\s*string\)\s*{[\s\S]*?showChainReorderFeedback\(movedTemplateId\);[\s\S]*?clearChainPreviewState\(\);[\s\S]*?}/.test(
+        workspaceSource
+      ) &&
+      workspaceSource.includes("updateSelectedChainTemplateOrder(nextSelectedTemplateIds, sourceTemplateId)") &&
+      workspaceSource.includes("updateSelectedChainTemplateOrder(nextSelectedTemplateIds, blockTemplateId)");
+    const exposesFeedbackOnMovedCard =
+      workspaceSource.includes("recentlyMovedTemplateId={recentlyMovedChainTemplateId}") &&
+      workspaceSource.includes('data-reorder-feedback={recentlyMovedTemplateId === template.blockTemplateId}') &&
+      workspaceSource.includes('className="chain-template-move-feedback"') &&
+      workspaceSource.includes("`${index + 1}순위로 이동됨`");
+    const hasNonIntrusiveFeedbackStyles =
+      /\.chain-template-quantity-row\s*{[\s\S]*?transition:\s*border-color[\s\S]*?box-shadow[\s\S]*?background-color[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-quantity-row\[data-reorder-feedback="true"\]\s*{[\s\S]*?border-color:[\s\S]*?box-shadow:[\s\S]*?background:[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-quantity-row\[data-reorder-feedback="true"\]\s+\.chain-template-rank-badge\s*{[\s\S]*?background:[\s\S]*?color:[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-move-feedback\s*{[\s\S]*?font-weight:\s*800;[\s\S]*?}/.test(styles) &&
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?transition:\s*none;[\s\S]*?}/.test(
+        styles
+      );
+
+    // When
+    const hasVisibleReorderFeedback =
+      hasMovedFeedbackState &&
+      feedbackUsesSharedReorderPath &&
+      exposesFeedbackOnMovedCard &&
+      hasNonIntrusiveFeedbackStyles;
+
+    // Then
+    assert.equal(hasVisibleReorderFeedback, true);
+  });
+
   it("추가 박스 선택 해제 후 다음 카드 또는 검색 입력으로 포커스를 옮긴다", () => {
     // Given
     const removeHandler =
@@ -407,6 +468,28 @@ describe("multi-chain-simulation-layout", () => {
 
     // Then
     assert.equal(clearsStaleChainConditions, true);
+  });
+
+  it("추가 박스 선택 초기화는 순서 변경 완료 피드백과 타이머도 함께 정리한다", () => {
+    // Given
+    const clearFeedbackHelper =
+      workspaceSource.includes("function clearChainReorderFeedback()") &&
+      workspaceSource.includes("window.clearTimeout(chainMoveFeedbackTimeoutRef.current);") &&
+      workspaceSource.includes("chainMoveFeedbackTimeoutRef.current = null;") &&
+      workspaceSource.includes("setRecentlyMovedChainTemplateId(null);");
+    const clearSelectionHandler =
+      workspaceSource.match(/function\s+clearChainSelection\(\)\s*{[\s\S]*?}\n\n\s*return\s*\(/)?.[0] ?? "";
+    const resultResetEffect =
+      workspaceSource.match(/useEffect\(\(\)\s*=>\s*{[\s\S]*?},\s*\[latestResult\?\.resultId\]\);/)?.[0] ?? "";
+    const clearsFeedbackOnSelectionReset =
+      clearSelectionHandler.includes("clearChainReorderFeedback();") &&
+      resultResetEffect.includes("clearChainReorderFeedback();");
+
+    // When
+    const clearsTransientReorderFeedback = clearFeedbackHelper && clearsFeedbackOnSelectionReset;
+
+    // Then
+    assert.equal(clearsTransientReorderFeedback, true);
   });
 
   it("추가 박스 시뮬레이션 상태 문구는 조건 설정과 계산 모델을 일관되게 안내한다", () => {

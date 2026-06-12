@@ -2752,11 +2752,26 @@ select:focus-visible {
   border-radius: 8px;
   background: white;
   padding: 10px;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
 }
 
 .chain-template-quantity-row[data-dragging="true"] {
   border-color: rgba(37, 99, 235, 0.45);
   opacity: 0.68;
+}
+
+.chain-template-quantity-row[data-reorder-feedback="true"] {
+  border-color: rgba(37, 99, 235, 0.72);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  background: #f6fbff;
+}
+
+.chain-template-quantity-row[data-reorder-feedback="true"] .chain-template-rank-badge {
+  background: #1d4f91;
+  color: white;
 }
 
 .chain-template-summary {
@@ -2792,6 +2807,14 @@ select:focus-visible {
 .chain-template-summary > .fine-print {
   grid-area: meta;
   min-width: 0;
+}
+
+.chain-template-move-feedback {
+  display: inline-flex;
+  margin-left: 6px;
+  color: #1d4f91;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .chain-template-remove-button {
@@ -3328,6 +3351,12 @@ select:focus-visible {
 
   .result-preview-large {
     min-height: 460px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chain-template-quantity-row {
+    transition: none;
   }
 }
 
