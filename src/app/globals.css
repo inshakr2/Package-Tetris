@@ -2762,11 +2762,17 @@ select:focus-visible {
 .chain-template-summary {
   grid-area: summary;
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "rank title remove"
+    ". meta remove";
   gap: 3px;
+  align-items: center;
   min-width: 0;
 }
 
 .chain-template-rank-badge {
+  grid-area: rank;
   width: fit-content;
   border-radius: 999px;
   background: #eaf2ff;
@@ -2775,6 +2781,27 @@ select:focus-visible {
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
+}
+
+.chain-template-summary > strong {
+  grid-area: title;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chain-template-summary > .fine-print {
+  grid-area: meta;
+  min-width: 0;
+}
+
+.chain-template-remove-button {
+  grid-area: remove;
+  justify-self: end;
+  align-self: center;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 10px;
+  white-space: normal;
 }
 
 .chain-template-quantity-mode {

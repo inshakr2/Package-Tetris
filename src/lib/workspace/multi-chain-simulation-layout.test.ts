@@ -238,6 +238,61 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasStableConditionLayout, true);
   });
 
+  it("추가 박스별 조건 카드는 우측 상단 선택 해제로 해당 박스와 수량 조건을 함께 제거한다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/
+      )?.[0] ?? "";
+    const clearsTemplateAndQuantity =
+      removeHandler.includes("const nextSelectedTemplateIds = selectedChainTemplateIds.filter") &&
+      removeHandler.includes("setSelectedChainTemplateIds(nextSelectedTemplateIds);") &&
+      removeHandler.includes("delete next[blockTemplateId];") &&
+      removeHandler.includes("clearChainPreviewState();") &&
+      removeHandler.includes("선택을 해제했습니다.");
+    const wiresRemoveAction =
+      workspaceSource.includes("onRemoveSelectedTemplate={removeSelectedChainTemplateSelection}") &&
+      workspaceSource.includes("onRemoveSelectedTemplate: (blockTemplateId: string) => void;") &&
+      workspaceSource.includes('className="danger-button chain-template-remove-button"') &&
+      workspaceSource.includes('aria-label={`${template.name} 추가 박스 선택 해제`}');
+    const keepsActionInsideSummary =
+      /\.chain-template-summary\s*{[\s\S]*?grid-template-areas:[\s\S]*?"rank title remove"[\s\S]*?". meta remove"[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-remove-button\s*{[\s\S]*?grid-area:\s*remove;[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(
+        styles
+      );
+
+    // When
+    const hasDirectRemoveContract = clearsTemplateAndQuantity && wiresRemoveAction && keepsActionInsideSummary;
+
+    // Then
+    assert.equal(hasDirectRemoveContract, true);
+  });
+
+  it("추가 박스 선택 해제 후 다음 카드 또는 검색 입력으로 포커스를 옮긴다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/
+      )?.[0] ?? "";
+    const calculatesNextFocusTarget =
+      removeHandler.includes("const removedIndex = selectedChainTemplateIds.indexOf(blockTemplateId);") &&
+      /const\s+nextFocusTemplateId\s*=\s*nextSelectedTemplateIds\[Math\.min\(/.test(removeHandler) &&
+      removeHandler.includes('document.querySelectorAll<HTMLButtonElement>("[data-chain-template-remove-id]")') &&
+      removeHandler.includes('document.querySelector<HTMLElement>("[data-chain-selection-fallback=\'true\']")') &&
+      removeHandler.includes("nextFocusTarget?.focus();");
+    const exposesFocusTargets =
+      workspaceSource.includes('data-chain-selection-fallback="true"') &&
+      workspaceSource.includes("data-chain-template-remove-id={template.blockTemplateId}");
+
+    // When
+    const hasFocusRecoveryContract = calculatesNextFocusTarget && exposesFocusTargets;
+
+    // Then
+    assert.equal(hasFocusRecoveryContract, true);
+  });
+
   it("추가 박스 계산 버튼은 비활성 사유를 버튼과 안내 문구로 제공한다", () => {
     // Given
     const hasDisabledReasonCopy =

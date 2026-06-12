@@ -4600,6 +4600,42 @@ const ResultStage = ({
     );
   }
 
+  function removeSelectedChainTemplateSelection(blockTemplateId: string) {
+    const nextSelectedTemplateIds = selectedChainTemplateIds.filter((templateId) => templateId !== blockTemplateId);
+
+    if (nextSelectedTemplateIds.length === selectedChainTemplateIds.length) {
+      return;
+    }
+
+    const removedIndex = selectedChainTemplateIds.indexOf(blockTemplateId);
+    const nextFocusTemplateId =
+      nextSelectedTemplateIds[Math.min(removedIndex, nextSelectedTemplateIds.length - 1)] ?? null;
+    const removedTemplate = selectedChainTemplates.find((template) => template.blockTemplateId === blockTemplateId);
+
+    setSelectedChainTemplateIds(nextSelectedTemplateIds);
+    setChainRequestedQuantitiesByTemplateId((current) => {
+      const next = { ...current };
+      delete next[blockTemplateId];
+      return next;
+    });
+    clearChainPreviewState();
+    setChainStatus("idle");
+    setChainStatusMessage(
+      nextSelectedTemplateIds.length
+        ? `${removedTemplate?.name ?? "선택 박스"} 선택을 해제했습니다. 남은 박스는 선택 순서대로 다시 계산하세요.`
+        : "선택을 해제했습니다. 추가할 박스를 최대 3개까지 선택하세요."
+    );
+    window.setTimeout(() => {
+      const nextFocusTarget = nextFocusTemplateId
+        ? Array.from(document.querySelectorAll<HTMLButtonElement>("[data-chain-template-remove-id]")).find(
+            (button) => button.dataset.chainTemplateRemoveId === nextFocusTemplateId
+          )
+        : document.querySelector<HTMLElement>("[data-chain-selection-fallback='true']");
+
+      nextFocusTarget?.focus();
+    }, 0);
+  }
+
   function updateSelectedChainTemplateOrder(nextSelectedTemplateIds: string[]) {
     setSelectedChainTemplateIds(nextSelectedTemplateIds);
 
@@ -5355,6 +5391,7 @@ const ResultStage = ({
         onTemplateQuantityLimitChange={changeChainTemplateQuantityLimit}
         onReorderSelectedTemplate={reorderSelectedChainTemplate}
         onMoveSelectedTemplate={moveSelectedChainTemplate}
+        onRemoveSelectedTemplate={removeSelectedChainTemplateSelection}
         onConfirm={confirmChainPreview}
         onCancelPreview={cancelChainPreview}
         onCreateResult={onCreateResult}
@@ -5972,6 +6009,7 @@ function ChainSimulationPanel({
   onTemplateQuantityLimitChange,
   onReorderSelectedTemplate,
   onMoveSelectedTemplate,
+  onRemoveSelectedTemplate,
   onConfirm,
   onCancelPreview,
   onCreateResult,
@@ -6009,6 +6047,7 @@ function ChainSimulationPanel({
   onTemplateQuantityLimitChange: (blockTemplateId: string, quantity: number | null) => void;
   onReorderSelectedTemplate: (sourceTemplateId: string, targetTemplateId: string) => void;
   onMoveSelectedTemplate: (blockTemplateId: string, direction: -1 | 1) => void;
+  onRemoveSelectedTemplate: (blockTemplateId: string) => void;
   onConfirm: () => void;
   onCancelPreview: () => void;
   onCreateResult: () => void;
@@ -6086,6 +6125,7 @@ function ChainSimulationPanel({
             <label className="chain-search-field">
               저장된 박스 검색
               <input
+                data-chain-selection-fallback="true"
                 aria-label="추가 시뮬레이션 박스 검색"
                 value={searchTerm}
                 placeholder="박스명, 그룹, 치수로 검색"
@@ -6359,6 +6399,16 @@ function ChainSimulationPanel({
                       <div className="chain-template-summary">
                         <span className="chain-template-rank-badge">{index + 1}순위</span>
                         <strong>{template.name}</strong>
+                        <button
+                          className="danger-button chain-template-remove-button"
+                          data-chain-template-remove-id={template.blockTemplateId}
+                          aria-label={`${template.name} 추가 박스 선택 해제`}
+                          title="추가 박스 선택 해제"
+                          onClick={() => onRemoveSelectedTemplate(template.blockTemplateId)}
+                        >
+                          <X size={14} aria-hidden="true" />
+                          선택 해제
+                        </button>
                         <span className="fine-print">{formatDimensions(template.dimensions)}</span>
                       </div>
                       <div className="chain-template-quantity-mode" role="group" aria-label={`${template.name} 수량 조건`}>
