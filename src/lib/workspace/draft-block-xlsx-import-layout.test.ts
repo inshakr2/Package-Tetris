@@ -20,6 +20,10 @@ describe("draft block xlsx import layout", () => {
       source.includes("현재 작업 엑셀 미리보기") &&
       source.includes("추가할 박스") &&
       source.includes("오류 행") &&
+      source.includes("합산된 행") &&
+      source.includes("기존 설정 유지") &&
+      source.includes("createDraftImportMergeSummaryCopy(row)") &&
+      source.includes("row.warnings.map") &&
       source.includes("현재 작업에 추가");
     const hasFormatUtilities =
       source.includes("readDraftBlockXlsxFile") &&

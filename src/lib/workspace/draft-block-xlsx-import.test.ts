@@ -144,6 +144,14 @@ describe("draft-block-xlsx-import", () => {
     assert.equal(preview.rows[0]?.rowNumber, 2);
     assert.equal(preview.rows[0]?.quantity, 16);
     assert.equal(preview.rows[0]?.loadPriority, 5);
+    assert.deepEqual(preview.rows[0]?.mergeSummary, {
+      baseQuantity: 12,
+      addedQuantity: 4,
+      mergedQuantity: 16,
+      mergedRowNumbers: [2, 3],
+      priorityConflict: true
+    });
+    assert.deepEqual(preview.rows[0]?.warnings, ["3행 적재위치타입은 첫 행의 기존 설정을 유지합니다."]);
   });
 
   it("수량 오류, 적재 위치 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {

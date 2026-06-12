@@ -69,6 +69,16 @@ export interface DraftBlockImportCandidate {
   fragile: boolean;
   quantity: number;
   loadPriority: LoadPriorityValue;
+  mergeSummary?: DraftBlockImportMergeSummary;
+  warnings?: string[];
+}
+
+export interface DraftBlockImportMergeSummary {
+  baseQuantity: number;
+  addedQuantity: number;
+  mergedQuantity: number;
+  mergedRowNumbers: number[];
+  priorityConflict: boolean;
 }
 
 export interface DraftBlockImportError {
@@ -249,8 +259,39 @@ function mergeDraftBlockImportRow(rows: DraftBlockImportCandidate[], row: DraftB
 
   rows[existingIndex] = {
     ...existingRow,
-    quantity: existingRow.quantity + row.quantity
+    quantity: existingRow.quantity + row.quantity,
+    mergeSummary: createDraftBlockMergeSummary(existingRow, row),
+    warnings: createDraftBlockMergeWarnings(existingRow, row)
   };
+}
+
+function createDraftBlockMergeSummary(
+  existingRow: DraftBlockImportCandidate,
+  row: DraftBlockImportCandidate
+): DraftBlockImportMergeSummary {
+  const previousSummary = existingRow.mergeSummary;
+  const baseQuantity = previousSummary?.baseQuantity ?? existingRow.quantity;
+  const addedQuantity = (previousSummary?.addedQuantity ?? 0) + row.quantity;
+  const mergedRowNumbers = previousSummary?.mergedRowNumbers ?? [existingRow.rowNumber];
+  const priorityConflict = Boolean(previousSummary?.priorityConflict) || existingRow.loadPriority !== row.loadPriority;
+
+  return {
+    baseQuantity,
+    addedQuantity,
+    mergedQuantity: baseQuantity + addedQuantity,
+    mergedRowNumbers: [...mergedRowNumbers, row.rowNumber],
+    priorityConflict
+  };
+}
+
+function createDraftBlockMergeWarnings(existingRow: DraftBlockImportCandidate, row: DraftBlockImportCandidate) {
+  const warnings = [...(existingRow.warnings ?? [])];
+
+  if (existingRow.loadPriority !== row.loadPriority) {
+    warnings.push(`${row.rowNumber}행 적재위치타입은 첫 행의 기존 설정을 유지합니다.`);
+  }
+
+  return warnings;
 }
 
 function parseImportRow(

@@ -8,7 +8,7 @@
     "start": "next start",
     "field:audit": "tsx scripts/field-audit.ts",
     "v1:verify": "npm test && npx tsc --noEmit && npm run field:audit && npm run build",
-    "v2:verify": "npm test && npx tsc --noEmit && npm run field:audit && npm run build",
+    "v2:verify": "npm test && npx tsc --noEmit && npm run field:audit && npm run build && git diff --check",
     "test": "node --import tsx --test src/lib/persistence/*.test.ts src/lib/workspace/*.test.ts"
   },
   "dependencies": {

@@ -2766,6 +2766,16 @@ function DraftBlockImportDialog({
                     )}
                   </div>
                   <p className="meta">{createDraftImportCandidateMeta(row)}</p>
+                  {row.mergeSummary ? (
+                    <p className="meta">{createDraftImportMergeSummaryCopy(row)}</p>
+                  ) : null}
+                  {row.warnings && row.warnings.length > 0 ? (
+                    <div className="block-template-import-error-list" aria-label="기존 설정 유지 경고">
+                      {row.warnings.map((warning) => (
+                        <p key={warning}>{warning}</p>
+                      ))}
+                    </div>
+                  ) : null}
                 </article>
               ))
             )}
@@ -7511,6 +7521,19 @@ function createDraftImportCandidateMeta(row: DraftBlockImportCandidate) {
     formatOptionalWeightDisplay(row.weightKg),
     row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
     row.group2 ? `하위 ${row.group2}` : "하위그룹 없음"
+  ].join(" · ");
+}
+
+function createDraftImportMergeSummaryCopy(row: DraftBlockImportCandidate) {
+  const summary = row.mergeSummary;
+
+  if (!summary) {
+    return "";
+  }
+
+  return [
+    `합산된 행 ${summary.mergedRowNumbers.join(", ")}`,
+    `기존 ${summary.baseQuantity}개 + 추가 ${summary.addedQuantity}개 = 합산 후 ${summary.mergedQuantity}개`
   ].join(" · ");
 }
 

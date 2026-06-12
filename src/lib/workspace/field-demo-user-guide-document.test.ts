@@ -64,6 +64,18 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /작업 지시서/);
   });
 
+  it("현재 작업 엑셀 등록은 중복 행 합산과 기존 설정 유지 경고를 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /현재 작업 엑셀 미리보기/);
+    assert.match(document, /같은 박스명이 여러 행/);
+    assert.match(document, /합산된 행/);
+    assert.match(document, /기존 설정 유지/);
+    assert.match(document, /적재위치타입/);
+  });
+
   it("추가 박스 시뮬레이션 가이드는 선택 순서 기반 우선순위를 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
