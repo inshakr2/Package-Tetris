@@ -135,6 +135,45 @@ z=580:
 - 현재 엔진에서 `690 x 370 x 580mm` 8개 케이스가 실패하는 테스트가 먼저 생긴다.
 - 목표 배치는 공간 경계, 충돌, 지지면, 깨짐주의 정책을 모두 통과해야 한다.
 
+### 5.1 Engine Correctness Closure Gate
+
+이 이슈는 단일 fixture 수정으로 닫지 않는다. 적재 엔진은 아래 정합성 gate를 모두 통과해야 Phase 2 구현을 완료한 것으로 본다.
+
+**Files:**
+- Create: `src/lib/workspace/packing-engine-invariants.ts`
+- Create: `src/lib/workspace/packing-engine-invariants.test.ts`
+- Create: `src/lib/workspace/packing-engine-field-regression.test.ts`
+- Modify: `src/lib/workspace/packing-engine.test.ts`
+- Modify: `src/lib/workspace/packing-placement.test.ts`
+- Modify: `src/lib/workspace/packing-field-scenarios.ts`
+- Modify: `src/lib/workspace/field-audit-report.test.ts`
+
+**Invariant checks:**
+- 모든 `PackedBlock`은 `calculateUsableSize(space)` 내부에 있어야 한다.
+- 어떤 두 박스도 3D 충돌하면 안 된다.
+- `zMm > 0`인 박스는 현재 policy 기준의 하단 지지면을 가져야 한다.
+- 부분 지지 OFF에서는 100% 지지면을 요구하고, ON에서는 `minimumSupportRatio` 이상만 허용한다.
+- 깨짐주의 정책은 부분 지지 ON/OFF와 무관하게 유지된다.
+- 입력 수량 총합은 `packed block count + unloadedBlockCount`와 일치해야 한다.
+- `blockId`는 결과 안에서 중복되면 안 된다.
+- `usedSpaceCount`는 실제 `spaces.length`와 같아야 한다.
+- `utilizationRate`와 `averageUtilizationRate`는 적재 부피 기준으로 재계산했을 때 허용 오차 안에 있어야 한다.
+- 같은 입력은 항상 같은 좌표와 회전 signature를 반환해야 한다.
+
+**Regression fixture matrix:**
+- `690 x 370 x 580mm`, 기본 파레트, 수량 8, 부분 지지 OFF, 기대 `1공간 / 8개`.
+- 위 케이스의 치수 순서 permutation: `370 x 690 x 580mm`, `580 x 370 x 690mm`, `690 x 580 x 370mm`.
+- 경계 근접 케이스: `690 x 370 x 580mm` 수량 9는 1공간에 9개가 들어가면 안 되며, 안전하게 2공간 또는 미적재로 처리되어야 한다.
+- off-by-one 케이스: `691 x 370 x 580mm`, `690 x 371 x 580mm`, `690 x 370 x 581mm`는 같은 기대값을 그대로 복사하지 말고 결과가 안전 검증을 통과하는지만 본다.
+- 기존 혼합 현장 케이스: `1000 x 800 x 400mm`, `965 x 300 x 200mm`, `600 x 250 x 150mm` 추가 시뮬레이션은 모든 variant를 검증한다.
+- 부분 지지 55% 케이스는 이번 후보 확장 후에도 OFF/ON 결과 차이를 유지해야 한다.
+- 깨짐주의 케이스는 일반 박스가 깨짐주의 박스 위에 올라가지 않는 기존 정책을 유지해야 한다.
+
+**Field audit rule:**
+- `npm run field:audit`는 `현장 바람개비 적재 검증` 기능 검증을 추가한다.
+- 이 기능 검증은 최소 `usedSpaceCount=1`, `packedBlockCount=8`, `unloadedBlockCount=0`, invariant 통과를 확인한다.
+- `field:audit` summary에는 이 검증 이름과 결과가 반드시 표시되어야 한다.
+
 ## 6. Phase 1. Box Registration And Current Work Integrity
 
 **Goal:** 저장 박스와 현재 작업 박스가 중복으로 늘어나는 문제를 막고, 치수 기본값으로 인한 오입력을 줄인다.
@@ -203,12 +242,21 @@ z=580:
 - 정렬은 기존처럼 낮은 `z`, 낮은 `y`, 낮은 `x`를 우선하되, 동일 높이에서 남는 공간을 줄이는 tie-breaker를 추가할지 테스트 결과를 보고 결정한다.
 - Phase 0 signature가 통과해야 한다.
 - 추가 시뮬레이션도 같은 엔진을 사용하므로 별도 로직 복사는 하지 않는다.
+- 후보 생성 변경은 `packing-placement` 단위 테스트에서 먼저 검증한다. 특히 `usableAxisSize - candidateAxisSize`, `blockStart - candidateAxisSize`, `blockEnd - candidateAxisSize` 후보가 바람개비 배치에 필요한 좌표를 만드는지 확인한다.
+- 엔진은 greedy를 유지하되, 후보 수 증가로 인해 잘못된 첫 후보를 고르지 않도록 `candidate ranking`을 테스트로 고정한다.
+- `ensureSafeOptimizationOutput` 또는 invariant gate가 실패하면 결과를 성공으로 반환하지 않는다.
+- 추가 시뮬레이션은 base result locked 상태에서 같은 invariant gate를 variant별로 실행한다.
+- 엔진 수정 후 `690 x 370 x 580mm` 케이스가 UI에서는 1파레트로 보이더라도, 내부 invariant 중 하나라도 실패하면 작업 완료로 보지 않는다.
 
 **Acceptance Criteria:**
 - `690 x 370 x 580mm` 8개 기본 파레트 케이스는 1공간에 8개가 모두 적재된다.
 - 기존 현장 audit 6개 기능 검증은 그대로 통과한다.
 - 부분 지지 OFF/ON, 깨짐주의 정책, 경계/충돌 검증이 유지된다.
 - 계산 시간이 현장 audit 기준에서 급격히 증가하지 않는다.
+- `packing-engine-field-regression.test.ts`는 현장 바람개비 케이스와 주변 치수 회귀 케이스를 별도 suite로 보관한다.
+- `multi-chain-simulation.test.ts`는 `recommended`, `custom-priority`, 모든 `template-priority` variant에 invariant gate를 적용한다.
+- `field:audit`는 기존 6개 기능 검증에서 7개 이상으로 늘어나고, 새 `현장 바람개비 적재 검증`을 포함한다.
+- `npm run v2:verify`를 통과하기 전에는 이 엔진 이슈를 완료로 보고하지 않는다.
 
 ## 8. Phase 3. Loading Preference Redesign
 
@@ -353,6 +401,22 @@ UI가 바뀐 cycle은 추가로 브라우저에서 아래 폭을 확인한다.
 - 3D 회전 후 pointer up/click으로 강조 상태가 생기지 않음
 - 결과 최대치수 오버레이가 캔버스 조작을 막지 않음
 
+엔진이 바뀐 cycle은 추가로 아래를 확인한다.
+
+```bash
+node --import tsx --test src/lib/workspace/packing-engine-field-regression.test.ts
+node --import tsx --test src/lib/workspace/packing-engine-invariants.test.ts
+node --import tsx --test src/lib/workspace/multi-chain-simulation.test.ts
+```
+
+엔진 정합성 수동 점검:
+
+- `690 x 370 x 580mm` 8개 기본 파레트 결과가 1공간인지 확인한다.
+- 해당 결과의 좌표/회전 signature가 Phase 0 목표 signature와 일치하는지 확인한다.
+- 결과 전체에 대해 boundary, collision, support, fragile policy invariant가 통과하는지 확인한다.
+- 추가 박스 시뮬레이션 variant 전체가 같은 invariant를 통과하는지 확인한다.
+- 후보 좌표 확장 후 `field:audit` 총 계산 시간이 이전 기준 대비 2배 이상 늘면 원인을 분석하고 commit하지 않는다.
+
 ## 13. Tracking Risks
 
 - `위로 배치 선호`는 현장 요구와 맞을 수 있지만, 실제 엔진에서는 “늦게 배치” 휴리스틱이다. 현장 기대가 “무조건 최상단”이면 후속 정책이 필요하므로 기본 패치에는 넣지 않는다.
@@ -365,9 +429,11 @@ UI가 바뀐 cycle은 추가로 브라우저에서 아래 폭을 확인한다.
 
 1. `docs: add v2 field patch plan`
 2. `test: lock field pinwheel packing regression`
-3. `fix: prevent duplicate box and draft entries`
-4. `fix: support pinwheel placement candidates`
-5. `feat: clarify loading placement preferences`
-6. `feat: improve result 3d interpretation`
-7. `feat: add chain selection remove action`
-8. `docs: update v2 field guide for patch scope`
+3. `test: add packing engine invariant gate`
+4. `fix: prevent duplicate box and draft entries`
+5. `fix: support pinwheel placement candidates`
+6. `test: expand field audit engine correctness coverage`
+7. `feat: clarify loading placement preferences`
+8. `feat: improve result 3d interpretation`
+9. `feat: add chain selection remove action`
+10. `docs: update v2 field guide for patch scope`
