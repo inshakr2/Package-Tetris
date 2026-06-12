@@ -7,7 +7,7 @@ const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 
 describe("draft-block-priority-layout", () => {
-  it("현재 작업 박스마다 현장 문구 기반 하단 우선 설정을 노출한다", () => {
+  it("현재 작업 박스마다 현장 문구 기반 배치 우선 설정을 노출한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -17,23 +17,23 @@ describe("draft-block-priority-layout", () => {
       source.includes("function updateCurrentLoadPriority") &&
       source.includes("onLoadPriorityChange={updateCurrentLoadPriority}");
     const hasFieldCopy =
-      source.includes("아래층 우선") &&
+      source.includes("배치 우선") &&
       source.includes("기본") &&
-      source.includes('displayLabel: "먼저\\n바닥에"') &&
-      source.includes("맨 아래 우선");
+      source.includes("아래 우선") &&
+      !source.includes("맨 아래 우선");
     const hasAccessibleGroup =
       source.includes('className="draft-priority-control"') &&
       source.includes('role="group"') &&
-      source.includes('aria-label={`${block.name} 아래층 우선 설정`}') &&
+      source.includes('aria-label={`${block.name} 배치 우선 설정`}') &&
       source.includes("DRAFT_LOAD_PRIORITY_OPTIONS.map");
 
     // Then
     assert.ok(hasUpdatePath, "draft priority should be wired from UI to workspace update helper");
-    assert.ok(hasFieldCopy, "priority options should use field-readable Korean labels");
+    assert.ok(hasFieldCopy, "priority options should remove duplicate below-first labels");
     assert.ok(hasAccessibleGroup, "priority controls should be grouped with a block-specific label");
   });
 
-  it("실행 전 확인은 하단 우선으로 지정한 현재 작업 항목 수를 요약한다", () => {
+  it("실행 전 확인은 배치 우선으로 지정한 현재 작업 항목 수를 요약한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -46,7 +46,7 @@ describe("draft-block-priority-layout", () => {
       source.includes("priorityBlockCount: number;");
     const hasReviewSummaryTile =
       source.includes('className="summary-grid compact-summary review-summary-grid"') &&
-      source.includes('label="하단 우선"') &&
+      source.includes('label="배치 우선"') &&
       source.includes('value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"}');
 
     // Then
@@ -55,7 +55,7 @@ describe("draft-block-priority-layout", () => {
     assert.ok(hasReviewSummaryTile, "review card should summarize priority settings without adding more inputs");
   });
 
-  it("실행 전 확인은 하단 우선 박스명과 우선 단계를 함께 보여준다", () => {
+  it("실행 전 확인은 배치 우선 박스명과 우선 단계를 함께 보여준다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -70,12 +70,38 @@ describe("draft-block-priority-layout", () => {
     const rendersPrioritySummaries =
       source.includes('className="review-priority-summary"') &&
       source.includes("priorityBlockSummaries.map") &&
-      source.includes("하단 우선 박스");
+      source.includes("배치 우선 박스");
 
     // Then
     assert.ok(createsPrioritySummaries, "workspace should create readable priority summaries from draft blocks");
     assert.ok(passesPrioritySummaries, "review card should receive the readable priority summaries");
     assert.ok(rendersPrioritySummaries, "review card should render names and priority levels, not only a count");
+  });
+
+  it("현재 작업 중복 추가는 영향을 받은 카드 근처에 합산 수량을 안내한다", () => {
+    // Given
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+
+    // When
+    const hasMergeState =
+      source.includes("interface DraftMergeNotice") &&
+      source.includes("createDraftImportMergeNotice") &&
+      source.includes("setDraftMergeNotice");
+    const hasCardNotice =
+      source.includes('className="draft-merge-notice"') &&
+      source.includes('role="status"') &&
+      source.includes("기존 카드에 {mergeNotice.quantityAdded}개 합산됨") &&
+      source.includes("총 {mergeNotice.totalQuantity}개");
+    const hasNoticeStyle =
+      /\.draft-merge-notice\s*{[\s\S]*?background:\s*#eef5ff;[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?}/.test(
+        css
+      );
+
+    // Then
+    assert.ok(hasMergeState, "workspace should track the latest duplicate-add merge");
+    assert.ok(hasCardNotice, "current work card should explain the merge result near the affected block");
+    assert.ok(hasNoticeStyle, "merge notice should remain readable without widening the card");
   });
 
   it("실행 전 확인 요약은 6개 타일을 위한 전용 그리드로 부피 타일 압축을 피한다", () => {
@@ -102,7 +128,7 @@ describe("draft-block-priority-layout", () => {
     assert.ok(hasMobileGrid, "review summary should stack to one column on mobile");
   });
 
-  it("하단 우선 설정은 모바일에서도 48px 터치 타깃과 줄바꿈 가능한 버튼을 유지한다", () => {
+  it("배치 우선 설정은 모바일에서도 48px 터치 타깃과 줄바꿈 가능한 버튼을 유지한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 

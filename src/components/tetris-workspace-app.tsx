@@ -66,6 +66,7 @@ import {
   addBlockTemplateToDraft,
   createBlockGroup,
   createBlockTemplate,
+  hasDuplicateBlockTemplateName,
   removeBlockGroup,
   removeBlockTemplate,
   removeDraftBlockItem,
@@ -203,6 +204,7 @@ import {
   BlockDefinition,
   BlockTemplate,
   ChainHistoryItem,
+  Dimensions,
   DraftBlockItem,
   ImportConflict,
   ImportConflictOption,
@@ -229,6 +231,12 @@ interface NavigatorWithStandalone extends Navigator {
 interface PendingImport {
   workspace: TetrisWorkspace;
   conflict: ImportConflict;
+}
+
+interface DraftMergeNotice {
+  draftBlockItemId: string;
+  quantityAdded: number;
+  totalQuantity: number;
 }
 
 interface WorkspaceSaveConflictNotice {
@@ -261,18 +269,30 @@ const DEFAULT_SPACE_FORM = {
   offsetHeightMm: 80
 };
 
-const DEFAULT_BLOCK_FORM = {
+type NumberFieldFormValue = number | "";
+
+interface BlockForm {
+  name: string;
+  widthMm: NumberFieldFormValue;
+  depthMm: NumberFieldFormValue;
+  heightMm: NumberFieldFormValue;
+  weightKg: string;
+  group1: string;
+  group2: string;
+  fragile: boolean;
+}
+
+const DEFAULT_BLOCK_FORM: BlockForm = {
   name: "",
-  widthMm: 300,
-  depthMm: 220,
-  heightMm: 180,
+  widthMm: "",
+  depthMm: "",
+  heightMm: "",
   weightKg: "",
   group1: "",
   group2: "",
   fragile: false
 };
 
-type BlockForm = typeof DEFAULT_BLOCK_FORM;
 const STORAGE_PANEL_ID = "storage-reliability-panel";
 const MOBILE_STICKY_STATUS_ID = "mobile-sticky-status";
 const MOBILE_STICKY_HELPER_ID = "mobile-sticky-helper";
@@ -287,8 +307,7 @@ const CHAIN_MAX_SELECTED_TEMPLATE_COUNT = 3;
 const CHAIN_PRIORITY_SCORE_STEP = 10;
 const DRAFT_LOAD_PRIORITY_OPTIONS = [
   { value: 0, label: "기본" },
-  { value: 5, label: "먼저 바닥에", displayLabel: "먼저\n바닥에" },
-  { value: 10, label: "맨 아래 우선" }
+  { value: 5, label: "아래 우선" }
 ] as const;
 type DraftLoadPriorityOptionValue = (typeof DRAFT_LOAD_PRIORITY_OPTIONS)[number]["value"];
 
@@ -306,7 +325,7 @@ const BLOCK_TEMPLATE_IMPORT_FORMAT_COLUMNS = [
 const DRAFT_BLOCK_IMPORT_FORMAT_COLUMNS = [
   { name: "박스명", requirement: "필수", description: "2번 박스 등록에 저장된 박스명과 정확히 같아야 합니다." },
   { name: "작업수량", requirement: "필수", description: "이번 작업에 실을 수량입니다. 1 이상의 정수만 입력합니다." },
-  { name: "아래층우선타입", requirement: "필수", description: "1=기본, 2=먼저바닥에, 3=맨아래우선 중 하나를 숫자로 입력합니다." }
+  { name: "적재위치타입", requirement: "필수", description: "1=기본, 2=아래우선 중 하나를 숫자로 입력합니다." }
 ] as const;
 
 const Result3DCanvas = dynamic(
@@ -363,7 +382,9 @@ export function TetrisWorkspaceApp() {
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
   const [spaceFormError, setSpaceFormError] = useState<string | null>(null);
   const [blockForm, setBlockForm] = useState(DEFAULT_BLOCK_FORM);
+  const [blockFormError, setBlockFormError] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [draftMergeNotice, setDraftMergeNotice] = useState<DraftMergeNotice | null>(null);
   const [creatingResult, setCreatingResult] = useState(false);
   const [resultCalculationStep, setResultCalculationStep] = useState<ResultCalculationProgressStep>("idle");
   const [resultFailure, setResultFailure] = useState<ResultCalculationFailure | null>(null);
@@ -964,16 +985,37 @@ export function TetrisWorkspaceApp() {
   }
 
   function saveBlockTemplate(addToDraft: boolean) {
+    if (!workspace) {
+      return;
+    }
+
+    const templateName = blockForm.name.trim();
+
+    if (!templateName) {
+      setBlockFormError("박스명을 입력해 주세요.");
+      return;
+    }
+
+    if (hasDuplicateBlockTemplateName(workspace, templateName, editingTemplateId ?? undefined)) {
+      setBlockFormError("이미 같은 박스명이 있습니다. 다른 박스명을 입력해 주세요.");
+      return;
+    }
+
+    const dimensions = createBlockFormDimensions(blockForm);
+
+    if (!dimensions) {
+      setBlockFormError("가로, 세로, 높이를 모두 1 이상의 정수로 입력해 주세요.");
+      return;
+    }
+
+    setBlockFormError(null);
+
     if (editingTemplateId) {
       updateWorkspace((current, now) =>
         updateBlockTemplate(current, {
           blockTemplateId: editingTemplateId,
-          name: blockForm.name.trim() || "신규 박스",
-          dimensions: {
-            widthMm: Number(blockForm.widthMm),
-            depthMm: Number(blockForm.depthMm),
-            heightMm: Number(blockForm.heightMm)
-          },
+          name: templateName,
+          dimensions,
           fragile: blockForm.fragile,
           weightKg: parseOptionalWeightKg(blockForm.weightKg),
           group1: blockForm.group1,
@@ -990,12 +1032,8 @@ export function TetrisWorkspaceApp() {
     updateWorkspace((current, now) =>
       createBlockTemplate(current, {
         blockTemplateId,
-        name: blockForm.name.trim() || "신규 박스",
-        dimensions: {
-          widthMm: Number(blockForm.widthMm),
-          depthMm: Number(blockForm.depthMm),
-          heightMm: Number(blockForm.heightMm)
-        },
+        name: templateName,
+        dimensions,
         fragile: blockForm.fragile,
         weightKg: parseOptionalWeightKg(blockForm.weightKg),
         group1: blockForm.group1,
@@ -1038,6 +1076,7 @@ export function TetrisWorkspaceApp() {
 
   function editBlockTemplate(template: BlockTemplate) {
     setEditingTemplateId(template.blockTemplateId);
+    setBlockFormError(null);
     setBlockForm({
       name: template.name,
       widthMm: template.dimensions.widthMm,
@@ -1070,13 +1109,28 @@ export function TetrisWorkspaceApp() {
   }
 
   function addTemplateToDraft(template: BlockTemplate, quantity = 1) {
+    const quantityToAdd = Math.max(1, quantity);
+    const existingItem = workspace?.draft.blockItems.find(
+      (item) => item.blockTemplateId === template.blockTemplateId
+    );
+
     updateWorkspace((current, now) =>
       addBlockTemplateToDraft(current, {
         draftBlockItemId: createClientId("item"),
         blockTemplateId: template.blockTemplateId,
-        quantity,
+        quantity: quantityToAdd,
         now
       })
+    );
+
+    setDraftMergeNotice(
+      existingItem
+        ? {
+            draftBlockItemId: existingItem.draftBlockItemId,
+            quantityAdded: quantityToAdd,
+            totalQuantity: existingItem.quantity + quantityToAdd
+          }
+        : null
     );
   }
 
@@ -1084,6 +1138,8 @@ export function TetrisWorkspaceApp() {
     if (rows.length === 0) {
       return;
     }
+
+    const mergeNotice = workspace ? createDraftImportMergeNotice(workspace, rows) : null;
 
     updateWorkspace((current, now) => {
       let nextWorkspace = current;
@@ -1109,6 +1165,7 @@ export function TetrisWorkspaceApp() {
 
       return nextWorkspace;
     });
+    setDraftMergeNotice(mergeNotice);
   }
 
   function deleteBlockTemplate(templateId: string) {
@@ -1122,6 +1179,7 @@ export function TetrisWorkspaceApp() {
   }
 
   function updateCurrentQuantity(draftBlockItemId: string, quantity: number) {
+    setDraftMergeNotice(null);
     updateWorkspace((current, now) =>
       updateDraftBlockItemQuantity(current, {
         draftBlockItemId,
@@ -1132,6 +1190,7 @@ export function TetrisWorkspaceApp() {
   }
 
   function updateCurrentLoadPriority(draftBlockItemId: string, loadPriority: number) {
+    setDraftMergeNotice(null);
     updateWorkspace((current, now) =>
       updateDraftBlockItemLoadPriority(current, {
         draftBlockItemId,
@@ -1754,9 +1813,13 @@ export function TetrisWorkspaceApp() {
             <div className="section-column">
               <BlockCreatePanel
                 form={blockForm}
+                error={blockFormError}
                 editingTemplateId={editingTemplateId}
                 blockGroups={workspace.blockGroups}
-                onChange={setBlockForm}
+                onChange={(nextForm) => {
+                  setBlockFormError(null);
+                  setBlockForm(nextForm);
+                }}
                 onAddBlockGroup={addBlockGroup}
                 onDeleteBlockGroup={(group, trigger) =>
                   requestDelete("block-group", group.blockGroupId, group.name, trigger)
@@ -1764,6 +1827,7 @@ export function TetrisWorkspaceApp() {
                 onSave={(addToDraft) => saveBlockTemplate(addToDraft)}
                 onCancel={() => {
                   setEditingTemplateId(null);
+                  setBlockFormError(null);
                   setBlockForm(DEFAULT_BLOCK_FORM);
                 }}
               />
@@ -1791,6 +1855,7 @@ export function TetrisWorkspaceApp() {
             <CurrentWorkBlocksPanel
               blocks={draftBlocks}
               templates={workspace.blockTemplates}
+              mergeNotice={draftMergeNotice}
               canResetCurrentWork={canResetCurrentWork}
               resetDisabled={isWorkspaceLocked || !canResetCurrentWork}
               resetDisabledReason={
@@ -2793,9 +2858,9 @@ function DraftBlockImportFormatDialog({
           <div className="block-template-format-callout">
             <strong>이번 작업 물량 자동화 기준</strong>
             <span>
-              저장된 박스명을 기준으로 작업수량과 아래층우선타입만 가져옵니다. 자동으로 엑셀을 만들 때는
+              저장된 박스명을 기준으로 작업수량과 적재위치타입만 가져옵니다. 자동으로 엑셀을 만들 때는
               열 순서를 바꾸지 말고 {DRAFT_BLOCK_XLSX_COLUMNS.join(" / ")} 순서로 내보내세요.
-              아래층우선타입은 1=기본, 2=먼저바닥에, 3=맨아래우선 숫자만 사용할 수 있습니다.
+              적재위치타입은 1=기본, 2=아래우선 숫자만 사용할 수 있습니다.
             </span>
           </div>
           <div className="block-template-format-table-wrap" aria-label="현재 작업 엑셀 열 설명">
@@ -2999,6 +3064,7 @@ function BlockTemplateImportFormatDialog({
 
 function BlockCreatePanel({
   form,
+  error,
   editingTemplateId,
   blockGroups,
   onChange,
@@ -3008,6 +3074,7 @@ function BlockCreatePanel({
   onCancel
 }: {
   form: BlockForm;
+  error: string | null;
   editingTemplateId: string | null;
   blockGroups: BlockGroup[];
   onChange: (value: BlockForm) => void;
@@ -3096,8 +3163,10 @@ function BlockCreatePanel({
             가로(mm)
             <NumberFieldInput
               aria-label="박스 가로 mm"
+              allowEmpty
               min={1}
               value={form.widthMm}
+              onEmptyValueChange={() => onChange({ ...form, widthMm: "" })}
               onValidValueChange={(widthMm) => onChange({ ...form, widthMm })}
             />
           </label>
@@ -3105,8 +3174,10 @@ function BlockCreatePanel({
             세로(mm)
             <NumberFieldInput
               aria-label="박스 세로 mm"
+              allowEmpty
               min={1}
               value={form.depthMm}
+              onEmptyValueChange={() => onChange({ ...form, depthMm: "" })}
               onValidValueChange={(depthMm) => onChange({ ...form, depthMm })}
             />
           </label>
@@ -3114,8 +3185,10 @@ function BlockCreatePanel({
             높이(mm)
             <NumberFieldInput
               aria-label="박스 높이 mm"
+              allowEmpty
               min={1}
               value={form.heightMm}
+              onEmptyValueChange={() => onChange({ ...form, heightMm: "" })}
               onValidValueChange={(heightMm) => onChange({ ...form, heightMm })}
             />
           </label>
@@ -3162,6 +3235,11 @@ function BlockCreatePanel({
           깨짐주의
         </label>
       </div>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <details className="block-group-register">
         <summary>새 그룹 등록</summary>
         <div className="block-group-register-grid">
@@ -3436,6 +3514,7 @@ function BlockGroupManagementDialog({
 function CurrentWorkBlocksPanel({
   blocks,
   templates,
+  mergeNotice,
   canResetCurrentWork,
   resetDisabled,
   resetDisabledReason,
@@ -3449,6 +3528,7 @@ function CurrentWorkBlocksPanel({
 }: {
   blocks: BlockDefinition[];
   templates: BlockTemplate[];
+  mergeNotice: DraftMergeNotice | null;
   canResetCurrentWork: boolean;
   resetDisabled: boolean;
   resetDisabledReason: string | null;
@@ -3547,7 +3627,7 @@ function CurrentWorkBlocksPanel({
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 박스명, 작업수량, 아래층우선타입을 바꿔 등록하세요.");
+    setDraftImportNotice("현재 작업 샘플 파일을 다운로드했습니다. 박스명, 작업수량, 적재위치타입을 바꿔 등록하세요.");
   };
 
   return (
@@ -3627,6 +3707,11 @@ function CurrentWorkBlocksPanel({
                           {block.fragile ? "깨짐주의" : "일반"}
                 </span>
               </div>
+              {mergeNotice?.draftBlockItemId === block.draftBlockItemId ? (
+                <p className="draft-merge-notice" role="status">
+                  기존 카드에 {mergeNotice.quantityAdded}개 합산됨 · 총 {mergeNotice.totalQuantity}개
+                </p>
+              ) : null}
               <div className="block-detail-grid">
                 <label>
                   이번 작업 수량(개)
@@ -3637,8 +3722,8 @@ function CurrentWorkBlocksPanel({
                     onValidValueChange={(quantity) => onQuantityChange(block.draftBlockItemId, quantity)}
                   />
                 </label>
-                <div className="draft-priority-control" role="group" aria-label={`${block.name} 아래층 우선 설정`}>
-                  <span>아래층 우선</span>
+                <div className="draft-priority-control" role="group" aria-label={`${block.name} 배치 우선 설정`}>
+                  <span>배치 우선</span>
                   <div className="draft-priority-options">
                     {DRAFT_LOAD_PRIORITY_OPTIONS.map((option) => (
                       <button
@@ -3648,7 +3733,7 @@ function CurrentWorkBlocksPanel({
                         aria-pressed={normalizeDraftLoadPriorityOptionValue(block.loadPriority) === option.value}
                         onClick={() => onLoadPriorityChange(block.draftBlockItemId, option.value)}
                       >
-                        {"displayLabel" in option ? option.displayLabel : option.label}
+                        {option.label}
                       </button>
                     ))}
                   </div>
@@ -3894,14 +3979,14 @@ function ReviewCompactCard({
       <div className="summary-grid compact-summary review-summary-grid">
         <SummaryTile label="선택 공간" value={selectedSpace?.name ?? "미선택"} />
         <SummaryTile label="총 박스" value={`${review?.totals.totalBlockCount ?? 0}개`} />
-        <SummaryTile label="하단 우선" value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"} />
+        <SummaryTile label="배치 우선" value={priorityBlockCount > 0 ? `${priorityBlockCount}개 항목` : "없음"} />
         <SummaryTile label="박스 총 부피" value={formatM3(review?.totals.totalBlockVolumeM3 ?? 0)} />
                 <SummaryTile label="공간 적재 가능 부피" value={formatM3(review?.totals.usableSpaceVolumeM3 ?? 0)} />
         <SummaryTile label="부피 기준 최소 공간 수" value={`${review?.totals.minimumSpaceCountLowerBound ?? 0}개`} />
       </div>
       {priorityBlockSummaries.length > 0 ? (
-        <div className="review-priority-summary" aria-label="하단 우선 박스">
-          <strong>하단 우선 박스</strong>
+        <div className="review-priority-summary" aria-label="배치 우선 박스">
+          <strong>배치 우선 박스</strong>
           <ul>
             {priorityBlockSummaries.map((summary) => (
               <li key={summary}>{summary}</li>
@@ -7217,27 +7302,37 @@ function NumberFieldInput({
   value,
   min,
   onValidValueChange,
+  onEmptyValueChange,
   "aria-label": ariaLabel,
+  allowEmpty = false,
   disabled = false
 }: {
-  value: number;
+  value: NumberFieldFormValue;
   min: number;
   onValidValueChange: (value: number) => void;
+  onEmptyValueChange?: () => void;
   "aria-label": string;
+  allowEmpty?: boolean;
   disabled?: boolean;
 }) {
   const errorId = useId();
   const [draftValue, setDraftValue] = useState(() => formatNumberFieldDraftValue(value));
-  const [error, setError] = useState<string | null>(() => getCommittedNumberFieldError(value, min));
+  const [error, setError] = useState<string | null>(() => getCommittedNumberFieldError(value, min, allowEmpty));
 
   useEffect(() => {
     setDraftValue(formatNumberFieldDraftValue(value));
-    setError(getCommittedNumberFieldError(value, min));
-  }, [min, value]);
+    setError(getCommittedNumberFieldError(value, min, allowEmpty));
+  }, [allowEmpty, min, value]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextDraftValue = event.target.value;
     setDraftValue(nextDraftValue);
+
+    if (allowEmpty && nextDraftValue.trim() === "") {
+      setError(null);
+      onEmptyValueChange?.();
+      return;
+    }
 
     const result = parseFieldIntegerInput(nextDraftValue, { min });
 
@@ -7251,11 +7346,18 @@ function NumberFieldInput({
   };
 
   const handleBlur = () => {
+    if (allowEmpty && draftValue.trim() === "") {
+      setDraftValue("");
+      setError(null);
+      onEmptyValueChange?.();
+      return;
+    }
+
     const result = parseFieldIntegerInput(draftValue, { min });
 
     if (result.status !== "valid") {
       setDraftValue(formatNumberFieldDraftValue(value));
-      setError(getCommittedNumberFieldError(value, min));
+      setError(getCommittedNumberFieldError(value, min, allowEmpty));
       return;
     }
 
@@ -7404,7 +7506,7 @@ function createDraftImportCandidateMeta(row: DraftBlockImportCandidate) {
   return [
     `${row.rowNumber}행`,
     `${row.quantity}개`,
-    getDraftLoadPriorityLabel(row.loadPriority),
+    getDraftLoadPriorityLabel(normalizeDraftLoadPriorityOptionValue(row.loadPriority)),
     formatDimensions(row.dimensions),
     formatOptionalWeightDisplay(row.weightKg),
     row.group1 ? `상위 ${row.group1}` : "상위그룹 없음",
@@ -7424,6 +7526,58 @@ function createChainQuantityStatusCopy(addedQuantity: number, requestedQuantity:
   return addedQuantity > 0 ? "일부 가능" : "추가 없음";
 }
 
+function createDraftImportMergeNotice(
+  workspace: TetrisWorkspace,
+  rows: DraftBlockImportCandidate[]
+): DraftMergeNotice | null {
+  const quantityByDraftItemId = new Map(
+    workspace.draft.blockItems.map((item) => [item.draftBlockItemId, item.quantity])
+  );
+  const draftItemByTemplateId = new Map(
+    workspace.draft.blockItems.map((item) => [item.blockTemplateId, item])
+  );
+  let notice: DraftMergeNotice | null = null;
+
+  rows.forEach((row) => {
+    const existingItem = draftItemByTemplateId.get(row.blockTemplateId);
+
+    if (!existingItem) {
+      return;
+    }
+
+    const currentQuantity = quantityByDraftItemId.get(existingItem.draftBlockItemId) ?? existingItem.quantity;
+    const totalQuantity = currentQuantity + row.quantity;
+    quantityByDraftItemId.set(existingItem.draftBlockItemId, totalQuantity);
+    notice = {
+      draftBlockItemId: existingItem.draftBlockItemId,
+      quantityAdded: row.quantity,
+      totalQuantity
+    };
+  });
+
+  return notice;
+}
+
+function createBlockFormDimensions(form: BlockForm): Dimensions | null {
+  if (
+    !isValidRequiredNumberFieldValue(form.widthMm) ||
+    !isValidRequiredNumberFieldValue(form.depthMm) ||
+    !isValidRequiredNumberFieldValue(form.heightMm)
+  ) {
+    return null;
+  }
+
+  return {
+    widthMm: form.widthMm,
+    depthMm: form.depthMm,
+    heightMm: form.heightMm
+  };
+}
+
+function isValidRequiredNumberFieldValue(value: NumberFieldFormValue): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
 function parseOptionalWeightKg(value: string) {
   const normalizedValue = value.trim();
 
@@ -7438,7 +7592,7 @@ function parseOptionalWeightKg(value: string) {
 function normalizeDraftLoadPriorityOptionValue(
   value: number | null | undefined
 ): DraftLoadPriorityOptionValue {
-  return normalizeLoadPriorityScore(value);
+  return normalizeLoadPriorityScore(value) > 0 ? 5 : 0;
 }
 
 function createDraftLoadPrioritySummary(block: BlockDefinition) {
@@ -7534,11 +7688,15 @@ function selectNumberFieldValue(event: FocusEvent<HTMLInputElement> | MouseEvent
   event.currentTarget.select();
 }
 
-function formatNumberFieldDraftValue(value: number) {
-  return Number.isFinite(value) ? String(value) : "";
+function formatNumberFieldDraftValue(value: NumberFieldFormValue) {
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "";
 }
 
-function getCommittedNumberFieldError(value: number, min: number) {
+function getCommittedNumberFieldError(value: NumberFieldFormValue, min: number, allowEmpty = false) {
+  if (value === "") {
+    return allowEmpty ? null : "숫자를 입력하세요.";
+  }
+
   if (!Number.isFinite(value)) {
     return "숫자를 입력하세요.";
   }

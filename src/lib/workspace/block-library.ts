@@ -86,10 +86,16 @@ export function createBlockTemplate(
   workspace: TetrisWorkspace,
   options: CreateBlockTemplateOptions
 ): TetrisWorkspace {
+  const name = normalizeRequiredTemplateName(options.name);
+
+  if (!name || hasDuplicateBlockTemplateName(workspace, name)) {
+    return workspace;
+  }
+
   const template: BlockTemplate = {
     blockTemplateId: options.blockTemplateId,
     entityVersion: 1,
-    name: options.name,
+    name,
     dimensions: options.dimensions,
     fragile: options.fragile,
     weightKg: normalizeOptionalWeightKg(options.weightKg),
@@ -126,12 +132,18 @@ export function updateBlockTemplate(
   workspace: TetrisWorkspace,
   options: UpdateBlockTemplateOptions
 ): TetrisWorkspace {
+  const name = normalizeRequiredTemplateName(options.name);
+
+  if (!name || hasDuplicateBlockTemplateName(workspace, name, options.blockTemplateId)) {
+    return workspace;
+  }
+
   const nextBlockTemplates = workspace.blockTemplates.map((template) =>
     template.blockTemplateId === options.blockTemplateId
       ? {
           ...template,
           entityVersion: template.entityVersion + 1,
-          name: options.name,
+          name,
           dimensions: options.dimensions,
           fragile: options.fragile,
           weightKg: "weightKg" in options ? normalizeOptionalWeightKg(options.weightKg) : template.weightKg ?? null,
@@ -240,10 +252,35 @@ export function addBlockTemplateToDraft(
   workspace: TetrisWorkspace,
   options: AddBlockTemplateToDraftOptions
 ): TetrisWorkspace {
+  const quantityToAdd = Math.max(1, options.quantity);
+  const existingItem = workspace.draft.blockItems.find(
+    (item) => item.blockTemplateId === options.blockTemplateId
+  );
+
+  if (existingItem) {
+    return {
+      ...touchDraft(workspace, options.now),
+      draft: {
+        ...workspace.draft,
+        blockItems: workspace.draft.blockItems.map((item) =>
+          item.draftBlockItemId === existingItem.draftBlockItemId
+            ? {
+                ...item,
+                quantity: item.quantity + quantityToAdd,
+                updatedAt: options.now
+              }
+            : item
+        ),
+        currentStep: "blocks",
+        updatedAt: options.now
+      }
+    };
+  }
+
   const item: DraftBlockItem = {
     draftBlockItemId: options.draftBlockItemId,
     blockTemplateId: options.blockTemplateId,
-    quantity: Math.max(1, options.quantity),
+    quantity: quantityToAdd,
     createdAt: options.now,
     updatedAt: options.now
   };
@@ -381,6 +418,28 @@ export function searchBlockTemplates(templates: BlockTemplate[], searchTerm: str
   });
 }
 
+export function hasDuplicateBlockTemplateName(
+  workspace: TetrisWorkspace,
+  name: string,
+  excludedBlockTemplateId?: string
+) {
+  const nameKey = normalizeBlockTemplateNameKey(name);
+
+  if (!nameKey) {
+    return false;
+  }
+
+  return workspace.blockTemplates.some(
+    (template) =>
+      template.blockTemplateId !== excludedBlockTemplateId &&
+      normalizeBlockTemplateNameKey(template.name) === nameKey
+  );
+}
+
+export function normalizeBlockTemplateNameKey(name: string) {
+  return name.trim().toLocaleLowerCase("ko-KR");
+}
+
 export function resolveDraftBlocks(workspace: TetrisWorkspace): BlockDefinition[] {
   return workspace.draft.blockItems.flatMap((item) => {
     const template = workspace.blockTemplates.find(
@@ -435,6 +494,10 @@ function normalizeOptionalWeightKg(weightKg: number | null | undefined) {
 function normalizeOptionalTemplateText(value: string | undefined) {
   const normalizedValue = value?.trim();
   return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizeRequiredTemplateName(value: string) {
+  return value.trim();
 }
 
 function formatSearchableWeight(weightKg: number | null | undefined) {

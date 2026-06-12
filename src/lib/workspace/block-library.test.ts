@@ -43,7 +43,7 @@ describe("block-library", () => {
     assert.equal(nextWorkspace.draft.blockItems[0]?.quantity, 12);
   });
 
-  it("라이브러리 블록은 여러 번 현재 작업에 재사용할 수 있고 수량은 작업 항목별로 독립된다", () => {
+  it("라이브러리 블록을 현재 작업에 다시 추가하면 새 행 대신 기존 작업 수량을 합산한다", () => {
     // Given
     const workspace = createBlockTemplate(
       createDefaultWorkspace({
@@ -75,17 +75,58 @@ describe("block-library", () => {
       quantity: 7,
       now: "2026-06-08T03:00:00.000Z"
     });
-    const updated = updateDraftBlockItemQuantity(secondAdd, {
+
+    // Then
+    assert.equal(secondAdd.blockTemplates.length, 1);
+    assert.equal(secondAdd.draft.blockItems.length, 1);
+    assert.equal(secondAdd.draft.blockItems[0]?.draftBlockItemId, "item-a");
+    assert.equal(secondAdd.draft.blockItems[0]?.quantity, 10);
+    assert.equal(secondAdd.draft.blockItems[0]?.updatedAt, "2026-06-08T03:00:00.000Z");
+  });
+
+  it("현재 작업 중복 추가로 수량을 합산해도 기존 배치 우선 설정은 유지한다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "A-박스",
+        dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+        fragile: false,
+        quantity: 5,
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+    const withDraftItem = addBlockTemplateToDraft(workspace, {
       draftBlockItemId: "item-a",
-      quantity: 9,
+      blockTemplateId: "template-a",
+      quantity: 3,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+    const prioritized = updateDraftBlockItemLoadPriority(withDraftItem, {
+      draftBlockItemId: "item-a",
+      loadPriority: 5,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+
+    // When
+    const nextWorkspace = addBlockTemplateToDraft(prioritized, {
+      draftBlockItemId: "item-b",
+      blockTemplateId: "template-a",
+      quantity: 2,
       now: "2026-06-08T04:00:00.000Z"
     });
 
     // Then
-    assert.equal(updated.blockTemplates.length, 1);
-    assert.equal(updated.draft.blockItems.length, 2);
-    assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-a")?.quantity, 9);
-    assert.equal(updated.draft.blockItems.find((item) => item.draftBlockItemId === "item-b")?.quantity, 7);
+    assert.equal(nextWorkspace.draft.blockItems.length, 1);
+    assert.equal(nextWorkspace.draft.blockItems[0]?.draftBlockItemId, "item-a");
+    assert.equal(nextWorkspace.draft.blockItems[0]?.quantity, 5);
+    assert.equal(nextWorkspace.draft.blockItems[0]?.loadPriority, 5);
   });
 
   it("현재 작업 박스의 하단 우선도는 저장된 박스 원본을 바꾸지 않고 작업 항목에만 저장된다", () => {
@@ -176,6 +217,84 @@ describe("block-library", () => {
     assert.equal(updated.blockTemplates[0]?.group1, "엔터그레인");
     assert.equal(updated.blockTemplates[0]?.group2, "앰프");
     assert.equal(updated.blockTemplates[0]?.entityVersion, 2);
+  });
+
+  it("저장된 박스명은 앞뒤 공백과 대소문자를 보정해 중복 등록을 막는다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createDefaultWorkspace({
+        deviceId: "device-a",
+        fileId: "file-a",
+        now: "2026-06-08T00:00:00.000Z"
+      }),
+      {
+        blockTemplateId: "template-a",
+        name: "AMP-100 박스",
+        dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+        fragile: false,
+        addToDraft: false,
+        now: "2026-06-08T01:00:00.000Z"
+      }
+    );
+
+    // When
+    const nextWorkspace = createBlockTemplate(workspace, {
+      blockTemplateId: "template-b",
+      name: " amp-100 박스 ",
+      dimensions: { widthMm: 430, depthMm: 370, heightMm: 290 },
+      fragile: false,
+      addToDraft: false,
+      now: "2026-06-08T02:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(nextWorkspace, workspace);
+    assert.equal(nextWorkspace.blockTemplates.length, 1);
+  });
+
+  it("저장된 박스 수정 시 다른 박스와 같은 이름으로 바꾸지 않는다", () => {
+    // Given
+    const workspace = createBlockTemplate(
+      createBlockTemplate(
+        createDefaultWorkspace({
+          deviceId: "device-a",
+          fileId: "file-a",
+          now: "2026-06-08T00:00:00.000Z"
+        }),
+        {
+          blockTemplateId: "template-a",
+          name: "스피커 박스",
+          dimensions: { widthMm: 420, depthMm: 360, heightMm: 280 },
+          fragile: false,
+          addToDraft: false,
+          now: "2026-06-08T01:00:00.000Z"
+        }
+      ),
+      {
+        blockTemplateId: "template-b",
+        name: "앰프 박스",
+        dimensions: { widthMm: 500, depthMm: 410, heightMm: 220 },
+        fragile: false,
+        addToDraft: false,
+        now: "2026-06-08T02:00:00.000Z"
+      }
+    );
+
+    // When
+    const nextWorkspace = updateBlockTemplate(workspace, {
+      blockTemplateId: "template-b",
+      name: " 스피커 박스 ",
+      dimensions: { widthMm: 510, depthMm: 420, heightMm: 230 },
+      fragile: true,
+      now: "2026-06-08T03:00:00.000Z"
+    });
+
+    // Then
+    assert.equal(nextWorkspace, workspace);
+    assert.deepEqual(
+      nextWorkspace.blockTemplates.map((template) => template.name),
+      ["스피커 박스", "앰프 박스"]
+    );
   });
 
   it("저장된 박스의 상위/하위 그룹은 별도 그룹 레지스트리로 등록되고 재사용된다", () => {
@@ -395,19 +514,30 @@ describe("block-library", () => {
     const workspace = addBlockTemplateToDraft(
       addBlockTemplateToDraft(
         createBlockTemplate(
-          createDefaultWorkspace({
-            deviceId: "device-a",
-            fileId: "file-a",
-            now: "2026-06-08T00:00:00.000Z"
-          }),
+          createBlockTemplate(
+            createDefaultWorkspace({
+              deviceId: "device-a",
+              fileId: "file-a",
+              now: "2026-06-08T00:00:00.000Z"
+            }),
+            {
+              blockTemplateId: "template-a",
+              name: "A-박스",
+              dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+              fragile: false,
+              quantity: 5,
+              addToDraft: false,
+              now: "2026-06-08T01:00:00.000Z"
+            }
+          ),
           {
-            blockTemplateId: "template-a",
-            name: "A-박스",
-            dimensions: { widthMm: 300, depthMm: 200, heightMm: 120 },
+            blockTemplateId: "template-b",
+            name: "B-박스",
+            dimensions: { widthMm: 400, depthMm: 250, heightMm: 160 },
             fragile: false,
             quantity: 5,
             addToDraft: false,
-            now: "2026-06-08T01:00:00.000Z"
+            now: "2026-06-08T01:30:00.000Z"
           }
         ),
         {
@@ -419,7 +549,7 @@ describe("block-library", () => {
       ),
       {
         draftBlockItemId: "item-b",
-        blockTemplateId: "template-a",
+        blockTemplateId: "template-b",
         quantity: 7,
         now: "2026-06-08T03:00:00.000Z"
       }

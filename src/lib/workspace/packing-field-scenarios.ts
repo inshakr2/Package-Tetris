@@ -547,7 +547,7 @@ function runDraftBlockXlsxImportFeatureCheck(): FieldFeatureCheckResult {
   const hasExpectedRows =
     preview.rows.length === DRAFT_BLOCK_IMPORT_SAMPLE_ROWS.length &&
     preview.rows.some((row) => row.quantity === 12 && row.loadPriority === 5) &&
-    preview.rows.some((row) => row.quantity === 4 && row.loadPriority === 10 && row.fragile);
+    preview.rows.some((row) => row.quantity === 4 && row.loadPriority === 5 && row.fragile);
 
   return {
     name: "현재 작업 엑셀 등록 현장 검증",

@@ -30,12 +30,12 @@ describe("draft-block-xlsx-import", () => {
     }
   ];
 
-  it("현재 작업용 .xlsx 행은 저장된 박스명, 작업수량, 아래층우선타입만 받아 미리보기 후보로 변환한다", () => {
+  it("현재 작업용 .xlsx 행은 저장된 박스명, 작업수량, 적재위치타입만 받아 미리보기 후보로 변환한다", () => {
     // Given
     const rows = [
       DRAFT_BLOCK_XLSX_COLUMNS,
       ["KMS-210 스피커 박스", 12, 2],
-      ["EG-AMP 조합 박스", "4", "3"]
+      ["EG-AMP 조합 박스", "4", "2"]
     ];
 
     // When
@@ -69,7 +69,7 @@ describe("draft-block-xlsx-import", () => {
           blockTemplateId: "template-amp",
           name: "EG-AMP 조합 박스",
           quantity: 4,
-          loadPriority: 10,
+          loadPriority: 5,
           fragile: true,
           weightKg: null
         }
@@ -80,8 +80,8 @@ describe("draft-block-xlsx-import", () => {
   it("컬럼 순서가 달라도 헤더 이름을 기준으로 현재 작업 값을 해석한다", () => {
     // Given
     const rows = [
-      ["아래층우선타입", "박스명", "작업수량"],
-      [3, "EG-AMP 조합 박스", 7]
+      ["적재위치타입", "박스명", "작업수량"],
+      [2, "EG-AMP 조합 박스", 7]
     ];
 
     // When
@@ -104,18 +104,54 @@ describe("draft-block-xlsx-import", () => {
           blockTemplateId: "template-amp",
           name: "EG-AMP 조합 박스",
           quantity: 7,
-          loadPriority: 10
+          loadPriority: 5
         }
       ]
     );
   });
 
-  it("수량 오류, 아래층 우선 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {
+  it("기존 아래층우선타입 컬럼은 읽기 호환하되 값 3도 아래 우선으로 보정한다", () => {
+    // Given
+    const rows = [
+      ["아래층우선타입", "박스명", "작업수량"],
+      [3, "EG-AMP 조합 박스", 7]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.equal(preview.rows[0]?.loadPriority, 5);
+  });
+
+  it("현재 작업 엑셀에 같은 저장 박스가 여러 행이면 수량을 합산하고 첫 번째 배치 우선 값을 유지한다", () => {
+    // Given
+    const rows = [
+      DRAFT_BLOCK_XLSX_COLUMNS,
+      ["KMS-210 스피커 박스", 12, 2],
+      ["KMS-210 스피커 박스", "4", "1"]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.equal(preview.rows.length, 1);
+    assert.equal(preview.rows[0]?.rowNumber, 2);
+    assert.equal(preview.rows[0]?.quantity, 16);
+    assert.equal(preview.rows[0]?.loadPriority, 5);
+  });
+
+  it("수량 오류, 적재 위치 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {
     // Given
     const rows = [
       DRAFT_BLOCK_XLSX_COLUMNS,
       ["KMS-210 스피커 박스", 0, 1],
-      ["KMS-210 스피커 박스", 2, "먼저 바닥에"],
+      ["KMS-210 스피커 박스", 2, "아래 우선"],
       ["저장 안 된 박스", 2, 2]
     ];
 
@@ -128,7 +164,7 @@ describe("draft-block-xlsx-import", () => {
       preview.errors.map((error) => [error.rowNumber, error.field, error.message]),
       [
         [2, "작업수량", "작업수량은 1 이상의 정수여야 합니다."],
-        [3, "아래층우선타입", "아래층우선타입은 1(기본), 2(먼저바닥에), 3(맨아래우선) 중 하나로 입력해 주세요."],
+        [3, "적재위치타입", "적재위치타입은 1(기본), 2(아래우선) 중 하나로 입력해 주세요."],
         [4, "박스명", "저장된 박스에 없는 박스명입니다. 먼저 박스 등록에서 저장해 주세요."]
       ]
     );
@@ -138,8 +174,8 @@ describe("draft-block-xlsx-import", () => {
   it("빈 sheet, 알 수 없는 컬럼, 중복 컬럼, prototype pollution 컬럼은 workbook 오류로 거부한다", () => {
     // Given
     const emptyRows: unknown[][] = [];
-    const unknownColumnRows = [["박스명", "작업수량", "아래층우선타입", "비고"]];
-    const duplicateColumnRows = [["박스명", "박스명", "작업수량", "아래층우선타입"]];
+    const unknownColumnRows = [["박스명", "작업수량", "적재위치타입", "비고"]];
+    const duplicateColumnRows = [["박스명", "박스명", "작업수량", "적재위치타입"]];
     const unsafeColumnRows = [["박스명", "작업수량", "__proto__"]];
 
     // When

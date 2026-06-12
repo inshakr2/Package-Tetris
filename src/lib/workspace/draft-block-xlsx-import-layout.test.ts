@@ -51,8 +51,8 @@ describe("draft block xlsx import layout", () => {
       source.includes("DRAFT_BLOCK_IMPORT_SAMPLE_ROWS");
     const hasAutomationCopy =
       source.includes("이번 작업 물량 자동화 기준") &&
-      source.includes("저장된 박스명을 기준으로 작업수량과 아래층우선타입만 가져옵니다.") &&
-      source.includes("1=기본, 2=먼저바닥에, 3=맨아래우선") &&
+      source.includes("저장된 박스명을 기준으로 작업수량과 적재위치타입만 가져옵니다.") &&
+      source.includes("1=기본, 2=아래우선") &&
       source.includes("이 포맷으로 파일 선택");
     const hasFormatStyles =
       /\.block-template-format-callout\s*{[\s\S]*?display:\s*grid;[\s\S]*?background:\s*#f7fbff;[\s\S]*?}/.test(css) &&

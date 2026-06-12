@@ -55,11 +55,33 @@ describe("field-number-input-layout", () => {
       source.includes("setDraftValue(nextDraftValue)") &&
       source.includes("value={draftValue}") &&
       source.includes("onClick={selectNumberFieldValue}") &&
-      source.includes("function formatNumberFieldDraftValue(value: number)");
+      source.includes("function formatNumberFieldDraftValue(value: NumberFieldFormValue)");
 
     // Then
     assert.equal(hasFocusHelper, true);
     assert.equal(hasDraftStringState, true);
+  });
+
+  it("박스 등록 치수는 빈 값으로 시작하고 저장 시 필수 치수를 검증한다", () => {
+    // Given / When
+    const hasEmptyBlockDefaults =
+      source.includes("const DEFAULT_BLOCK_FORM: BlockForm =") &&
+      source.includes('widthMm: ""') &&
+      source.includes('depthMm: ""') &&
+      source.includes('heightMm: ""');
+    const hasEmptyNumberFieldPath =
+      source.includes("allowEmpty") &&
+      source.includes("onEmptyValueChange={() => onChange({ ...form, widthMm: \"\" })}") &&
+      source.includes("onEmptyValueChange={() => onChange({ ...form, depthMm: \"\" })}") &&
+      source.includes("onEmptyValueChange={() => onChange({ ...form, heightMm: \"\" })}");
+    const hasSaveValidation =
+      source.includes("const dimensions = createBlockFormDimensions(blockForm)") &&
+      source.includes("가로, 세로, 높이를 모두 1 이상의 정수로 입력해 주세요.");
+
+    // Then
+    assert.equal(hasEmptyBlockDefaults, true);
+    assert.equal(hasEmptyNumberFieldPath, true);
+    assert.equal(hasSaveValidation, true);
   });
 
   it("현재 작업 카드의 총 부피는 비정상 숫자를 작업자 문구로 처리한다", () => {

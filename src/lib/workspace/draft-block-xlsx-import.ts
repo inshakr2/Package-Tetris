@@ -9,10 +9,17 @@ import {
   createXlsxHeaderMapping,
   createXlsxRowByColumn,
   isEmptyXlsxRow,
-  normalizeXlsxText
+  normalizeXlsxText,
+  type XlsxHeaderMapping
 } from "./xlsx-header-row";
 
 export const DRAFT_BLOCK_XLSX_COLUMNS = [
+  "박스명",
+  "작업수량",
+  "적재위치타입"
+] as const;
+
+const LEGACY_DRAFT_BLOCK_XLSX_COLUMNS = [
   "박스명",
   "작업수량",
   "아래층우선타입"
@@ -20,13 +27,26 @@ export const DRAFT_BLOCK_XLSX_COLUMNS = [
 
 export const DRAFT_BLOCK_IMPORT_SAMPLE_ROWS = [
   ["KMS-210 스피커 박스", "12", "2"],
-  ["EG-AMP 조합 박스", "4", "3"]
+  ["EG-AMP 조합 박스", "4", "2"]
 ] as const;
 
 export const DRAFT_BLOCK_IMPORT_SAMPLE_FILE_NAME = "package-tetris-current-work-sample.xlsx";
 
 type DraftBlockXlsxColumn = (typeof DRAFT_BLOCK_XLSX_COLUMNS)[number];
+type LegacyDraftBlockXlsxColumn = (typeof LEGACY_DRAFT_BLOCK_XLSX_COLUMNS)[number];
 type ImportRowByColumn = Record<DraftBlockXlsxColumn, unknown>;
+
+type DraftBlockImportHeaderMapping =
+  | {
+      legacy: false;
+      columns: typeof DRAFT_BLOCK_XLSX_COLUMNS;
+      mapping: XlsxHeaderMapping<DraftBlockXlsxColumn>;
+    }
+  | {
+      legacy: true;
+      columns: typeof LEGACY_DRAFT_BLOCK_XLSX_COLUMNS;
+      mapping: XlsxHeaderMapping<LegacyDraftBlockXlsxColumn>;
+    };
 
 export interface ExistingDraftBlockTemplate {
   blockTemplateId: string;
@@ -118,7 +138,7 @@ export function createDraftBlockImportPreview(
   }
 
   const [headerRow, ...bodyRows] = rawRows;
-  const headerMapping = createXlsxHeaderMapping(headerRow ?? [], DRAFT_BLOCK_XLSX_COLUMNS);
+  const headerMapping = createDraftBlockImportHeaderMapping(headerRow ?? []);
 
   if (!headerMapping.ok) {
     return createRejectedPreview(headerMapping.message);
@@ -137,11 +157,8 @@ export function createDraftBlockImportPreview(
       continue;
     }
 
-    const parsed = parseImportRow(
-      createXlsxRowByColumn(rawRow, DRAFT_BLOCK_XLSX_COLUMNS, headerMapping.mapping),
-      rowNumber,
-      existingTemplateByName
-    );
+    const rowByColumn = createDraftBlockImportRow(rawRow, headerMapping.mapping);
+    const parsed = parseImportRow(rowByColumn, rowNumber, existingTemplateByName, headerMapping.mapping.legacy);
 
     if (parsed.errors.length > 0) {
       errors.push(...parsed.errors);
@@ -149,7 +166,7 @@ export function createDraftBlockImportPreview(
     }
 
     if (parsed.row) {
-      rows.push(parsed.row);
+      mergeDraftBlockImportRow(rows, parsed.row);
     }
   }
 
@@ -164,10 +181,83 @@ export function createDraftBlockImportPreview(
   };
 }
 
+function createDraftBlockImportHeaderMapping(headerRow: readonly unknown[]) {
+  const headers = headerRow.map((cell) => normalizeText(cell));
+  const useLegacyColumns = headers.includes("아래층우선타입") && !headers.includes("적재위치타입");
+
+  if (useLegacyColumns) {
+    const legacyMapping = createXlsxHeaderMapping(headerRow, LEGACY_DRAFT_BLOCK_XLSX_COLUMNS);
+
+    if (!legacyMapping.ok) {
+      return legacyMapping;
+    }
+
+    return {
+      ok: true as const,
+      mapping: {
+        legacy: true as const,
+        columns: LEGACY_DRAFT_BLOCK_XLSX_COLUMNS,
+        mapping: legacyMapping.mapping
+      }
+    };
+  }
+
+  const currentMapping = createXlsxHeaderMapping(headerRow, DRAFT_BLOCK_XLSX_COLUMNS);
+
+  if (!currentMapping.ok) {
+    return currentMapping;
+  }
+
+  return {
+    ok: true as const,
+    mapping: {
+      legacy: false as const,
+      columns: DRAFT_BLOCK_XLSX_COLUMNS,
+      mapping: currentMapping.mapping
+    }
+  };
+}
+
+function createDraftBlockImportRow(rawRow: readonly unknown[], headerMapping: DraftBlockImportHeaderMapping) {
+  if (headerMapping.legacy) {
+    const legacyRow = createXlsxRowByColumn(rawRow, headerMapping.columns, headerMapping.mapping);
+
+    return {
+      박스명: legacyRow["박스명"],
+      작업수량: legacyRow["작업수량"],
+      적재위치타입: legacyRow["아래층우선타입"]
+    };
+  }
+
+  return createXlsxRowByColumn(rawRow, headerMapping.columns, headerMapping.mapping);
+}
+
+function mergeDraftBlockImportRow(rows: DraftBlockImportCandidate[], row: DraftBlockImportCandidate) {
+  const existingIndex = rows.findIndex((candidate) => candidate.blockTemplateId === row.blockTemplateId);
+
+  if (existingIndex === -1) {
+    rows.push(row);
+    return;
+  }
+
+  const existingRow = rows[existingIndex];
+
+  if (!existingRow) {
+    rows.push(row);
+    return;
+  }
+
+  rows[existingIndex] = {
+    ...existingRow,
+    quantity: existingRow.quantity + row.quantity
+  };
+}
+
 function parseImportRow(
   row: ImportRowByColumn,
   rowNumber: number,
-  existingTemplateByName: Map<string, ExistingDraftBlockTemplate>
+  existingTemplateByName: Map<string, ExistingDraftBlockTemplate>,
+  legacyPriorityColumn: boolean
 ) {
   const errors: DraftBlockImportError[] = [];
   const name = normalizeText(row["박스명"]);
@@ -177,7 +267,7 @@ function parseImportRow(
   }
 
   const quantity = parseQuantity(row["작업수량"], rowNumber, errors);
-  const loadPriority = parseLoadPriorityType(row["아래층우선타입"], rowNumber, errors);
+  const loadPriority = parseLoadPriorityType(row["적재위치타입"], rowNumber, errors, legacyPriorityColumn);
 
   if (!name || errors.length > 0 || quantity === null || loadPriority === null) {
     return { row: null, errors };
@@ -227,30 +317,39 @@ function parseQuantity(value: unknown, rowNumber: number, errors: DraftBlockImpo
   return quantity;
 }
 
-function parseLoadPriorityType(value: unknown, rowNumber: number, errors: DraftBlockImportError[]) {
+function parseLoadPriorityType(
+  value: unknown,
+  rowNumber: number,
+  errors: DraftBlockImportError[],
+  legacyPriorityColumn: boolean
+) {
   const explicitValue = parseNumber(value);
 
   if (explicitValue === 1) {
     return 0;
   }
 
-  if (explicitValue === 2) {
+  if (explicitValue === 2 || (legacyPriorityColumn && explicitValue === 3)) {
     return normalizeLoadPriorityScore(5);
   }
 
-  if (explicitValue === 3) {
-    return normalizeLoadPriorityScore(10);
-  }
-
-  errors.push(createLoadPriorityError(rowNumber));
+  errors.push(createLoadPriorityError(rowNumber, legacyPriorityColumn));
   return null;
 }
 
-function createLoadPriorityError(rowNumber: number) {
+function createLoadPriorityError(rowNumber: number, legacyPriorityColumn: boolean) {
+  if (legacyPriorityColumn) {
+    return {
+      rowNumber,
+      field: "아래층우선타입",
+      message: "아래층우선타입은 1(기본), 2(아래우선), 3(아래우선 레거시) 중 하나로 입력해 주세요."
+    };
+  }
+
   return {
     rowNumber,
-    field: "아래층우선타입",
-    message: "아래층우선타입은 1(기본), 2(먼저바닥에), 3(맨아래우선) 중 하나로 입력해 주세요."
+    field: "적재위치타입",
+    message: "적재위치타입은 1(기본), 2(아래우선) 중 하나로 입력해 주세요."
   };
 }
 
