@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -32,16 +33,24 @@ describe("v2 verification report document", () => {
     assert.equal(metadataExists, true);
     assert.ok(metadata);
     assert.match(metadata.verifiedImplementationCommit, /^[0-9a-f]{7,40}$/);
+    assert.equal(metadata.verifiedImplementationCommit, "10c1f31");
+    assert.equal(gitCommandSucceeds(["cat-file", "-e", `${metadata.verifiedImplementationCommit}^{commit}`]), true);
+    assert.equal(gitCommandSucceeds(["merge-base", "--is-ancestor", metadata.verifiedImplementationCommit, "HEAD"]), true);
     assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
     assert.ok(metadata.npmTestPassCount > 0);
+    assert.equal(metadata.npmTestPassCount, 442);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
     assert.match(
       document,
       new RegExp(`제품 구현 검증 기준 커밋[\\s\\S]*\`${metadata.verifiedImplementationCommit}\``)
     );
+    assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업 동작 변경은 포함하지 않는다/);
+    assert.match(document, /보증하는 대상[\s\S]*verified implementation commit[\s\S]*검증 결과/);
+    assert.match(document, /수동 브라우저 검증 생략[\s\S]*문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
     assert.doesNotMatch(document, /기준 커밋:\s*`1418a37`/);
     assert.doesNotMatch(document, /431개 테스트/);
+    assert.doesNotMatch(document, /439개 테스트/);
     assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
     assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
     assert.match(document, /npx next typegen[\s\S]*통과/);
@@ -53,7 +62,7 @@ describe("v2 verification report document", () => {
     assert.match(document, /다음 사이클 체크리스트[\s\S]*npm run build/);
     assert.match(document, /다음 사이클 체크리스트[\s\S]*git diff --check/);
     assert.match(document, /다음 사이클 체크리스트[\s\S]*문서\/테스트\/검증 스크립트만 변경/);
-    assert.match(document, /다음 사이클 체크리스트[\s\S]*수동 브라우저 검증을 생략할 수 있다/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*수동 브라우저 검증 생략은 문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
     assert.match(document, /현장 바람개비 적재 검증 - 기본 8개[\s\S]*1공간[\s\S]*적재 8개[\s\S]*미적재 0개/);
     assert.match(document, /현장 바람개비 적재 검증 - 치수 순서 변형/);
     assert.match(document, /현장 바람개비 적재 검증 - 9개 경계/);
@@ -66,3 +75,12 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /쌓는 순서/);
   });
 });
+
+function gitCommandSucceeds(args: string[]) {
+  try {
+    execFileSync("git", args, { cwd: process.cwd(), stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
