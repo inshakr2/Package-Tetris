@@ -47,6 +47,7 @@
 
 | 명령 | 기대 결과 | 기록 |
 | --- | --- | --- |
+| `npx next typegen` | Next.js 자동 생성 타입 파일 준비 | 통과 |
 | `npm test` | Node test runner 전체 통과 | 439개 테스트 통과 |
 | `npx tsc --noEmit` | TypeScript 타입 검사 통과 | 통과 |
 | `npm run field:audit` | 현장 preset과 V2 기능 검증 통과 | `Package Tetris 현장 audit 통과` |
@@ -107,7 +108,10 @@
 
 ## 6. 다음 사이클 체크리스트
 
+- [ ] 새 구현 후 `npx next typegen`을 실행해 Next.js 자동 생성 타입 기준을 준비한다.
 - [ ] 새 구현 후 `npm test` 결과의 테스트 수를 이 리포트와 문서 테스트에 반영한다.
+- [ ] `npx tsc --noEmit`, `npm run build`, `git diff --check`가 모두 통과하는지 확인한다.
 - [ ] `npm run field:audit` summary에 바람개비 세부 항목이 모두 남아 있는지 확인한다.
 - [ ] UI 변경이 있으면 360px, 390px, 768px, 1280px 브라우저 실측을 수행한다.
+- [ ] 문서/테스트/검증 스크립트만 변경했고 런타임 UI 코드가 바뀌지 않았으면 `npm run v2:verify` 통과를 근거로 수동 브라우저 검증을 생략할 수 있다.
 - [ ] 검증 실패 또는 field audit 항목 누락이 있으면 커밋하지 않는다.

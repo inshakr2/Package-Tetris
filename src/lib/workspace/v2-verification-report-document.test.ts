@@ -44,9 +44,16 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /431개 테스트/);
     assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
     assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
+    assert.match(document, /npx next typegen[\s\S]*통과/);
     assert.match(document, /npx tsc --noEmit[\s\S]*통과/);
     assert.match(document, /npm run field:audit[\s\S]*Package Tetris 현장 audit 통과/);
     assert.match(document, /npm run build[\s\S]*Compiled successfully/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*npx next typegen/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*npx tsc --noEmit/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*npm run build/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*git diff --check/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*문서\/테스트\/검증 스크립트만 변경/);
+    assert.match(document, /다음 사이클 체크리스트[\s\S]*수동 브라우저 검증을 생략할 수 있다/);
     assert.match(document, /현장 바람개비 적재 검증 - 기본 8개[\s\S]*1공간[\s\S]*적재 8개[\s\S]*미적재 0개/);
     assert.match(document, /현장 바람개비 적재 검증 - 치수 순서 변형/);
     assert.match(document, /현장 바람개비 적재 검증 - 9개 경계/);

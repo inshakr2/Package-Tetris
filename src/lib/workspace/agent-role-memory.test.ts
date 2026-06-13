@@ -58,9 +58,30 @@ describe("agent role memory", () => {
     assert.match(productManagerDoc, /business-analyst/);
     assert.match(productManagerDoc, /ui-ux-tester/);
     assert.match(productManagerDoc, /code-reviewer/);
+    assert.match(productManagerDoc, /npm run v2:verify/);
+    assert.match(productManagerDoc, /npx next typegen/);
     assert.match(productManagerDoc, /npm test/);
+    assert.match(productManagerDoc, /npm run field:audit/);
+    assert.match(productManagerDoc, /git diff --check/);
     assert.match(productManagerDoc, /커밋/);
     assert.match(productManagerDoc, /푸시/);
+  });
+
+  it("nextjs-developer 메모리는 최신 V2 검증 명령과 UI 변경 시 브라우저 검증 기준을 공유한다", () => {
+    // Given
+    const nextjsDeveloperDoc = readDoc(`${agentDir}/nextjs-developer.md`);
+
+    // When / Then
+    assert.match(nextjsDeveloperDoc, /npm run v2:verify/);
+    assert.match(nextjsDeveloperDoc, /npx next typegen/);
+    assert.match(nextjsDeveloperDoc, /npm test/);
+    assert.match(nextjsDeveloperDoc, /npx tsc --noEmit/);
+    assert.match(nextjsDeveloperDoc, /npm run field:audit/);
+    assert.match(nextjsDeveloperDoc, /npm run build/);
+    assert.match(nextjsDeveloperDoc, /git diff --check/);
+    assert.match(nextjsDeveloperDoc, /UI 변경/);
+    assert.match(nextjsDeveloperDoc, /360px/);
+    assert.match(nextjsDeveloperDoc, /1280px/);
   });
 
   it("product-manager 메모리는 버튼과 기능 추가 전 UI 역할 협의를 강제한다", () => {
