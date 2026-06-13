@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 const workspaceSource = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
+const multiChainSimulationSource = readFileSync("src/lib/workspace/multi-chain-simulation.ts", "utf8");
 const styles = readFileSync("src/app/globals.css", "utf8");
 
 describe("multi-chain-simulation-layout", () => {
@@ -141,8 +142,11 @@ describe("multi-chain-simulation-layout", () => {
       workspaceSource.includes("수량+선택 순서 조건 포함");
     const hasPriorityAwareButton =
       workspaceSource.includes("createChainCalculateButtonLabel(") &&
-      workspaceSource.includes("조건 반영 결과 계산") &&
-      workspaceSource.includes("우선순위 결과 계산");
+      workspaceSource.includes("지정 수량대로 계산") &&
+      workspaceSource.includes("선택 순서대로 계산") &&
+      workspaceSource.includes("선택 순서와 수량대로 계산") &&
+      !workspaceSource.includes("조건 반영 결과 계산") &&
+      !workspaceSource.includes("우선순위 결과 계산");
     const hasSelectionOrderCopy =
       workspaceSource.includes("박스를 선택한 순서가 추가 우선순위입니다.") &&
       workspaceSource.includes("먼저 선택한 박스가 1순위로 계산됩니다.");
@@ -166,7 +170,8 @@ describe("multi-chain-simulation-layout", () => {
     const passesPriorityToEngine =
       workspaceSource.includes("const priorityByTemplateId = createSelectedChainPriorityMap();") &&
       workspaceSource.includes("priorityByTemplateId") &&
-      workspaceSource.includes("선택 순서 결과");
+      multiChainSimulationSource.includes("선택 순서 결과") &&
+      multiChainSimulationSource.includes("우선 결과");
     const hasPriorityScoreContract =
       workspaceSource.includes("createChainPriorityScoreForIndex(index)") &&
       workspaceSource.includes("(CHAIN_MAX_SELECTED_TEMPLATE_COUNT - index) * CHAIN_PRIORITY_SCORE_STEP");
@@ -238,6 +243,122 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(hasStableConditionLayout, true);
   });
 
+  it("추가 박스별 조건 카드는 우측 상단 선택 해제로 해당 박스와 수량 조건을 함께 제거한다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/
+      )?.[0] ?? "";
+    const clearsTemplateAndQuantity =
+      removeHandler.includes("const nextSelectedTemplateIds = selectedChainTemplateIds.filter") &&
+      removeHandler.includes("setSelectedChainTemplateIds(nextSelectedTemplateIds);") &&
+      removeHandler.includes("delete next[blockTemplateId];") &&
+      removeHandler.includes("clearChainPreviewState();") &&
+      removeHandler.includes("선택을 해제했습니다.");
+    const wiresRemoveAction =
+      workspaceSource.includes("onRemoveSelectedTemplate={removeSelectedChainTemplateSelection}") &&
+      workspaceSource.includes("onRemoveSelectedTemplate: (blockTemplateId: string) => void;") &&
+      workspaceSource.includes('className="danger-button chain-template-remove-button"') &&
+      workspaceSource.includes('aria-label={`${template.name} 추가 박스 선택 해제`}');
+    const keepsActionInsideSummary =
+      /\.chain-template-summary\s*{[\s\S]*?grid-template-areas:[\s\S]*?"rank title remove"[\s\S]*?". meta remove"[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-remove-button\s*{[\s\S]*?grid-area:\s*remove;[\s\S]*?min-height:\s*48px;[\s\S]*?}/.test(
+        styles
+      );
+
+    // When
+    const hasDirectRemoveContract = clearsTemplateAndQuantity && wiresRemoveAction && keepsActionInsideSummary;
+
+    // Then
+    assert.equal(hasDirectRemoveContract, true);
+  });
+
+  it("추가 박스 선택 해제는 남아 있는 순서 변경 완료 피드백도 정리한다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+clearChainReorderFeedback/
+      )?.[0] ?? "";
+    const clearsTransientFeedback =
+      removeHandler.includes("clearChainReorderFeedback();") &&
+      removeHandler.includes("clearChainPreviewState();") &&
+      removeHandler.includes("setChainStatus(\"idle\");");
+
+    // When
+    const clearsFeedbackOnRemove = clearsTransientFeedback;
+
+    // Then
+    assert.equal(clearsFeedbackOnRemove, true);
+  });
+
+  it("추가 박스 우선순위 변경은 이동한 카드에 짧은 완료 피드백을 표시한다", () => {
+    // Given
+    const hasMovedFeedbackState =
+      workspaceSource.includes("recentlyMovedChainTemplateId") &&
+      workspaceSource.includes("showChainReorderFeedback") &&
+      workspaceSource.includes("chainMoveFeedbackTimeoutRef");
+    const feedbackUsesSharedReorderPath =
+      /function\s+updateSelectedChainTemplateOrder\(nextSelectedTemplateIds:\s*string\[\],\s*movedTemplateId:\s*string\)\s*{[\s\S]*?showChainReorderFeedback\(movedTemplateId\);[\s\S]*?clearChainPreviewState\(\);[\s\S]*?}/.test(
+        workspaceSource
+      ) &&
+      workspaceSource.includes("updateSelectedChainTemplateOrder(nextSelectedTemplateIds, sourceTemplateId)") &&
+      workspaceSource.includes("updateSelectedChainTemplateOrder(nextSelectedTemplateIds, blockTemplateId)");
+    const exposesFeedbackOnMovedCard =
+      workspaceSource.includes("recentlyMovedTemplateId={recentlyMovedChainTemplateId}") &&
+      workspaceSource.includes('data-reorder-feedback={recentlyMovedTemplateId === template.blockTemplateId}') &&
+      workspaceSource.includes('className="chain-template-move-feedback"') &&
+      workspaceSource.includes("`${index + 1}순위로 이동됨`");
+    const hasNonIntrusiveFeedbackStyles =
+      /\.chain-template-quantity-row\s*{[\s\S]*?transition:\s*border-color[\s\S]*?box-shadow[\s\S]*?background-color[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-quantity-row\[data-reorder-feedback="true"\]\s*{[\s\S]*?border-color:[\s\S]*?box-shadow:[\s\S]*?background:[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-quantity-row\[data-reorder-feedback="true"\]\s+\.chain-template-rank-badge\s*{[\s\S]*?background:[\s\S]*?color:[\s\S]*?}/.test(
+        styles
+      ) &&
+      /\.chain-template-move-feedback\s*{[\s\S]*?font-weight:\s*800;[\s\S]*?}/.test(styles) &&
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*{[\s\S]*?\.chain-template-quantity-row\s*{[\s\S]*?transition:\s*none;[\s\S]*?}/.test(
+        styles
+      );
+
+    // When
+    const hasVisibleReorderFeedback =
+      hasMovedFeedbackState &&
+      feedbackUsesSharedReorderPath &&
+      exposesFeedbackOnMovedCard &&
+      hasNonIntrusiveFeedbackStyles;
+
+    // Then
+    assert.equal(hasVisibleReorderFeedback, true);
+  });
+
+  it("추가 박스 선택 해제 후 다음 카드 또는 검색 입력으로 포커스를 옮긴다", () => {
+    // Given
+    const removeHandler =
+      workspaceSource.match(
+        /function\s+removeSelectedChainTemplateSelection\(blockTemplateId:\s*string\)\s*{[\s\S]*?}\n\n\s*function\s+updateSelectedChainTemplateOrder/
+      )?.[0] ?? "";
+    const calculatesNextFocusTarget =
+      removeHandler.includes("const removedIndex = selectedChainTemplateIds.indexOf(blockTemplateId);") &&
+      /const\s+nextFocusTemplateId\s*=\s*nextSelectedTemplateIds\[Math\.min\(/.test(removeHandler) &&
+      removeHandler.includes('document.querySelectorAll<HTMLButtonElement>("[data-chain-template-remove-id]")') &&
+      removeHandler.includes('document.querySelector<HTMLElement>("[data-chain-selection-fallback=\'true\']")') &&
+      removeHandler.includes("nextFocusTarget?.focus();");
+    const exposesFocusTargets =
+      workspaceSource.includes('data-chain-selection-fallback="true"') &&
+      workspaceSource.includes("data-chain-template-remove-id={template.blockTemplateId}");
+
+    // When
+    const hasFocusRecoveryContract = calculatesNextFocusTarget && exposesFocusTargets;
+
+    // Then
+    assert.equal(hasFocusRecoveryContract, true);
+  });
+
   it("추가 박스 계산 버튼은 비활성 사유를 버튼과 안내 문구로 제공한다", () => {
     // Given
     const hasDisabledReasonCopy =
@@ -246,9 +367,11 @@ describe("multi-chain-simulation-layout", () => {
       workspaceSource.includes("추가 가능 수량을 계산하고 있습니다.");
     const exposesReasonOnButton =
       workspaceSource.includes("title={chainCalculateDisabledReason ?? undefined}") &&
-      /aria-label={[\s\S]*?chainCalculateDisabledReason[\s\S]*?`추가 박스 계산 비활성: \$\{chainCalculateDisabledReason\}`[\s\S]*?"추가 박스 추천 결과 계산"[\s\S]*?}/.test(
+      workspaceSource.includes("const chainCalculateButtonLabel = createChainCalculateButtonLabel(") &&
+      /aria-label={[\s\S]*?chainCalculateDisabledReason[\s\S]*?`추가 박스 계산 비활성: \$\{chainCalculateDisabledReason\}`[\s\S]*?`추가 박스 \$\{chainCalculateButtonLabel\}`[\s\S]*?}/.test(
         workspaceSource
-      );
+      ) &&
+      workspaceSource.includes(": chainCalculateButtonLabel");
     const rendersSingleGuidance =
       workspaceSource.includes('{chainCalculateDisabledReason && chainStatus !== "calculating" ? (') &&
       workspaceSource.includes("{chainCalculateDisabledReason}") &&
@@ -354,20 +477,48 @@ describe("multi-chain-simulation-layout", () => {
     assert.equal(clearsStaleChainConditions, true);
   });
 
+  it("추가 박스 선택 초기화는 순서 변경 완료 피드백과 타이머도 함께 정리한다", () => {
+    // Given
+    const clearFeedbackHelper =
+      workspaceSource.includes("function clearChainReorderFeedback()") &&
+      workspaceSource.includes("window.clearTimeout(chainMoveFeedbackTimeoutRef.current);") &&
+      workspaceSource.includes("chainMoveFeedbackTimeoutRef.current = null;") &&
+      workspaceSource.includes("setRecentlyMovedChainTemplateId(null);");
+    const clearSelectionHandler =
+      workspaceSource.match(/function\s+clearChainSelection\(\)\s*{[\s\S]*?}\n\n\s*return\s*\(/)?.[0] ?? "";
+    const resultResetEffect =
+      workspaceSource.match(/useEffect\(\(\)\s*=>\s*{[\s\S]*?},\s*\[latestResult\?\.resultId\]\);/)?.[0] ?? "";
+    const clearsFeedbackOnSelectionReset =
+      clearSelectionHandler.includes("clearChainReorderFeedback();") &&
+      resultResetEffect.includes("clearChainReorderFeedback();");
+
+    // When
+    const clearsTransientReorderFeedback = clearFeedbackHelper && clearsFeedbackOnSelectionReset;
+
+    // Then
+    assert.equal(clearsTransientReorderFeedback, true);
+  });
+
   it("추가 박스 시뮬레이션 상태 문구는 조건 설정과 계산 모델을 일관되게 안내한다", () => {
     // Given
     const hasSelectionPrompt = workspaceSource.includes(
       "선택한 순서가 추가 우선순위입니다."
     );
     const hasQuantityCalculatingCopy = workspaceSource.includes(
-      "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
+      "지정 수량대로 계산하고 있습니다."
+    );
+    const hasPriorityCalculatingCopy = workspaceSource.includes(
+      "선택한 순서대로 계산하고 있습니다."
     );
     const hasPriorityEmptyCopy = workspaceSource.includes(
       "선택 순서 조건의 박스를 더 넣을 수 없습니다."
     );
+    const hasFieldHistoryCopy =
+      workspaceSource.includes('aria-label="추가 반영 이력"') && !workspaceSource.includes("체이닝 이력");
 
     // When
-    const hasConsistentConditionCopy = hasSelectionPrompt && hasQuantityCalculatingCopy && hasPriorityEmptyCopy;
+    const hasConsistentConditionCopy =
+      hasSelectionPrompt && hasQuantityCalculatingCopy && hasPriorityCalculatingCopy && hasPriorityEmptyCopy && hasFieldHistoryCopy;
 
     // Then
     assert.equal(hasConsistentConditionCopy, true);

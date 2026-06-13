@@ -15,14 +15,35 @@ describe("result-3d-orientation-arrow-layout", () => {
     // When
     const hasOrientationProp = source.includes("showOrientationArrows");
     const hasArrowFactory = source.includes("function createBlockOrientationArrow");
-    const usesThreeArrowHelper = source.includes("new THREE.ArrowHelper");
+    const avoidsThreeArrowHelper = !source.includes("new THREE.ArrowHelper");
+    const usesFlatArrowGeometry = source.includes("createFlatOrientationArrowGeometry");
+    const usesShapeBasedMesh = source.includes("new THREE.Shape()") && source.includes("new THREE.ExtrudeGeometry");
+    const preservesDrawingBufferForFieldVerification = source.includes("preserveDrawingBuffer: true");
+    const usesPackingSceneLayoutContract =
+      source.includes("block.orientation.layout") && source.includes("layout.outline.forEach");
+    const centersThinPlateThickness = source.includes("geometry.translate(0, 0");
+    const usesMeshMaterial = source.includes("new THREE.MeshBasicMaterial");
+    const orientsFlatArrowToDirection = source.includes("setFromUnitVectors");
+    const avoidsRendererOwnedDimensionRules =
+      !source.includes("shortestSide * 0.35") && !source.includes("block.orientation.length * 0.22");
     const keepsRaycastOnBlockMeshes = source.includes("raycasterRef.current.intersectObjects(blockMeshesRef.current, false)");
     const explainsOriginalHeight = source.includes("처음 입력한 높이 방향");
     const keepsFallbackCopy = source.includes("방향 화살표가 없어도 위/앞/옆 보기로 배치를 확인할 수 있습니다.");
 
     // Then
     assert.ok(hasOrientationProp, "3D canvas should accept an orientation arrow visibility prop");
-    assert.ok(hasArrowFactory && usesThreeArrowHelper, "3D canvas should render orientation arrows with Three.js");
+    assert.ok(hasArrowFactory, "3D canvas should render orientation arrows with Three.js");
+    assert.ok(avoidsThreeArrowHelper, "orientation arrows should not use line-based THREE.ArrowHelper");
+    assert.ok(usesFlatArrowGeometry && usesShapeBasedMesh, "orientation arrows should use a shape-based thin mesh geometry");
+    assert.ok(
+      preservesDrawingBufferForFieldVerification,
+      "3D canvas should keep the drawing buffer available for screenshots and pixel verification"
+    );
+    assert.ok(usesPackingSceneLayoutContract, "orientation arrow mesh should consume the packing-scene layout contract");
+    assert.ok(centersThinPlateThickness, "orientation arrow plate should stay centered while keeping a thin visible side");
+    assert.ok(usesMeshMaterial, "orientation arrows should render as a visible mesh surface");
+    assert.ok(orientsFlatArrowToDirection, "flat arrow mesh should rotate from the upright axis to the block direction");
+    assert.ok(avoidsRendererOwnedDimensionRules, "renderer should not re-own arrow dimension rules already fixed in packing-scene");
     assert.ok(keepsRaycastOnBlockMeshes, "orientation arrows should not join block picking targets");
     assert.ok(explainsOriginalHeight, "3D canvas should explain what the arrow means");
     assert.ok(keepsFallbackCopy, "WebGL fallback should still explain that result review is possible without arrows");

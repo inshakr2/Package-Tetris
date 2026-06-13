@@ -18,6 +18,20 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /시연 전 최종 확인[\s\S]*npm run v1:verify/);
   });
 
+  it("V2 최종 검증 실패 시 자동 생성 파일과 오류 전달 기준을 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /npm run v2:verify/);
+    assert.match(document, /next-env\.d\.ts/);
+    assert.match(document, /자동 생성 파일/);
+    assert.match(document, /화면 기능 불량이 아니라/);
+    assert.match(document, /터미널 마지막 오류/);
+    assert.match(document, /변경된 파일명/);
+    assert.match(document, /개발 담당자/);
+  });
+
   it("박스 .xlsx 일괄등록 흐름과 오류 수정 기준을 현장 언어로 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
@@ -64,6 +78,18 @@ describe("field demo user guide document", () => {
     assert.doesNotMatch(document, /작업 지시서/);
   });
 
+  it("현재 작업 엑셀 등록은 중복 행 합산과 기존 설정 유지 경고를 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /현재 작업 엑셀 미리보기/);
+    assert.match(document, /같은 박스명이 여러 행/);
+    assert.match(document, /합산된 행/);
+    assert.match(document, /기존 설정 유지/);
+    assert.match(document, /적재위치타입/);
+  });
+
   it("추가 박스 시뮬레이션 가이드는 선택 순서 기반 우선순위를 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
@@ -72,9 +98,28 @@ describe("field demo user guide document", () => {
     assert.match(document, /박스를 선택한 순서/);
     assert.match(document, /1순위\/2순위\/3순위/);
     assert.match(document, /드래그하거나 우측의 위로\/아래로 버튼/);
+    assert.match(document, /선택 해제/);
+    assert.match(document, /지정 수량 조건/);
+    assert.match(document, /순위로 이동됨/);
+    assert.match(document, /다시 계산/);
+    assert.match(document, /지정 수량대로 계산/);
+    assert.match(document, /선택 순서대로 계산/);
+    assert.match(document, /선택 순서와 수량대로 계산/);
     assert.match(document, /선택 순서 결과/);
+    assert.match(document, /박스별 우선 결과/);
+    assert.doesNotMatch(document, /조건 반영 결과 계산/);
+    assert.doesNotMatch(document, /우선순위 결과 계산/);
     assert.doesNotMatch(document, /먼저 추가 또는 `최우선 추가`/);
     assert.doesNotMatch(document, /지정 우선 결과/);
+  });
+
+  it("현장 시연 순서는 공간 치수를 가로/세로/높이 용어로 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /가로, 세로, 높이, 안전 여유/);
+    assert.doesNotMatch(document, /폭, 깊이, 높이, 안전 여유/);
   });
 
   it("개발 시연의 오프라인 준비 상태는 자동 새로고침 방지 정책과 구분해서 안내한다", () => {

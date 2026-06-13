@@ -23,7 +23,7 @@ export function createFieldAuditReport(audit: FieldPackingScenarioPerformanceAud
   audit.scenarioResults.forEach((result) => {
     const status = result.isSafe && result.isWithinBudget && result.unloadedBlockCount === 0 ? "통과" : "확인";
     lines.push(
-      `- ${result.name}: ${status}, ${result.elapsedMs}ms, 적재 ${result.packedBlockCount}개, 공간 ${result.usedSpaceCount}개`
+      `- ${result.name}: ${status}, ${result.elapsedMs}ms, 적재 ${result.packedBlockCount}개, 공간 ${result.usedSpaceCount}개, 미적재 ${result.unloadedBlockCount}개, ${result.detail}`
     );
   });
 

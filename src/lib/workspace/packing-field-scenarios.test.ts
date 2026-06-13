@@ -75,7 +75,7 @@ describe("packing-field-scenarios", () => {
     assert.ok(audit.totalPackedBlockCount >= 40);
   });
 
-  it("현장 audit는 V2 부분 지지와 추가 박스 시뮬레이션 안전 검증을 포함한다", () => {
+  it("현장 audit는 V2 핵심 기능 안전 검증을 포함한다", () => {
     // Given
     const scenarios = createFieldPackingScenarios();
 
@@ -87,11 +87,32 @@ describe("packing-field-scenarios", () => {
       audit.featureCheckResults.map((result) => [result.name, result.isSafe, result.isExpected]),
       [
         ["부분 지지 허용 55% 현장 검증", true, true],
+        ["오버행 파레트 추천 현장 검증", true, true],
+        ["현장 바람개비 적재 검증 - 기본 8개", true, true],
+        ["현장 바람개비 적재 검증 - 치수 순서 변형", true, true],
+        ["현장 바람개비 적재 검증 - 9개 경계", true, true],
+        ["현장 바람개비 적재 검증 - 주변 치수", true, true],
+        ["저장 박스 엑셀 일괄등록 현장 검증", true, true],
+        ["현재 작업 엑셀 등록 현장 검증", true, true],
         ["추가 박스 시뮬레이션 현장 검증", true, true],
-        ["현장 피드백 추가 적재 시뮬레이션 검증", true, true]
+        ["현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과", true, true]
       ]
     );
     assert.deepEqual(audit.failedFeatureCheckNames, []);
+    assert.match(
+      audit.featureCheckResults.find((result) => result.name === "현장 바람개비 적재 검증 - 기본 8개")?.detail ?? "",
+      /690x370x580 8개, 기본 파레트 1공간, 교차 회전 2층 배치/
+    );
+    assert.match(
+      audit.featureCheckResults.find((result) => result.name === "현장 바람개비 적재 검증 - 치수 순서 변형")
+        ?.detail ?? "",
+      /370x690x580 8개 1공간/
+    );
+    assert.match(
+      audit.featureCheckResults.find((result) => result.name === "현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과")
+        ?.detail ?? "",
+      /추가 결과 방식 5개 전체 검증/
+    );
   });
 });
 

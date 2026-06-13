@@ -13,6 +13,7 @@ import { X } from "lucide-react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
+  calculatePackedBlocksFootprint,
   createPackingSceneBlocks,
   createPackingSceneBounds,
   type PackingSceneBlock,
@@ -36,7 +37,6 @@ interface Result3DCanvasProps {
   showOrientationArrows: boolean;
   spaceLabel: string;
   utilizationLabel: string;
-  onSelectBlockTemplate: (blockTemplateId: string) => void;
   onClearSelection: () => void;
   fallbackAction?: {
     label: string;
@@ -53,6 +53,10 @@ interface HoverState {
 
 const CAMERA_DISTANCE_MULTIPLIER = 1.45;
 const CAMERA_MIN_POLAR_RAD = 0.08;
+const TOOLTIP_MAX_WIDTH_PX = 260;
+const TOOLTIP_MAX_HEIGHT_PX = 96;
+const TOOLTIP_OFFSET_PX = 10;
+const TOOLTIP_MARGIN_PX = 12;
 
 export function Result3DCanvas({
   blocks,
@@ -64,7 +68,6 @@ export function Result3DCanvas({
   showOrientationArrows,
   spaceLabel,
   utilizationLabel,
-  onSelectBlockTemplate,
   onClearSelection,
   fallbackAction
 }: Result3DCanvasProps) {
@@ -83,6 +86,8 @@ export function Result3DCanvas({
   const pendingHoverPointRef = useRef<{
     clientX: number;
     clientY: number;
+    hostHeight: number;
+    hostWidth: number;
     offsetX: number;
     offsetY: number;
   } | null>(null);
@@ -99,6 +104,7 @@ export function Result3DCanvas({
     () => createPackingSceneBlocks(blocks, bounds),
     [blocks, bounds.depthMm, bounds.heightMm, bounds.widthMm]
   );
+  const occupiedSize = useMemo(() => calculatePackedBlocksFootprint(blocks), [blocks]);
   const selectedBlock =
     sceneBlocks.find((block) => block.blockTemplateId === selectedBlockTemplateId) ?? null;
   const statusText = `${spaceLabel}, ${blocks.length}개 블록, ${utilizationLabel}${
@@ -165,6 +171,7 @@ export function Result3DCanvas({
       renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
+        preserveDrawingBuffer: true,
         powerPreference: "high-performance"
       });
       renderer.setClearColor(0xf7faf8, 1);
@@ -214,6 +221,7 @@ export function Result3DCanvas({
       controls.addEventListener("change", controlsChangeHandler);
 
       resizeObserver = new ResizeObserver(() => {
+        clearHoverState();
         resizeRendererToHost(host, activeRenderer, camera);
         requestSceneRender();
       });
@@ -286,6 +294,8 @@ export function Result3DCanvas({
     pendingHoverPointRef.current = {
       clientX: event.clientX,
       clientY: event.clientY,
+      hostHeight: event.currentTarget.clientHeight,
+      hostWidth: event.currentTarget.clientWidth,
       offsetX: event.nativeEvent.offsetX,
       offsetY: event.nativeEvent.offsetY
     };
@@ -311,13 +321,12 @@ export function Result3DCanvas({
 
       setHoverState({
         block: hit.block,
-        left: point.offsetX,
-        top: point.offsetY
+        ...calculateTooltipPosition(point)
       });
     });
   }
 
-  function handlePointerLeave() {
+  function clearHoverState() {
     pendingHoverPointRef.current = null;
 
     if (hoverFrameRef.current !== null) {
@@ -328,14 +337,8 @@ export function Result3DCanvas({
     setHoverState(null);
   }
 
-  function handleClick(event: ReactPointerEvent<HTMLDivElement>) {
-    const hit = pickBlockAt(event.clientX, event.clientY);
-
-    if (!hit) {
-      return;
-    }
-
-    onSelectBlockTemplate(hit.block.blockTemplateId);
+  function handlePointerLeave() {
+    clearHoverState();
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -418,7 +421,6 @@ export function Result3DCanvas({
         aria-label={`${statusText}. ${orientationStatusText} 3D 적재 결과 조작 영역.`}
         aria-describedby={keyboardHelpId}
         data-render-state={renderState}
-        onClick={handleClick}
         onKeyDown={handleKeyDown}
         onPointerLeave={handlePointerLeave}
         onPointerMove={handlePointerMove}
@@ -426,18 +428,19 @@ export function Result3DCanvas({
         <p id={keyboardHelpId} className="three-keyboard-help">
           {RESULT_3D_KEYBOARD_HELP_TEXT}
         </p>
-        <div className="three-dimension-overlay" aria-label="3D 공간 치수">
+        <div className="three-dimension-overlay" aria-label="3D 결과 최대치수">
+          <span className="three-dimension-overlay-title">결과 최대치수</span>
           <span>
             <strong>가로</strong>
-            {formatThreeDimensionMm(bounds.widthMm)}
+            {formatThreeDimensionMm(occupiedSize.widthMm)}
           </span>
           <span>
-            <strong>깊이</strong>
-            {formatThreeDimensionMm(bounds.depthMm)}
+            <strong>세로</strong>
+            {formatThreeDimensionMm(occupiedSize.depthMm)}
           </span>
           <span>
             <strong>높이</strong>
-            {formatThreeDimensionMm(bounds.heightMm)}
+            {formatThreeDimensionMm(occupiedSize.heightMm)}
           </span>
         </div>
         {renderState === "loading" ? (
@@ -504,6 +507,35 @@ export function Result3DCanvas({
   );
 }
 
+function calculateTooltipPosition(point: {
+  hostHeight: number;
+  hostWidth: number;
+  offsetX: number;
+  offsetY: number;
+}) {
+  const maxTooltipWidth = Math.min(
+    TOOLTIP_MAX_WIDTH_PX,
+    Math.max(0, point.hostWidth - TOOLTIP_MARGIN_PX * 2)
+  );
+  const maxTooltipHeight = Math.min(
+    TOOLTIP_MAX_HEIGHT_PX,
+    Math.max(0, point.hostHeight - TOOLTIP_MARGIN_PX * 2)
+  );
+  const maxLeft = Math.max(
+    TOOLTIP_MARGIN_PX,
+    point.hostWidth - maxTooltipWidth - TOOLTIP_MARGIN_PX
+  );
+  const maxTop = Math.max(
+    TOOLTIP_MARGIN_PX,
+    point.hostHeight - maxTooltipHeight - TOOLTIP_MARGIN_PX
+  );
+
+  return {
+    left: clampNumber(point.offsetX + TOOLTIP_OFFSET_PX, TOOLTIP_MARGIN_PX, maxLeft),
+    top: clampNumber(point.offsetY + TOOLTIP_OFFSET_PX, TOOLTIP_MARGIN_PX, maxTop)
+  };
+}
+
 function createBlockMesh(block: PackingSceneBlock, isSelected: boolean, previewState: "base" | "new") {
   const geometry = new THREE.BoxGeometry(block.size.width, block.size.height, block.size.depth);
   const material = new THREE.MeshStandardMaterial({
@@ -544,40 +576,49 @@ function createBlockOrientationArrow(
     block.orientation.direction.y,
     block.orientation.direction.z
   ).normalize();
-  const origin = direction.clone().multiplyScalar(-block.orientation.length / 2);
-  const arrow = new THREE.ArrowHelper(
-    direction,
-    origin,
-    block.orientation.length,
-    previewState === "new" ? 0x166534 : 0x111827,
-    Math.max(block.orientation.length * 0.24, 0.12),
-    Math.max(block.orientation.length * 0.16, 0.08)
-  );
+  const geometry = createFlatOrientationArrowGeometry(block.orientation.layout);
   const opacity = isSelected ? 0.96 : 0.48;
 
+  const material = new THREE.MeshBasicMaterial({
+    color: previewState === "new" ? 0x166534 : 0x111827,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity,
+    depthTest: false,
+    depthWrite: false
+  });
+  const arrow = new THREE.Mesh(geometry, material);
+
+  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+  arrow.renderOrder = 3;
   arrow.name = "처음 입력한 높이 방향";
   arrow.userData.orientationLabel = block.orientation.label;
-  arrow.traverse((object) => {
-    object.renderOrder = 3;
-
-    if ("material" in object) {
-      const material = object.material;
-      const materials = Array.isArray(material) ? material : [material];
-
-      materials.forEach((item) => {
-        if (!item) {
-          return;
-        }
-
-        item.transparent = true;
-        item.opacity = opacity;
-        item.depthTest = false;
-        item.depthWrite = false;
-      });
-    }
-  });
+  arrow.userData.isOrientationArrow = true;
 
   return arrow;
+}
+
+function createFlatOrientationArrowGeometry(layout: PackingSceneBlock["orientation"]["layout"]) {
+  const shape = new THREE.Shape();
+
+  layout.outline.forEach((point, index) => {
+    if (index === 0) {
+      shape.moveTo(point.x, point.y);
+      return;
+    }
+
+    shape.lineTo(point.x, point.y);
+  });
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    bevelEnabled: false,
+    depth: layout.thickness,
+    steps: 1
+  });
+
+  geometry.translate(0, 0, -layout.thickness / 2);
+  return geometry;
 }
 
 function createSpaceFrame(bounds: ReturnType<typeof createPackingSceneBounds>) {

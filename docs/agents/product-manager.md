@@ -34,7 +34,8 @@ Package Tetris의 product-manager는 V2 프론트 단독 제품 범위를 지키
 
 ## Verification And Git
 
-- 통과 기준은 `npm test`, `npx tsc --noEmit`, `npm run build`다.
+- 기본 통과 기준은 `npm run v2:verify`다.
+- `npm run v2:verify`는 `npx next typegen`, `npm test`, `npx tsc --noEmit`, `npm run field:audit`, `npm run build`, `git diff --check`를 순서대로 실행한다.
 - UI 변경이 있으면 360px, 390px, 768px, 1280px 기준 화면 검증을 수행한다.
 - 버튼, 카드, 모달, 표, 요약 타일을 바꾸면 실제 브라우저에서 각 폭별 horizontal overflow와 주요 CTA 좌표가 부모 컨테이너 안에 남는지 확인한다.
 - 3D 관련 변경이 있으면 캔버스가 비어 있지 않은지, 조작 버튼과 fallback이 살아 있는지 확인한다.

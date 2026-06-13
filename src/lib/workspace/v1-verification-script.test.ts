@@ -18,10 +18,15 @@ describe("v1 verification script", () => {
     const script = packageJson.scripts?.["v1:verify"] ?? "";
 
     // Then
+    assert.match(script, /next typegen/);
     assert.match(script, /npm test/);
     assert.match(script, /npx tsc --noEmit/);
     assert.match(script, /npm run field:audit/);
     assert.match(script, /npm run build/);
+    assert.ok(
+      script.indexOf("next typegen") < script.indexOf("npx tsc --noEmit"),
+      "next typegen should run before TypeScript type checking"
+    );
   });
 
   it("V1 역사 기준 문서와 개발 산출물 문서는 V1 마감 검증 명령을 안내한다", () => {

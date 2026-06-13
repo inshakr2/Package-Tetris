@@ -128,7 +128,7 @@ export function runMultiChainSimulationV0(input: MultiChainSimulationInput): Mul
 
       return createVariantFromCandidate(candidate, {
         variantId: `${input.runId}-priority-${template.blockTemplateId}`,
-        label: `${template.name} 우선`,
+        label: `${template.name} 우선 결과`,
         mode: "template-priority" as const,
         priorityBlockTemplateId: template.blockTemplateId
       });

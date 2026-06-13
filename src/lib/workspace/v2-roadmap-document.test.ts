@@ -27,6 +27,10 @@ describe("v2 roadmap document", () => {
     // When / Then
     assert.match(roadmap, /선택 순서가 추가 우선순위/);
     assert.match(roadmap, /드래그하거나 위\/아래 버튼/);
+    assert.match(roadmap, /선택 해제/);
+    assert.match(roadmap, /지정 수량 조건/);
+    assert.match(roadmap, /n순위로 이동됨/);
+    assert.match(roadmap, /다시 계산/);
     assert.match(roadmap, /선택 순서 결과/);
     assert.match(roadmap, /부피는 남아 있어도 안전하게 받칠 바닥면이 부족하거나 빈 공간이 나뉘면 추가 가능 0개 안내로 보여준다/);
     assert.match(roadmap, /기존 결과 안전 검증 실패와 구분해 계산 실패로 처리하지 않는다/);
@@ -55,7 +59,7 @@ describe("v2 roadmap document", () => {
     const roadmap = readFileSync(ROADMAP_PATH, "utf8");
 
     // When / Then
-    assert.match(roadmap, /현재 작업 물량 컬럼을 확정한다: `박스명`, `작업수량`, `아래층우선타입` 3개 컬럼만 받는다/);
+    assert.match(roadmap, /현재 작업 물량 컬럼을 확정한다: `박스명`, `작업수량`, `적재위치타입` 3개 컬럼만 받는다/);
     assert.match(roadmap, /저장된 박스명과 정확히 일치하는 행만 현재 작업에 추가/);
     assert.match(roadmap, /없는 박스명은 오류 행으로 안내/);
     assert.match(roadmap, /컬럼명 기준으로 값을 읽는다/);
@@ -63,13 +67,17 @@ describe("v2 roadmap document", () => {
     assert.doesNotMatch(roadmap, /저장 박스에 없는 현재 작업 import 행은 저장 박스 템플릿을 만들고 바로 현재 작업에 추가한다/);
   });
 
-  it("V2 검증 기준은 field audit의 부분 지지와 추가 시뮬레이션 기능 검증을 안내한다", () => {
+  it("V2 검증 기준은 field audit의 핵심 기능 검증을 안내한다", () => {
     // Given
     const roadmap = readFileSync(ROADMAP_PATH, "utf8");
 
     // When / Then
     assert.match(roadmap, /현장형 preset 대량 적재 3개 시나리오/);
     assert.match(roadmap, /`부분 지지 허용 55% 현장 검증`/);
+    assert.match(roadmap, /`오버행 파레트 추천 현장 검증`/);
+    assert.match(roadmap, /`저장 박스 엑셀 일괄등록 현장 검증`/);
+    assert.match(roadmap, /`현재 작업 엑셀 등록 현장 검증`/);
     assert.match(roadmap, /`추가 박스 시뮬레이션 현장 검증`/);
+    assert.match(roadmap, /`현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과`/);
   });
 });

@@ -33,9 +33,19 @@ describe("development deliverables document", () => {
     assert.match(document, /부분 지지 허용/);
     assert.match(document, /\.xlsx 일괄등록/);
     assert.match(document, /컬럼명 기준으로 값을 읽어 열 순서가 바뀌어도 동작/);
+    assert.match(document, /중복 행은 오류가 아니라 합산 미리보기/);
+    assert.match(document, /적재위치타입이 다르면 기존 설정 유지 경고/);
     assert.match(document, /선택 순서 기반 우선순위/);
+    assert.match(document, /선택 해제/);
+    assert.match(document, /지정 수량 조건/);
+    assert.match(document, /순위로 이동됨/);
+    assert.match(document, /다시 계산/);
     assert.match(document, /부분 지지 허용 55% 현장 검증/);
+    assert.match(document, /오버행 파레트 추천 현장 검증/);
+    assert.match(document, /저장 박스 엑셀 일괄등록 현장 검증/);
+    assert.match(document, /현재 작업 엑셀 등록 현장 검증/);
     assert.match(document, /추가 박스 시뮬레이션 현장 검증/);
+    assert.match(document, /현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과/);
     assert.match(document, /npm run v1:verify/);
     assert.match(document, /npm run v2:verify/);
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);
@@ -56,9 +66,10 @@ describe("development deliverables document", () => {
     // Then
     assert.equal(exists, true);
     assert.match(document, /개발 지식이 없는 사용자/);
-    assert.match(document, /docs\/field-demo-user-guide\.md/);
-    assert.match(document, /docs\/windows-cmd-launch-guide\.md/);
+    assert.match(document, /\[field-demo-user-guide\.md]\(field-demo-user-guide\.md\)/);
+    assert.match(document, /\[windows-cmd-launch-guide\.md]\(windows-cmd-launch-guide\.md\)/);
     assert.match(document, /scripts\/windows-start-package-tetris\.cmd/);
+    assert.doesNotMatch(document, /\]\(docs\//);
     assert.doesNotMatch(document, /작업 지시서/);
   });
 });

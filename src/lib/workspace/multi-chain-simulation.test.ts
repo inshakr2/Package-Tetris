@@ -157,6 +157,7 @@ describe("multi-chain-simulation v0", () => {
 
     // Then
     assert.deepEqual(result.spaces?.[0]?.blocks, [baseBlock]);
+    assert.equal(priority?.label, "추가 박스 우선 결과");
     assert.deepEqual(priority?.spaces[0]?.blocks[0], baseBlock);
     assert.equal(priority?.spaces[0]?.blocks.some((block) => block.blockId.startsWith("multi-run-locked")), true);
   });

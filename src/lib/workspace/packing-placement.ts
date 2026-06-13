@@ -39,6 +39,7 @@ const ROTATION_CANDIDATES: ReadonlyArray<{
   { rotation: "zxy", dimensions: ["heightMm", "widthMm", "depthMm"] },
   { rotation: "zyx", dimensions: ["heightMm", "depthMm", "widthMm"] }
 ];
+const SAME_LAYER_FOLLOW_UP_LOOKAHEAD_LIMIT = 3;
 
 export function createRotationCandidates(
   dimensions: { widthMm: number; depthMm: number; heightMm: number },
@@ -82,12 +83,13 @@ export function findFirstStablePlacement(
   policy: PlacementPolicy
 ): PositionCandidate | null {
   const rotations = createRotationCandidates(dimensions, usableSize);
-  const xCandidates = createAxisCandidates(blocks, "xMm", "widthMm");
-  const yCandidates = createAxisCandidates(blocks, "yMm", "depthMm");
-  const zCandidates = createAxisCandidates(blocks, "zMm", "heightMm");
 
-  const candidates = rotations.flatMap((rotation) =>
-    zCandidates.flatMap((zMm) =>
+  const candidates = rotations.flatMap((rotation) => {
+    const xCandidates = createAxisCandidates(blocks, "xMm", "widthMm", usableSize.widthMm, rotation.widthMm);
+    const yCandidates = createAxisCandidates(blocks, "yMm", "depthMm", usableSize.depthMm, rotation.depthMm);
+    const zCandidates = createAxisCandidates(blocks, "zMm", "heightMm", usableSize.heightMm, rotation.heightMm);
+
+    return zCandidates.flatMap((zMm) =>
       yCandidates.flatMap((yMm) =>
         xCandidates.map((xMm) => ({
           ...rotation,
@@ -96,27 +98,64 @@ export function findFirstStablePlacement(
           zMm
         }))
       )
-    )
-  );
+    );
+  });
 
+  const viableCandidates = candidates
+    .filter((candidate) => canPlaceAt(blocks, fragile, candidate, usableSize, policy))
+    .sort(comparePositionCoordinates);
+  const firstPosition = viableCandidates[0];
+
+  if (!firstPosition) {
+    return null;
+  }
+
+  const firstPositionCandidates = viableCandidates
+    .filter((candidate) => comparePositionCoordinates(firstPosition, candidate) === 0)
+    .map((candidate) => {
+      const preservesInputLayer = preservesInputLayerFootprint(candidate, dimensions);
+
+      return {
+        candidate,
+        preservesInputLayer,
+        sameLayerFollowUpCount: preservesInputLayer
+          ? countSameLayerFollowUpPlacements(blocks, dimensions, fragile, usableSize, policy, candidate)
+          : -1
+      };
+    });
+
+  return firstPositionCandidates.sort((left, right) => {
+    if (left.preservesInputLayer !== right.preservesInputLayer) {
+      return left.preservesInputLayer ? -1 : 1;
+    }
+
+    if (left.sameLayerFollowUpCount !== right.sameLayerFollowUpCount) {
+      return right.sameLayerFollowUpCount - left.sameLayerFollowUpCount;
+    }
+
+    return left.candidate.rotation.localeCompare(right.candidate.rotation);
+  })[0].candidate;
+}
+
+function comparePositionCoordinates(left: PositionCandidate, right: PositionCandidate) {
+  if (left.zMm !== right.zMm) {
+    return left.zMm - right.zMm;
+  }
+
+  if (left.yMm !== right.yMm) {
+    return left.yMm - right.yMm;
+  }
+
+  return left.xMm - right.xMm;
+}
+
+function preservesInputLayerFootprint(
+  candidate: PositionCandidate,
+  dimensions: { widthMm: number; depthMm: number; heightMm: number }
+) {
   return (
-    candidates
-      .filter((candidate) => canPlaceAt(blocks, fragile, candidate, usableSize, policy))
-      .sort((left, right) => {
-        if (left.zMm !== right.zMm) {
-          return left.zMm - right.zMm;
-        }
-
-        if (left.yMm !== right.yMm) {
-          return left.yMm - right.yMm;
-        }
-
-        if (left.xMm !== right.xMm) {
-          return left.xMm - right.xMm;
-        }
-
-        return left.rotation.localeCompare(right.rotation);
-      })[0] ?? null
+    candidate.heightMm === dimensions.heightMm &&
+    candidate.widthMm * candidate.depthMm === dimensions.widthMm * dimensions.depthMm
   );
 }
 
@@ -149,11 +188,111 @@ export function overlaps3d(block: PackedBlock, candidate: PositionCandidate) {
 function createAxisCandidates(
   blocks: PackedBlock[],
   offsetKey: "xMm" | "yMm" | "zMm",
-  sizeKey: "widthMm" | "depthMm" | "heightMm"
+  sizeKey: "widthMm" | "depthMm" | "heightMm",
+  usableAxisSize: number,
+  candidateAxisSize: number
 ) {
-  return Array.from(new Set([0, ...blocks.flatMap((block) => [block[offsetKey], block[offsetKey] + block[sizeKey]])]))
-    .filter((value) => value >= 0)
+  const maxOffset = usableAxisSize - candidateAxisSize;
+
+  return Array.from(
+    new Set([
+      0,
+      maxOffset,
+      ...blocks.flatMap((block) => {
+        const blockStart = block[offsetKey];
+        const blockEnd = block[offsetKey] + block[sizeKey];
+
+        return [blockStart, blockEnd, blockStart - candidateAxisSize, blockEnd - candidateAxisSize];
+      })
+    ])
+  )
+    .filter((value) => value >= 0 && value <= maxOffset)
     .sort((left, right) => left - right);
+}
+
+function countSameLayerFollowUpPlacements(
+  blocks: PackedBlock[],
+  dimensions: { widthMm: number; depthMm: number; heightMm: number },
+  fragile: boolean,
+  usableSize: PlacementBounds,
+  policy: PlacementPolicy,
+  candidate: PositionCandidate
+) {
+  const simulatedBlocks = [...blocks, createTemporaryPackedBlock(candidate, fragile)];
+  const rotations = createRotationCandidates(dimensions, usableSize);
+  let followUpCount = 0;
+
+  while (followUpCount < SAME_LAYER_FOLLOW_UP_LOOKAHEAD_LIMIT) {
+    const nextPlacement = findSameLayerFollowUpPlacement(
+      simulatedBlocks,
+      rotations,
+      fragile,
+      usableSize,
+      policy,
+      candidate.zMm,
+      candidate.heightMm
+    );
+
+    if (!nextPlacement) {
+      return followUpCount;
+    }
+
+    simulatedBlocks.push(createTemporaryPackedBlock(nextPlacement, fragile));
+    followUpCount += 1;
+  }
+
+  return followUpCount;
+}
+
+function findSameLayerFollowUpPlacement(
+  blocks: PackedBlock[],
+  rotations: RotationCandidate[],
+  fragile: boolean,
+  usableSize: PlacementBounds,
+  policy: PlacementPolicy,
+  zMm: number,
+  heightMm: number
+) {
+  const candidates = rotations.flatMap((rotation) => {
+    if (rotation.heightMm !== heightMm) {
+      return [];
+    }
+
+    const xCandidates = createAxisCandidates(blocks, "xMm", "widthMm", usableSize.widthMm, rotation.widthMm);
+    const yCandidates = createAxisCandidates(blocks, "yMm", "depthMm", usableSize.depthMm, rotation.depthMm);
+
+    return yCandidates.flatMap((yMm) =>
+      xCandidates.map((xMm) => ({
+        ...rotation,
+        xMm,
+        yMm,
+        zMm
+      }))
+    );
+  });
+
+  return (
+    candidates
+      .filter((candidate) => canPlaceAt(blocks, fragile, candidate, usableSize, policy))
+      .sort((left, right) => comparePositionCoordinates(left, right) || left.rotation.localeCompare(right.rotation))[0] ??
+    null
+  );
+}
+
+function createTemporaryPackedBlock(candidate: PositionCandidate, fragile: boolean): PackedBlock {
+  return {
+    blockId: "__candidate__",
+    blockTemplateId: "__candidate_template__",
+    name: "후보 박스",
+    fragile,
+    xMm: candidate.xMm,
+    yMm: candidate.yMm,
+    zMm: candidate.zMm,
+    widthMm: candidate.widthMm,
+    depthMm: candidate.depthMm,
+    heightMm: candidate.heightMm,
+    rotation: candidate.rotation
+  };
 }
 
 function fitsWithinUsableSize(candidate: PositionCandidate, usableSize: PlacementBounds) {
