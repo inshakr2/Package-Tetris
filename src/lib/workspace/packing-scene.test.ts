@@ -4,6 +4,7 @@ import {
   calculatePackedBlocksFootprint,
   createPackingSceneBlocks,
   createPackingSceneBounds,
+  createPackingSceneOrientationArrowLayout,
   getSceneTemplateColor
 } from "./packing-scene";
 import { projectPackedBlock } from "./projection-view";
@@ -161,6 +162,52 @@ describe("packing-scene", () => {
     assert.equal(sceneBlock?.orientation.length, 0.468);
   });
 
+  it("방향 화살표 레이아웃은 얇은 면형 꼬리와 head/shaft/thickness 상한을 순수 유틸 계약으로 고정한다", () => {
+    // Given
+    const block = createBlock({
+      widthMm: 100,
+      depthMm: 80,
+      heightMm: 60
+    });
+    const [sceneBlock] = createPackingSceneBlocks([block], bounds);
+
+    // When
+    const layout = createPackingSceneOrientationArrowLayout(sceneBlock!.size);
+    const shortestSide = Math.min(sceneBlock!.size.width, sceneBlock!.size.height, sceneBlock!.size.depth);
+
+    // Then
+    assert.equal(layout.length, sceneBlock!.orientation.length);
+    assert.equal(layout.outline.length, 8);
+    assert.ok(layout.shaftWidth > 0);
+    assert.ok(layout.headWidth > layout.shaftWidth);
+    assert.ok(layout.headWidth >= layout.shaftWidth * 1.8);
+    assert.ok(layout.headWidth <= shortestSide * 0.35);
+    assert.ok(layout.headLength > 0);
+    assert.ok(layout.thickness > 0);
+    assert.ok(layout.thickness <= layout.headWidth * 0.16);
+    assert.deepEqual(layout.outline.at(0), layout.outline.at(-1));
+    assertClose(layout.outline[0]!.x, -layout.outline[1]!.x);
+    assertClose(layout.outline[3]!.x, -layout.outline[5]!.x);
+    assert.equal(layout.outline[4]?.x, 0);
+  });
+
+  it("방향 화살표 레이아웃은 작은 블록에서도 꼬리 폭과 두께를 블록 단축 기준 상한 안에 둔다", () => {
+    // Given / When
+    const layout = createPackingSceneOrientationArrowLayout({
+      width: 0.08,
+      height: 0.07,
+      depth: 0.05
+    });
+
+    // Then
+    assert.equal(layout.length, 0.18);
+    assert.ok(layout.shaftWidth > 0);
+    assert.ok(layout.headWidth > 0);
+    assert.ok(layout.headWidth <= 0.05 * 0.35 + 0.001);
+    assert.equal(layout.headLength, 0.08);
+    assert.equal(layout.thickness, 0.003);
+  });
+
   it("블록 유형 색상은 2D 투영과 3D 렌더링에서 같은 값을 사용한다", () => {
     // Given
     const block = createBlock();
@@ -173,3 +220,10 @@ describe("packing-scene", () => {
     assert.notEqual(getSceneTemplateColor("template-a"), getSceneTemplateColor("template-b"));
   });
 });
+
+function assertClose(actual: number, expected: number, epsilon = 0.002) {
+  assert.ok(
+    Math.abs(actual - expected) <= epsilon,
+    `Expected ${actual} to be within ${epsilon} of ${expected}`
+  );
+}

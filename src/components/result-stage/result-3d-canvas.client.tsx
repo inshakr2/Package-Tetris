@@ -171,6 +171,7 @@ export function Result3DCanvas({
       renderer = new THREE.WebGLRenderer({
         antialias: true,
         alpha: true,
+        preserveDrawingBuffer: true,
         powerPreference: "high-performance"
       });
       renderer.setClearColor(0xf7faf8, 1);
@@ -575,22 +576,7 @@ function createBlockOrientationArrow(
     block.orientation.direction.y,
     block.orientation.direction.z
   ).normalize();
-  const shortestSide = Math.max(Math.min(block.size.width, block.size.height, block.size.depth), 0.01);
-  const maxArrowWidth = Math.max(shortestSide * 0.35, 0.02);
-  const shaftWidth = Math.min(Math.max(block.orientation.length * 0.22, 0.055), maxArrowWidth);
-  const headWidth = Math.max(
-    shaftWidth,
-    Math.min(Math.max(block.orientation.length * 0.44, shaftWidth * 1.8), maxArrowWidth)
-  );
-  const headLength = Math.min(Math.max(block.orientation.length * 0.28, 0.08), block.orientation.length * 0.45);
-  const plateThickness = Math.min(Math.max(shortestSide * 0.035, 0.012), maxArrowWidth * 0.16);
-  const geometry = createFlatOrientationArrowGeometry(
-    block.orientation.length,
-    shaftWidth,
-    headLength,
-    headWidth,
-    plateThickness
-  );
+  const geometry = createFlatOrientationArrowGeometry(block.orientation.layout);
   const opacity = isSelected ? 0.96 : 0.48;
 
   const material = new THREE.MeshBasicMaterial({
@@ -612,34 +598,26 @@ function createBlockOrientationArrow(
   return arrow;
 }
 
-function createFlatOrientationArrowGeometry(
-  length: number,
-  shaftWidth: number,
-  headLength: number,
-  headWidth: number,
-  plateThickness: number
-) {
-  const halfLength = length / 2;
-  const neckY = halfLength - headLength;
+function createFlatOrientationArrowGeometry(layout: PackingSceneBlock["orientation"]["layout"]) {
   const shape = new THREE.Shape();
 
-  shape.moveTo(-shaftWidth / 2, -halfLength);
-  shape.lineTo(shaftWidth / 2, -halfLength);
-  shape.lineTo(shaftWidth / 2, neckY);
-  shape.lineTo(headWidth / 2, neckY);
-  shape.lineTo(0, halfLength);
-  shape.lineTo(-headWidth / 2, neckY);
-  shape.lineTo(-shaftWidth / 2, neckY);
-  shape.lineTo(-shaftWidth / 2, -halfLength);
+  layout.outline.forEach((point, index) => {
+    if (index === 0) {
+      shape.moveTo(point.x, point.y);
+      return;
+    }
+
+    shape.lineTo(point.x, point.y);
+  });
   shape.closePath();
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     bevelEnabled: false,
-    depth: plateThickness,
+    depth: layout.thickness,
     steps: 1
   });
 
-  geometry.translate(0, 0, -plateThickness / 2);
+  geometry.translate(0, 0, -layout.thickness / 2);
   return geometry;
 }
 

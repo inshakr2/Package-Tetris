@@ -45,6 +45,21 @@ export interface PackingSceneBlockOrientation {
   };
   label: string;
   length: number;
+  layout: PackingSceneOrientationArrowLayout;
+}
+
+export interface PackingSceneOrientationArrowLayoutPoint {
+  x: number;
+  y: number;
+}
+
+export interface PackingSceneOrientationArrowLayout {
+  length: number;
+  shaftWidth: number;
+  headWidth: number;
+  headLength: number;
+  thickness: number;
+  outline: PackingSceneOrientationArrowLayoutPoint[];
 }
 
 export function createPackingSceneBounds(bounds: PackingSceneBoundsInput): PackingSceneBounds {
@@ -118,6 +133,64 @@ export function getSceneTemplateColor(blockTemplateId: string) {
   return getTemplateColor(blockTemplateId);
 }
 
+export function createPackingSceneOrientationArrowLayout(
+  size: PackingSceneBlock["size"]
+): PackingSceneOrientationArrowLayout {
+  const shortestSide = Math.max(Math.min(size.width, size.height, size.depth), 0);
+  const length = roundSceneUnit(Math.max(shortestSide * 0.65, 0.18));
+  const maxArrowWidth = Math.max(shortestSide * 0.35, 0.001);
+  const shaftWidth = roundSceneUnit(Math.min(Math.max(length * 0.22, 0.055), maxArrowWidth));
+  const headWidth = roundSceneUnit(
+    Math.max(shaftWidth, Math.min(Math.max(length * 0.44, shaftWidth * 1.8), maxArrowWidth))
+  );
+  const headLength = roundSceneUnit(Math.min(Math.max(length * 0.28, 0.08), length * 0.45));
+  const thickness = roundSceneUnit(Math.min(Math.max(shortestSide * 0.035, 0.012), maxArrowWidth * 0.16));
+  const halfLength = length / 2;
+  const neckY = halfLength - headLength;
+
+  return {
+    length,
+    shaftWidth,
+    headWidth,
+    headLength,
+    thickness,
+    outline: [
+      {
+        x: roundSceneUnit(-shaftWidth / 2),
+        y: roundSceneUnit(-halfLength)
+      },
+      {
+        x: roundSceneUnit(shaftWidth / 2),
+        y: roundSceneUnit(-halfLength)
+      },
+      {
+        x: roundSceneUnit(shaftWidth / 2),
+        y: roundSceneUnit(neckY)
+      },
+      {
+        x: roundSceneUnit(headWidth / 2),
+        y: roundSceneUnit(neckY)
+      },
+      {
+        x: 0,
+        y: roundSceneUnit(halfLength)
+      },
+      {
+        x: roundSceneUnit(-headWidth / 2),
+        y: roundSceneUnit(neckY)
+      },
+      {
+        x: roundSceneUnit(-shaftWidth / 2),
+        y: roundSceneUnit(neckY)
+      },
+      {
+        x: roundSceneUnit(-shaftWidth / 2),
+        y: roundSceneUnit(-halfLength)
+      }
+    ]
+  };
+}
+
 function roundSceneUnit(value: number) {
   return Math.round(value * 1000) / 1000;
 }
@@ -127,14 +200,14 @@ function createPackingSceneBlockOrientation(
   size: PackingSceneBlock["size"]
 ): PackingSceneBlockOrientation {
   const heightAxisIndex = rotation.indexOf("z");
-  const shortestRenderedSide = Math.max(Math.min(size.width, size.height, size.depth), 0);
-  const length = roundSceneUnit(Math.max(shortestRenderedSide * 0.65, 0.18));
+  const layout = createPackingSceneOrientationArrowLayout(size);
 
   if (heightAxisIndex === 0) {
     return {
       direction: { x: 1, y: 0, z: 0 },
       label: "입력 높이: 가로 방향",
-      length
+      length: layout.length,
+      layout
     };
   }
 
@@ -142,13 +215,15 @@ function createPackingSceneBlockOrientation(
     return {
       direction: { x: 0, y: 0, z: 1 },
       label: "입력 높이: 세로 방향",
-      length
+      length: layout.length,
+      layout
     };
   }
 
   return {
     direction: { x: 0, y: 1, z: 0 },
     label: "입력 높이: 위쪽",
-    length
+    length: layout.length,
+    layout
   };
 }
