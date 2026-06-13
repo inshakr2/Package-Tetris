@@ -4786,11 +4786,11 @@ const ResultStage = ({
     setChainStatus("calculating");
     setChainStatusMessage(
       hasQuantityLimits && hasPrioritySettings
-        ? "박스별 지정 수량과 선택 순서로 결과를 계산하고 있습니다."
+        ? "선택한 순서와 지정 수량대로 계산하고 있습니다."
         : hasQuantityLimits
-        ? "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
+        ? "지정 수량대로 계산하고 있습니다."
         : hasPrioritySettings
-          ? "선택 순서 결과를 계산하고 있습니다."
+          ? "선택한 순서대로 계산하고 있습니다."
         : "선택한 박스 조합의 추천 결과를 계산하고 있습니다."
     );
 
@@ -6111,6 +6111,7 @@ function ChainSimulationPanel({
       : chainStatus === "calculating"
         ? "추가 가능 수량을 계산하고 있습니다."
         : null;
+  const chainCalculateButtonLabel = createChainCalculateButtonLabel(hasQuantityLimits, hasPrioritySettings);
   const chainConfirmDisabledReason = !hasResult
     ? "결과를 먼저 생성하면 추가 결과를 반영할 수 있습니다."
     : chainStatus === "empty"
@@ -6137,7 +6138,7 @@ function ChainSimulationPanel({
             저장된 박스 중 최대 3개를 골라 현재 결과 위에 더 쌓을 수 있는 추천 결과를 비교합니다.
           </p>
         </div>
-        <div className="chain-history-row" aria-label="체이닝 이력">
+        <div className="chain-history-row" aria-label="추가 반영 이력">
           <span className="badge">기준 결과</span>
           {chainHistory
             .slice()
@@ -6524,14 +6525,14 @@ function ChainSimulationPanel({
                 aria-label={
                   chainCalculateDisabledReason
                     ? `추가 박스 계산 비활성: ${chainCalculateDisabledReason}`
-                    : "추가 박스 추천 결과 계산"
+                    : `추가 박스 ${chainCalculateButtonLabel}`
                 }
               >
                 {chainStatus === "calculating"
                   ? "추가 가능 수량 계산 중..."
                   : chainStatus === "error"
                     ? "다시 계산"
-                    : createChainCalculateButtonLabel(hasQuantityLimits, hasPrioritySettings)}
+                    : chainCalculateButtonLabel}
               </button>
               <button
                 className="primary-button"
@@ -7749,15 +7750,15 @@ function createChainSelectionOrderStatusMessage(selectedCount: number) {
 
 function createChainCalculateButtonLabel(hasQuantityLimits: boolean, hasPrioritySettings: boolean) {
   if (hasQuantityLimits && hasPrioritySettings) {
-    return "조건 반영 결과 계산";
+    return "선택 순서와 수량대로 계산";
   }
 
   if (hasPrioritySettings) {
-    return "우선순위 결과 계산";
+    return "선택 순서대로 계산";
   }
 
   if (hasQuantityLimits) {
-    return "조건 반영 결과 계산";
+    return "지정 수량대로 계산";
   }
 
   return "추천 결과 계산";

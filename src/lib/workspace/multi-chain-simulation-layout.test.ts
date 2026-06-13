@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 const workspaceSource = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
+const multiChainSimulationSource = readFileSync("src/lib/workspace/multi-chain-simulation.ts", "utf8");
 const styles = readFileSync("src/app/globals.css", "utf8");
 
 describe("multi-chain-simulation-layout", () => {
@@ -141,8 +142,11 @@ describe("multi-chain-simulation-layout", () => {
       workspaceSource.includes("수량+선택 순서 조건 포함");
     const hasPriorityAwareButton =
       workspaceSource.includes("createChainCalculateButtonLabel(") &&
-      workspaceSource.includes("조건 반영 결과 계산") &&
-      workspaceSource.includes("우선순위 결과 계산");
+      workspaceSource.includes("지정 수량대로 계산") &&
+      workspaceSource.includes("선택 순서대로 계산") &&
+      workspaceSource.includes("선택 순서와 수량대로 계산") &&
+      !workspaceSource.includes("조건 반영 결과 계산") &&
+      !workspaceSource.includes("우선순위 결과 계산");
     const hasSelectionOrderCopy =
       workspaceSource.includes("박스를 선택한 순서가 추가 우선순위입니다.") &&
       workspaceSource.includes("먼저 선택한 박스가 1순위로 계산됩니다.");
@@ -166,7 +170,8 @@ describe("multi-chain-simulation-layout", () => {
     const passesPriorityToEngine =
       workspaceSource.includes("const priorityByTemplateId = createSelectedChainPriorityMap();") &&
       workspaceSource.includes("priorityByTemplateId") &&
-      workspaceSource.includes("선택 순서 결과");
+      multiChainSimulationSource.includes("선택 순서 결과") &&
+      multiChainSimulationSource.includes("우선 결과");
     const hasPriorityScoreContract =
       workspaceSource.includes("createChainPriorityScoreForIndex(index)") &&
       workspaceSource.includes("(CHAIN_MAX_SELECTED_TEMPLATE_COUNT - index) * CHAIN_PRIORITY_SCORE_STEP");
@@ -362,9 +367,11 @@ describe("multi-chain-simulation-layout", () => {
       workspaceSource.includes("추가 가능 수량을 계산하고 있습니다.");
     const exposesReasonOnButton =
       workspaceSource.includes("title={chainCalculateDisabledReason ?? undefined}") &&
-      /aria-label={[\s\S]*?chainCalculateDisabledReason[\s\S]*?`추가 박스 계산 비활성: \$\{chainCalculateDisabledReason\}`[\s\S]*?"추가 박스 추천 결과 계산"[\s\S]*?}/.test(
+      workspaceSource.includes("const chainCalculateButtonLabel = createChainCalculateButtonLabel(") &&
+      /aria-label={[\s\S]*?chainCalculateDisabledReason[\s\S]*?`추가 박스 계산 비활성: \$\{chainCalculateDisabledReason\}`[\s\S]*?`추가 박스 \$\{chainCalculateButtonLabel\}`[\s\S]*?}/.test(
         workspaceSource
-      );
+      ) &&
+      workspaceSource.includes(": chainCalculateButtonLabel");
     const rendersSingleGuidance =
       workspaceSource.includes('{chainCalculateDisabledReason && chainStatus !== "calculating" ? (') &&
       workspaceSource.includes("{chainCalculateDisabledReason}") &&
@@ -498,14 +505,20 @@ describe("multi-chain-simulation-layout", () => {
       "선택한 순서가 추가 우선순위입니다."
     );
     const hasQuantityCalculatingCopy = workspaceSource.includes(
-      "박스별 지정 수량 조건으로 결과를 계산하고 있습니다."
+      "지정 수량대로 계산하고 있습니다."
+    );
+    const hasPriorityCalculatingCopy = workspaceSource.includes(
+      "선택한 순서대로 계산하고 있습니다."
     );
     const hasPriorityEmptyCopy = workspaceSource.includes(
       "선택 순서 조건의 박스를 더 넣을 수 없습니다."
     );
+    const hasFieldHistoryCopy =
+      workspaceSource.includes('aria-label="추가 반영 이력"') && !workspaceSource.includes("체이닝 이력");
 
     // When
-    const hasConsistentConditionCopy = hasSelectionPrompt && hasQuantityCalculatingCopy && hasPriorityEmptyCopy;
+    const hasConsistentConditionCopy =
+      hasSelectionPrompt && hasQuantityCalculatingCopy && hasPriorityCalculatingCopy && hasPriorityEmptyCopy && hasFieldHistoryCopy;
 
     // Then
     assert.equal(hasConsistentConditionCopy, true);

@@ -102,7 +102,13 @@ describe("field demo user guide document", () => {
     assert.match(document, /지정 수량 조건/);
     assert.match(document, /순위로 이동됨/);
     assert.match(document, /다시 계산/);
+    assert.match(document, /지정 수량대로 계산/);
+    assert.match(document, /선택 순서대로 계산/);
+    assert.match(document, /선택 순서와 수량대로 계산/);
     assert.match(document, /선택 순서 결과/);
+    assert.match(document, /박스별 우선 결과/);
+    assert.doesNotMatch(document, /조건 반영 결과 계산/);
+    assert.doesNotMatch(document, /우선순위 결과 계산/);
     assert.doesNotMatch(document, /먼저 추가 또는 `최우선 추가`/);
     assert.doesNotMatch(document, /지정 우선 결과/);
   });
