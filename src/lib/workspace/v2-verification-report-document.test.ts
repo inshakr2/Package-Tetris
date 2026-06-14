@@ -45,9 +45,12 @@ describe("v2 verification report document", () => {
       document,
       new RegExp(`제품 구현 검증 기준 커밋[\\s\\S]*\`${metadata.verifiedImplementationCommit}\``)
     );
+    assert.match(document, /개발 산출물 문서/);
     assert.match(document, /브라우저 acceptance 기록/);
     assert.match(document, /활성 기획서/);
-    assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업 동작 변경은 포함하지 않는다/);
+    assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업[\s\S]*엑셀 import 동작 변경은 포함하지 않는다/);
+    assert.match(document, /개발 산출물 문서[\s\S]*제품 동작 계약을 바꾸지 않는 경우에만 verification-only/);
+    assert.match(document, /제품 동작 계약이 바뀌면[\s\S]*새 구현 검증 기준 커밋/);
     assert.match(document, /보증하는 대상[\s\S]*verified implementation commit[\s\S]*검증 결과/);
     assert.match(document, /수동 브라우저 검증 생략[\s\S]*문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
     assert.doesNotMatch(document, /기준 커밋:\s*`1418a37`/);
@@ -105,12 +108,14 @@ function getDisallowedPathsAfterVerifiedCommit(commit: string) {
 function isAllowedVerificationOnlyPath(path: string) {
   return (
     path === "docs/field-demo-user-guide.md" ||
+    path === "docs/development-deliverables.md" ||
     path === "docs/tetris-ui-planning-draft.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.meta.json" ||
     path === "docs/verification/2026-06-14-v2-field-browser-acceptance.md" ||
     path === "docs/verification/2026-06-14-v2-field-browser-acceptance.meta.json" ||
     path === "src/lib/workspace/active-planning-document.test.ts" ||
+    path === "src/lib/workspace/development-deliverables-document.test.ts" ||
     path === "src/lib/workspace/field-demo-user-guide-document.test.ts" ||
     path === "src/lib/workspace/v2-field-browser-acceptance-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
