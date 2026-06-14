@@ -33,12 +33,11 @@ describe("v2 verification report document", () => {
     assert.equal(metadataExists, true);
     assert.ok(metadata);
     assert.match(metadata.verifiedImplementationCommit, /^[0-9a-f]{7,40}$/);
-    assert.equal(metadata.verifiedImplementationCommit, "10c1f31");
+    assert.notEqual(metadata.verifiedImplementationCommit, "10c1f31");
     assert.equal(gitCommandSucceeds(["cat-file", "-e", `${metadata.verifiedImplementationCommit}^{commit}`]), true);
     assert.equal(gitCommandSucceeds(["merge-base", "--is-ancestor", metadata.verifiedImplementationCommit, "HEAD"]), true);
     assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
-    assert.ok(metadata.npmTestPassCount > 0);
-    assert.equal(metadata.npmTestPassCount, 442);
+    assert.ok(metadata.npmTestPassCount >= 448);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
     assert.match(
@@ -51,6 +50,7 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /기준 커밋:\s*`1418a37`/);
     assert.doesNotMatch(document, /431개 테스트/);
     assert.doesNotMatch(document, /439개 테스트/);
+    assert.doesNotMatch(document, /442개 테스트/);
     assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
     assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
     assert.match(document, /npx next typegen[\s\S]*통과/);
