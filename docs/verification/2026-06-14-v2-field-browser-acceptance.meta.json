@@ -65,5 +65,22 @@
     "verified": true,
     "width": 104,
     "height": 48
+  },
+  "sourceLevelGuards": [
+    "src/lib/workspace/result-detail-removal-layout.test.ts"
+  ],
+  "legacyResultOutputs": {
+    "placementDetail": {
+      "visible": false,
+      "exportable": false
+    },
+    "stackingOrder": {
+      "visible": false,
+      "exportable": false
+    },
+    "workInstruction": {
+      "visible": false,
+      "exportable": false
+    }
   }
 }

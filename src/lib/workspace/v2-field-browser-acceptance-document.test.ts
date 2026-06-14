@@ -35,6 +35,21 @@ interface BrowserAcceptanceMetadata {
     width: number;
     height: number;
   };
+  sourceLevelGuards: string[];
+  legacyResultOutputs: {
+    placementDetail: {
+      visible: boolean;
+      exportable: boolean;
+    };
+    stackingOrder: {
+      visible: boolean;
+      exportable: boolean;
+    };
+    workInstruction: {
+      visible: boolean;
+      exportable: boolean;
+    };
+  };
 }
 
 describe("v2 field browser acceptance document", () => {
@@ -68,6 +83,22 @@ describe("v2 field browser acceptance document", () => {
     assert.equal(metadata.viewports.every((viewport) => viewport.minimumVisibleCtaHeight >= 44), true);
     assert.equal(metadata.selectedAdditionalBoxClearButton.verified, true);
     assert.equal(metadata.selectedAdditionalBoxClearButton.height >= 48, true);
+    assert.equal(Array.isArray(metadata.sourceLevelGuards), true);
+    assert.ok(metadata.sourceLevelGuards.includes("src/lib/workspace/result-detail-removal-layout.test.ts"));
+    assert.deepEqual(metadata.legacyResultOutputs, {
+      placementDetail: {
+        visible: false,
+        exportable: false
+      },
+      stackingOrder: {
+        visible: false,
+        exportable: false
+      },
+      workInstruction: {
+        visible: false,
+        exportable: false
+      }
+    });
     assert.match(document, /Package Tetris V2 현장 브라우저 acceptance 기록/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
     assert.match(
@@ -83,8 +114,14 @@ describe("v2 field browser acceptance document", () => {
     assert.match(document, /결과 최대치수[\s\S]*가로\/세로\/높이/);
     assert.match(document, /WebGL fallback[\s\S]*2D 보기|2D 보기[\s\S]*WebGL fallback/);
     assert.match(document, /백업 파일 만들기/);
-    assert.match(document, /배치 상세|쌓는 순서/);
-    assert.match(document, /미노출|없음|제거/);
+    assert.match(document, /레거시 결과 산출물[\s\S]*배치 상세[\s\S]*쌓는 순서[\s\S]*작업지시서/);
+    assert.match(document, /source-level 제거 가드[\s\S]*result-detail-removal-layout\.test\.ts/);
+    assert.match(document, /배치 상세[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);
+    assert.match(document, /쌓는 순서[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);
+    assert.match(document, /작업지시서[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);
+    assert.doesNotMatch(document, /배치 상세[\s\S]{0,80}(노출됨|표시됨|제공됨|열기|다운로드|복사)/);
+    assert.doesNotMatch(document, /쌓는 순서[\s\S]{0,80}(노출됨|표시됨|제공됨|열기|다운로드|복사)/);
+    assert.doesNotMatch(document, /작업지시서[\s\S]{0,80}(노출됨|표시됨|제공됨|열기|다운로드|복사)/);
     assert.match(document, /추가 박스 시뮬레이션[\s\S]*선택 순서/);
     assert.match(document, /선택 해제/);
     assert.match(document, /부분 지지 허용[\s\S]*55%/);
