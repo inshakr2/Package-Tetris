@@ -67,6 +67,36 @@
 | 쌓는 순서 | 미노출 | export 없음 |
 | 작업지시서 | 미노출 | export 없음 |
 
+결과 KPI source-level 가드:
+
+아래 항목은 새 브라우저 실측이 아니라 기존 source-level 가드로 유지 중인 결과 해석 기준이다. 결과 요약 타일이나 상태 문구 UI가 바뀌면 다음 브라우저 acceptance 재실측 대상에 포함한다.
+
+| 항목 | 의미 | 현장 판단 | 가드 |
+| --- | --- | --- | --- |
+| 평균 적재율 | 사용된 적재공간별 적재율 평균 | 공간별 적재 효율이 전반적으로 낮은지 빠르게 판단 | `src/lib/workspace/result-remaining-volume-layout.test.ts` |
+| 남은 부피 | 현재 결과 기준으로 사용할 수 있게 남은 총 부피 | 추가 박스를 더 시험할 여지가 있는지 판단 | `src/lib/workspace/result-remaining-volume-layout.test.ts` |
+| 미적재 | 현재 결과에서 적재하지 못한 박스 수량 | 수량 조정, 공간 변경, 오버행 검토 필요 여부 판단 | `src/lib/workspace/result-warning-summary.test.ts` |
+| 계산 시각 | 현재 결과가 생성된 시각 | 보고 있는 결과가 최신 계산인지 확인 | `src/lib/workspace/result-calculated-time-layout.test.ts` |
+
+상태 전이 source-level 가드:
+
+`계산 실패`는 복구가 필요한 경고 배너로 보고, `추가 가능 0`은 실패가 아니라 결과 맥락 안의 안내 상태로 본다. 두 상태가 같은 오류처럼 보이면 현장 작업자가 입력 문제와 단순 추가 불가 결과를 혼동할 수 있다. 또한 `결과 백업 권장`과 `오프라인 백업 권장`은 분리한다. 전자는 생성된 결과를 다른 기기/시연 PC로 옮기기 위한 안내이고, 후자는 인터넷 끊김 상태에서 현재 작업을 잃지 않기 위한 안내다.
+
+| 상태 | 시작 상태 | 트리거 | 도착 상태 | 다음 행동 | 유지/취소 정책 | 가드 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 미적재 확인 | 결과 생성 완료 | 미적재 박스가 1개 이상 남음 | 결과 확인 유지 | 작업 수량 조정 또는 더 큰 공간 선택 | 현재 결과와 미적재 요약 유지 | `src/lib/workspace/result-warning-summary.test.ts` |
+| 결과 백업 권장 | 결과 생성 완료 | 최신 결과가 아직 백업되지 않음 | 결과 확인 유지 | 백업 파일 만들기 | 현재 결과와 작업 데이터 유지 | `src/lib/workspace/result-backup-action-layout.test.ts` |
+| 오프라인 백업 권장 | 작업 중 | 인터넷 끊김 감지 및 작업 데이터 존재 | 작업 중 유지 | 현재 작업 백업 만들기 | 브라우저 저장 상태를 유지하고 백업 안내 | `src/lib/workspace/connectivity-status.test.ts` |
+| 결과 생성 중 | 실행 전 확인 | 결과 만들기 클릭 | 계산 진행 | 계산 완료까지 대기 | 중복 계산 CTA 비활성 | `src/lib/workspace/result-calculation-feedback-layout.test.ts` |
+| 메인 결과 계산 실패 | 계산 진행 | 적재 계산 예외 발생 | 복구 필요 | 입력 수정 또는 다시 계산 | 실패 원인을 경고 배너에 유지 | `src/lib/workspace/result-calculation-failure-layout.test.ts` |
+| 추가 시뮬레이션 계산 실패 | 추가 시뮬레이션 계산 중 | 추가 결과 계산 예외 또는 fatal warning | 추가 시뮬레이션 복구 필요 | 기준 결과 다시 생성 또는 선택 초기화 | 선택한 추가 박스 조건은 사용자가 복구 행동을 선택할 때까지 유지 | `src/lib/workspace/multi-chain-simulation-layout.test.ts` |
+| 추가 가능 0 | 추가 시뮬레이션 계산 완료 | 선택 조건에서 추가 가능한 박스가 없음 | 결과 안내 | 다른 박스 선택 또는 선택 초기화 | 계산 실패가 아닌 안내 상태로 유지 | `src/lib/workspace/multi-chain-simulation-layout.test.ts` |
+| 미리보기 취소 | 추가 결과 미리보기 | 미리보기 취소 클릭 | 추가 시뮬레이션 조건 설정 | 조건 유지 후 다시 계산 | 선택 박스와 수량 조건 유지 | `src/lib/workspace/multi-chain-simulation-layout.test.ts` |
+| 직전 추가 취소 | 추가 결과 반영 완료 | 직전 추가 취소 클릭 | 직전 반영 이전 결과 | 필요 시 추가 조건 재계산 | 반영된 추가 결과만 되돌림 | `src/lib/workspace/multi-chain-simulation-layout.test.ts` |
+| 다른 탭 저장 충돌 | 작업 중 | 다른 탭 또는 창에서 최신 작업본 저장 | 읽기 전용 충돌 보호 | 최신본 불러오기 또는 현재 화면 백업 | 덮어쓰기 방지를 위해 편집 CTA 차단 | `src/lib/workspace/save-conflict-banner-layout.test.ts` |
+| WebGL 실패 2D 보기 | 3D 결과 확인 | WebGL 렌더러 초기화 실패 | 2D 투영 확인 | 위 보기로 확인 | 결과 데이터는 유지하고 2D 보기로 대체 | `src/lib/workspace/webgl-fallback-action-layout.test.ts` |
+| 백업 가져오기 충돌 | 백업 파일 가져오기 | 현재 작업과 가져오기 파일이 충돌 | 가져오기 결정 대기 | 현재 작업 유지, 가져온 파일로 교체, 복사본 열기 또는 가져오기 취소 | 사용자가 결정하기 전 현재 작업 유지 | `src/lib/workspace/import-conflict-panel-layout.test.ts` |
+
 ## 4. 추가 박스 시뮬레이션 상태 확인
 
 - 결과 하단에 `5. 추가 박스 시뮬레이션`이 노출된다.

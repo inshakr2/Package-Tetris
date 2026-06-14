@@ -4,18 +4,26 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
+const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 
 describe("save-conflict-banner-layout", () => {
-  it("readonly pointer 차단 규칙에서 충돌 banner는 제외한다", () => {
+  it("저장 충돌 readonly pointer 차단 규칙에서 충돌 banner는 제외한다", () => {
     // Given
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
+    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
     // When
+    const hasReadonlyRuntimeContract =
+      source.includes("data-readonly={isWorkspaceLocked}") &&
+      source.includes('className="workspace-readonly-banner"') &&
+      source.includes("saveConflictBannerCopy?.primaryLabel ?? \"최신본 불러오기\"") &&
+      source.includes("saveConflictBannerCopy?.secondaryLabel ?? \"현재 화면 백업\"");
     const readonlyRule = css.match(
       /\.workspace-stack\[data-readonly="true"\][^{]+{[\s\S]*?pointer-events:\s*none;[\s\S]*?}/
     );
 
     // Then
+    assert.ok(hasReadonlyRuntimeContract, "readonly conflict banner should keep reload and backup actions");
     assert.ok(readonlyRule, "readonly pointer-events selector should stay explicit");
     assert.ok(readonlyRule[0].includes(".workspace-readonly-banner"));
   });
