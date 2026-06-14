@@ -90,6 +90,17 @@ describe("field demo user guide document", () => {
     assert.match(document, /적재위치타입/);
   });
 
+  it("현재 작업 엑셀 등록은 박스명 보정 범위와 오류 기준을 안내한다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /앞뒤 공백과 대소문자는 보정/);
+    assert.match(document, /글자가 다른 박스명은 오류 행/);
+    assert.match(document, /저장된 박스에 없는 박스명이 있거나/);
+    assert.doesNotMatch(document, /저장된 박스명과 정확히 일치/);
+  });
+
   it("추가 박스 시뮬레이션 가이드는 선택 순서 기반 우선순위를 안내한다", () => {
     // Given
     const document = readFileSync(FIELD_GUIDE_PATH, "utf8");

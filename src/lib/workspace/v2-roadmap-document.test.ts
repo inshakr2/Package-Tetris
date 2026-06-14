@@ -54,16 +54,18 @@ describe("v2 roadmap document", () => {
     assert.doesNotMatch(roadmap, /Decision needed during Phase 7/);
   });
 
-  it("현재 작업 엑셀 import는 저장된 박스명을 기준으로만 작업 물량을 추가한다고 안내한다", () => {
+  it("현재 작업 엑셀 import는 저장된 박스명 보정 범위와 오류 기준을 안내한다", () => {
     // Given
     const roadmap = readFileSync(ROADMAP_PATH, "utf8");
 
     // When / Then
     assert.match(roadmap, /현재 작업 물량 컬럼을 확정한다: `박스명`, `작업수량`, `적재위치타입` 3개 컬럼만 받는다/);
-    assert.match(roadmap, /저장된 박스명과 정확히 일치하는 행만 현재 작업에 추가/);
-    assert.match(roadmap, /없는 박스명은 오류 행으로 안내/);
+    assert.match(roadmap, /저장된 박스명을 기준으로 앞뒤 공백과 대소문자는 보정/);
+    assert.match(roadmap, /글자가 다른 박스명은 오류 행으로 안내/);
+    assert.match(roadmap, /없는 박스명.*오류 행으로 안내/);
     assert.match(roadmap, /컬럼명 기준으로 값을 읽는다/);
     assert.match(roadmap, /중복 컬럼/);
+    assert.doesNotMatch(roadmap, /저장된 박스명과 정확히 일치하는 행만 현재 작업에 추가/);
     assert.doesNotMatch(roadmap, /저장 박스에 없는 현재 작업 import 행은 저장 박스 템플릿을 만들고 바로 현재 작업에 추가한다/);
   });
 

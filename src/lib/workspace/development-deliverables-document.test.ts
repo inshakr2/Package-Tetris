@@ -33,6 +33,8 @@ describe("development deliverables document", () => {
     assert.match(document, /부분 지지 허용/);
     assert.match(document, /\.xlsx 일괄등록/);
     assert.match(document, /컬럼명 기준으로 값을 읽어 열 순서가 바뀌어도 동작/);
+    assert.match(document, /현재 작업 import의 박스명은 앞뒤 공백과 대소문자를 보정/);
+    assert.match(document, /글자가 다른 박스명은 오류 행/);
     assert.match(document, /중복 행은 오류가 아니라 합산 미리보기/);
     assert.match(document, /적재위치타입이 다르면 기존 설정 유지 경고/);
     assert.match(document, /선택 순서 기반 우선순위/);
