@@ -12,10 +12,24 @@ const V2_VERIFICATION_METADATA_PATH = join(
   process.cwd(),
   "docs/verification/2026-06-13-v2-field-patch-verification.meta.json"
 );
+const V2_BROWSER_ACCEPTANCE_METADATA_PATH = join(
+  process.cwd(),
+  "docs/verification/2026-06-14-v2-field-browser-acceptance.meta.json"
+);
 
 interface V2VerificationMetadata {
   verifiedImplementationCommit: string;
   npmTestPassCount: number;
+}
+
+interface BrowserAcceptanceMetadata {
+  sourceLevelGuards?: string[];
+  resultSummaryKpis?: {
+    sourceLevelGuards?: string[];
+  };
+  stateTransitionCoverage?: Array<{
+    sourceLevelGuard?: string;
+  }>;
 }
 
 describe("v2 verification report document", () => {
@@ -27,6 +41,7 @@ describe("v2 verification report document", () => {
     const metadata = metadataExists
       ? (JSON.parse(readFileSync(V2_VERIFICATION_METADATA_PATH, "utf8")) as V2VerificationMetadata)
       : null;
+    const acceptanceSourceGuardPaths = readBrowserAcceptanceSourceGuardPaths();
 
     // Then
     assert.equal(exists, true);
@@ -50,6 +65,7 @@ describe("v2 verification report document", () => {
     assert.match(document, /활성 기획서/);
     assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업[\s\S]*엑셀 import 동작 변경은 포함하지 않는다/);
     assert.match(document, /개발 산출물 문서[\s\S]*제품 동작 계약을 바꾸지 않는 경우에만 verification-only/);
+    assert.match(document, /브라우저 acceptance[\s\S]*source-level guard 테스트[\s\S]*verification-only/);
     assert.match(document, /제품 동작 계약이 바뀌면[\s\S]*새 구현 검증 기준 커밋/);
     assert.match(document, /보증하는 대상[\s\S]*verified implementation commit[\s\S]*검증 결과/);
     assert.match(document, /수동 브라우저 검증 생략[\s\S]*문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
@@ -81,6 +97,14 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /작업 지시서/);
     assert.doesNotMatch(document, /배치 상세/);
     assert.doesNotMatch(document, /쌓는 순서/);
+    assert.ok(acceptanceSourceGuardPaths.has("src/lib/workspace/result-detail-removal-layout.test.ts"));
+    assert.ok(acceptanceSourceGuardPaths.has("src/lib/workspace/import-conflict-panel-layout.test.ts"));
+    assert.equal(acceptanceSourceGuardPaths.size >= 10, true);
+    for (const path of acceptanceSourceGuardPaths) {
+      assert.equal(isAllowedVerificationOnlyPath(path), true);
+    }
+    assert.equal(isAllowedVerificationOnlyPath("src/components/PackingResultViewer.tsx"), false);
+    assert.equal(isAllowedVerificationOnlyPath("src/app/globals.css"), false);
   });
 });
 
@@ -119,6 +143,26 @@ function isAllowedVerificationOnlyPath(path: string) {
     path === "src/lib/workspace/field-demo-user-guide-document.test.ts" ||
     path === "src/lib/workspace/v2-field-browser-acceptance-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
-    path === "src/lib/workspace/v2-verification-script.test.ts"
+    path === "src/lib/workspace/v2-verification-script.test.ts" ||
+    readBrowserAcceptanceSourceGuardPaths().has(path)
   );
+}
+
+function readBrowserAcceptanceSourceGuardPaths() {
+  const metadata = JSON.parse(
+    readFileSync(V2_BROWSER_ACCEPTANCE_METADATA_PATH, "utf8")
+  ) as BrowserAcceptanceMetadata;
+  const paths = new Set<string>();
+  for (const path of metadata.sourceLevelGuards ?? []) {
+    paths.add(path);
+  }
+  for (const path of metadata.resultSummaryKpis?.sourceLevelGuards ?? []) {
+    paths.add(path);
+  }
+  for (const coverage of metadata.stateTransitionCoverage ?? []) {
+    if (coverage.sourceLevelGuard) {
+      paths.add(coverage.sourceLevelGuard);
+    }
+  }
+  return paths;
 }
