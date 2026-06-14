@@ -26,10 +26,31 @@ describe("field demo user guide document", () => {
     assert.match(document, /npm run v2:verify/);
     assert.match(document, /next-env\.d\.ts/);
     assert.match(document, /자동 생성 파일/);
+    assert.match(document, /git diff --check/);
+    assert.match(document, /공백 오류 검사/);
+    assert.match(document, /UI 변경[\s\S]*360px[\s\S]*390px[\s\S]*768px[\s\S]*1280px/);
     assert.match(document, /화면 기능 불량이 아니라/);
     assert.match(document, /터미널 마지막 오류/);
     assert.match(document, /변경된 파일명/);
     assert.match(document, /개발 담당자/);
+  });
+
+  it("현장 PC audit 안내는 V2 핵심 기능 검증 범위를 과소 안내하지 않는다", () => {
+    // Given
+    const document = readFileSync(FIELD_GUIDE_PATH, "utf8");
+
+    // When / Then
+    assert.match(document, /npm run field:audit/);
+    assert.match(document, /현장형 preset 대량 적재/);
+    assert.match(document, /V2 핵심 기능 검증/);
+    assert.match(document, /부분 지지 허용 55% 현장 검증/);
+    assert.match(document, /오버행 파레트 추천 현장 검증/);
+    assert.match(document, /현장 바람개비 적재 검증 - 기본 8개/);
+    assert.match(document, /저장 박스 엑셀 일괄등록 현장 검증/);
+    assert.match(document, /현재 작업 엑셀 등록 현장 검증/);
+    assert.match(document, /추가 박스 시뮬레이션 현장 검증/);
+    assert.match(document, /현장 바람개비 적재 검증 - 혼합 추가 시뮬레이션 결과/);
+    assert.doesNotMatch(document, /기능 검증에는 `부분 지지 허용 55% 현장 검증`과 `추가 박스 시뮬레이션 현장 검증`이 포함된다/);
   });
 
   it("박스 .xlsx 일괄등록 흐름과 오류 수정 기준을 현장 언어로 안내한다", () => {
