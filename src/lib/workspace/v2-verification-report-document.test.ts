@@ -33,18 +33,20 @@ describe("v2 verification report document", () => {
     assert.equal(metadataExists, true);
     assert.ok(metadata);
     assert.match(metadata.verifiedImplementationCommit, /^[0-9a-f]{7,40}$/);
-    assert.equal(metadata.verifiedImplementationCommit, "ad2fc1e");
+    assert.equal(metadata.verifiedImplementationCommit, "d05ad40");
     assert.equal(gitCommandSucceeds(["cat-file", "-e", `${metadata.verifiedImplementationCommit}^{commit}`]), true);
     assert.equal(gitCommandSucceeds(["merge-base", "--is-ancestor", metadata.verifiedImplementationCommit, "HEAD"]), true);
     assert.deepEqual(getDisallowedPathsAfterVerifiedCommit(metadata.verifiedImplementationCommit), []);
     assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
-    assert.equal(metadata.npmTestPassCount, 449);
+    assert.equal(metadata.npmTestPassCount, 450);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
     assert.match(
       document,
       new RegExp(`제품 구현 검증 기준 커밋[\\s\\S]*\`${metadata.verifiedImplementationCommit}\``)
     );
+    assert.match(document, /브라우저 acceptance 기록/);
+    assert.match(document, /활성 기획서/);
     assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업 동작 변경은 포함하지 않는다/);
     assert.match(document, /보증하는 대상[\s\S]*verified implementation commit[\s\S]*검증 결과/);
     assert.match(document, /수동 브라우저 검증 생략[\s\S]*문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
@@ -53,6 +55,7 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /439개 테스트/);
     assert.doesNotMatch(document, /442개 테스트/);
     assert.doesNotMatch(document, /448개 테스트/);
+    assert.doesNotMatch(document, /449개 테스트/);
     assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
     assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
     assert.match(document, /npx next typegen[\s\S]*통과/);
@@ -102,9 +105,14 @@ function getDisallowedPathsAfterVerifiedCommit(commit: string) {
 function isAllowedVerificationOnlyPath(path: string) {
   return (
     path === "docs/field-demo-user-guide.md" ||
+    path === "docs/tetris-ui-planning-draft.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.meta.json" ||
+    path === "docs/verification/2026-06-14-v2-field-browser-acceptance.md" ||
+    path === "docs/verification/2026-06-14-v2-field-browser-acceptance.meta.json" ||
+    path === "src/lib/workspace/active-planning-document.test.ts" ||
     path === "src/lib/workspace/field-demo-user-guide-document.test.ts" ||
+    path === "src/lib/workspace/v2-field-browser-acceptance-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-script.test.ts"
   );
