@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 const source = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
 
 describe("result-calculation-feedback-layout", () => {
-  it("결과 생성은 계산 중 상태를 켜고 완료 후 해제한다", () => {
+  it("결과 생성 중 상태를 켜고 완료 후 해제한다", () => {
     // Given / When
     const hasCalculationState =
       source.includes("const [creatingResult, setCreatingResult] = useState(false)") &&

@@ -6,11 +6,20 @@ import { describe, it } from "node:test";
 const DEVELOPMENT_DELIVERABLES_PATH = join(process.cwd(), "docs/development-deliverables.md");
 const NON_DEVELOPER_GUIDE_PATH = join(process.cwd(), "docs/non-developer-start-guide.md");
 
+const extractSection = (document: string, heading: string): string => {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return document.match(new RegExp(`## ${escapedHeading}[\\s\\S]*?(?=\\n## |$)`))?.[0] ?? "";
+};
+
 describe("development deliverables document", () => {
   it("개발 산출물 문서는 기술 스택, 구조, 검증, V2 현재 범위를 추적 가능하게 정리한다", () => {
     // Given / When
     const exists = existsSync(DEVELOPMENT_DELIVERABLES_PATH);
     const document = exists ? readFileSync(DEVELOPMENT_DELIVERABLES_PATH, "utf8") : "";
+    const productScopeSection = extractSection(document, "제품 범위");
+    const currentScopeSection = productScopeSection.match(/V2 현재 범위:[\s\S]*?(?=\nV2 현재 제외 범위:)/)?.[0] ?? "";
+    const excludedScopeSection = productScopeSection.match(/V2 현재 제외 범위:[\s\S]*$/)?.[0] ?? "";
+    const decisionGateSection = extractSection(document, "V2 잔여 의사결정 게이트");
 
     // Then
     assert.equal(exists, true);
@@ -33,6 +42,8 @@ describe("development deliverables document", () => {
     assert.match(document, /부분 지지 허용/);
     assert.match(document, /\.xlsx 일괄등록/);
     assert.match(document, /컬럼명 기준으로 값을 읽어 열 순서가 바뀌어도 동작/);
+    assert.match(document, /현재 작업 import의 박스명은 앞뒤 공백과 대소문자를 보정/);
+    assert.match(document, /글자가 다른 박스명은 오류 행/);
     assert.match(document, /중복 행은 오류가 아니라 합산 미리보기/);
     assert.match(document, /적재위치타입이 다르면 기존 설정 유지 경고/);
     assert.match(document, /선택 순서 기반 우선순위/);
@@ -51,6 +62,35 @@ describe("development deliverables document", () => {
     assert.match(document, /src\/components\/tetris-workspace-app\.tsx/);
     assert.match(document, /src\/lib\/workspace\/packing-engine\.ts/);
     assert.match(document, /V2 현재 제외 범위/);
+    assert.match(document, /V2 잔여 의사결정 게이트/);
+    assert.match(decisionGateSection, /구현되지 않은 기능은 문서에서 완료처럼 표시하지 않는다/);
+    assert.doesNotMatch(currentScopeSection, /위로 배치 선호/);
+    assert.doesNotMatch(currentScopeSection, /무게 기반 계산/);
+    assert.doesNotMatch(currentScopeSection, /여러 기기 자동 동기화/);
+    assert.doesNotMatch(currentScopeSection, /바람개비 signature/);
+    assert.match(excludedScopeSection, /서버 기반 여러 기기 자동 동기화/);
+    assert.match(excludedScopeSection, /무게 중심, 파레트 총중량, 층별 하중 계산/);
+    assert.match(decisionGateSection, /위로 배치 선호/);
+    assert.match(decisionGateSection, /현재 구현 범위가 아니다/);
+    assert.match(decisionGateSection, /별도 승인/);
+    assert.match(decisionGateSection, /엔진 정책/);
+    assert.match(decisionGateSection, /무게 기반 계산/);
+    assert.match(decisionGateSection, /metadata/);
+    assert.match(decisionGateSection, /현재 적재 계산에는 반영하지 않는다/);
+    assert.match(decisionGateSection, /무게 중심/);
+    assert.match(decisionGateSection, /여러 기기 자동 동기화/);
+    assert.match(decisionGateSection, /IndexedDB/);
+    assert.match(decisionGateSection, /JSON 백업/);
+    assert.match(decisionGateSection, /검증 증거/);
+    assert.match(decisionGateSection, /현재 HEAD/);
+    assert.match(decisionGateSection, /바람개비 signature/);
+    assert.match(decisionGateSection, /product-manager/);
+    assert.match(decisionGateSection, /code-reviewer/);
+    assert.match(decisionGateSection, /현장 작업자에게 보이는 UI/);
+    assert.match(decisionGateSection, /business-analyst/);
+    assert.match(decisionGateSection, /ui-designer/);
+    assert.match(decisionGateSection, /ui-ux-tester/);
+    assert.match(decisionGateSection, /자동 검증 또는 브라우저 증거/);
     assert.doesNotMatch(document, /V1 개발 과정/);
     assert.doesNotMatch(document, /Package Tetris V1은/);
     assert.doesNotMatch(document, /작업 지시서/);

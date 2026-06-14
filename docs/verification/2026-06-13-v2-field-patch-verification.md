@@ -4,12 +4,12 @@
 
 - 작성일: 2026-06-13
 - 브랜치: `v2`
-- 제품 구현 검증 기준 커밋: `10c1f31`
+- 제품 구현 검증 기준 커밋: `d05ad40`
 - 목적: 2026-06-12 현장 패치 범위가 자동 검증과 대표 현장 케이스 기준을 만족하는지 추적한다.
 
 이 리포트는 `docs/plans/2026-06-12-v2-field-patch-plan.md`의 Phase 6 산출물이다. V2는 프론트 단독 구조를 유지하며, 검증된 변경만 `v2`에 push하고 안정화 후 `main`으로 병합한다. 이 리포트는 최신 HEAD를 자동 보증하지 않는다. 새 제품 구현 후에는 실제 터미널 출력 기준으로 기준 커밋, 테스트 수, 검증 결과를 함께 갱신한다.
 
-이번 동기화 증분의 범위는 검증 리포트, 검증 메타데이터, 문서 테스트 최신화다. 런타임 UI, 적재 엔진, 저장/백업 동작 변경은 포함하지 않는다. 이 문서가 보증하는 대상은 현재 브랜치 전체가 아니라 verified implementation commit `10c1f31` 시점의 검증 결과다.
+이번 동기화 증분의 범위는 검증 리포트, 검증 메타데이터, 브라우저 acceptance 기록, 활성 기획서, 개발 산출물 문서, 현장 가이드, 문서 테스트 최신화다. 런타임 UI, 적재 엔진, 저장/백업, 엑셀 import 동작 변경은 포함하지 않는다. 이 문서가 보증하는 대상은 현재 브랜치 전체가 아니라 verified implementation commit `d05ad40` 시점의 검증 결과다. 개발 산출물 문서는 구현 범위와 의사결정 게이트 설명을 보강하되 제품 동작 계약을 바꾸지 않는 경우에만 verification-only 변경으로 본다. 브라우저 acceptance 기록에 연결된 source-level guard 테스트도 제품 동작을 바꾸지 않는 상태 확인용 테스트 변경일 때만 verification-only로 허용한다. UI, 엔진, 저장/백업, 엑셀 import 등 제품 동작 계약이 바뀌면 새 구현 검증 기준 커밋과 자동/브라우저 검증 결과를 함께 갱신한다.
 
 검증 메타데이터 기준 파일은 `docs/verification/2026-06-13-v2-field-patch-verification.meta.json`이다. 문서 테스트는 이 파일의 커밋과 테스트 수가 리포트 본문에 반영되어 있는지 확인한다.
 
@@ -50,7 +50,7 @@
 | 명령 | 기대 결과 | 기록 |
 | --- | --- | --- |
 | `npx next typegen` | Next.js 자동 생성 타입 파일 준비 | 통과 |
-| `npm test` | Node test runner 전체 통과 | 442개 테스트 통과 |
+| `npm test` | Node test runner 전체 통과 | 450개 테스트 통과 |
 | `npx tsc --noEmit` | TypeScript 타입 검사 통과 | 통과 |
 | `npm run field:audit` | 현장 preset과 V2 기능 검증 통과 | `Package Tetris 현장 audit 통과` |
 | `npm run build` | Next.js production build 성공 | `Compiled successfully` |

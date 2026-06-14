@@ -7,7 +7,7 @@ const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 
 describe("result-backup-action-layout", () => {
-  it("결과 영역은 최신 백업이 필요할 때 결과 요약 근처에 백업 CTA를 표시한다", () => {
+  it("결과 영역은 최신 백업이 필요할 때 결과 요약 근처에 백업 권장 CTA를 표시한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -18,6 +18,7 @@ describe("result-backup-action-layout", () => {
     const hasResultScopedCallout =
       source.includes("latestResult && needsExport") &&
       source.includes('className="result-backup-callout"') &&
+      source.includes("백업 권장") &&
       source.includes("결과를 다른 기기로 옮기거나 복구하려면 백업 파일을 만들어 두세요.");
 
     // Then

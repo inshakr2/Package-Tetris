@@ -154,6 +154,63 @@ describe("draft-block-xlsx-import", () => {
     assert.deepEqual(preview.rows[0]?.warnings, ["3행 적재위치타입은 첫 행의 기존 설정을 유지합니다."]);
   });
 
+  it("현재 작업 엑셀의 박스명은 앞뒤 공백과 대소문자를 보정해 저장 박스와 연결한다", () => {
+    // Given
+    const rows = [
+      DRAFT_BLOCK_XLSX_COLUMNS,
+      ["  kms-210 스피커 박스  ", 12, 2],
+      [" EG-AMP 조합 박스 ", "4", "2"]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, true);
+    assert.deepEqual(preview.errors, []);
+    assert.deepEqual(
+      preview.rows.map((row) => ({
+        blockTemplateId: row.blockTemplateId,
+        name: row.name,
+        quantity: row.quantity
+      })),
+      [
+        {
+          blockTemplateId: "template-speaker",
+          name: "KMS-210 스피커 박스",
+          quantity: 12
+        },
+        {
+          blockTemplateId: "template-amp",
+          name: "EG-AMP 조합 박스",
+          quantity: 4
+        }
+      ]
+    );
+  });
+
+  it("현재 작업 엑셀의 박스명이 실제 저장명과 다르면 보정하지 않고 오류로 안내한다", () => {
+    // Given
+    const rows = [
+      DRAFT_BLOCK_XLSX_COLUMNS,
+      ["KMS-210 스피커", 12, 2]
+    ];
+
+    // When
+    const preview = createDraftBlockImportPreview(rows, { existingTemplates });
+
+    // Then
+    assert.equal(preview.canImport, false);
+    assert.deepEqual(preview.rows, []);
+    assert.deepEqual(preview.errors, [
+      {
+        rowNumber: 2,
+        field: "박스명",
+        message: "저장된 박스에 없는 박스명입니다. 먼저 박스 등록에서 저장해 주세요."
+      }
+    ]);
+  });
+
   it("수량 오류, 적재 위치 타입 오류, 저장되지 않은 박스명은 행 번호와 사유를 반환한다", () => {
     // Given
     const rows = [

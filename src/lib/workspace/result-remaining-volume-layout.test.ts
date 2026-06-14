@@ -7,7 +7,7 @@ const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 
 describe("result-remaining-volume-layout", () => {
-  it("결과 상단 요약은 남은 부피 KPI를 표시한다", () => {
+  it("결과 상단 요약은 평균 적재율, 남은 부피, 미적재 KPI를 표시한다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
 
@@ -15,13 +15,15 @@ describe("result-remaining-volume-layout", () => {
     const hasRemainingVolumeImport =
       source.includes("calculateResultRemainingVolumeM3") &&
       source.includes("formatVolumeM3");
-    const hasRemainingVolumeTile =
+    const hasResultSummaryTiles =
+      source.includes('label="평균 적재율"') &&
       source.includes('label="남은 부피"') &&
+      source.includes('label="미적재"') &&
       source.includes("remainingVolumeLabel");
 
     // Then
     assert.equal(hasRemainingVolumeImport, true);
-    assert.equal(hasRemainingVolumeTile, true);
+    assert.equal(hasResultSummaryTiles, true);
   });
 
   it("결과 요약 5개 타일은 데스크톱 한 줄과 모바일 한 컬럼을 유지한다", () => {

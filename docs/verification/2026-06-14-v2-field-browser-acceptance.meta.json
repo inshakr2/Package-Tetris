@@ -1,0 +1,243 @@
+{
+  "branch": "v2",
+  "checkedAt": "2026-06-14",
+  "verifiedImplementationCommit": "d05ad40",
+  "runtimeChangeIncluded": false,
+  "viewports": [
+    {
+      "label": "360px mobile",
+      "width": 360,
+      "height": 800,
+      "scrollWidth": 345,
+      "horizontalOverflow": false,
+      "canvasRect": {
+        "width": 223,
+        "height": 262
+      },
+      "canvasNonWhitePixels": 20250,
+      "canvasDistinctSampleColors": 710,
+      "minimumVisibleCtaHeight": 48
+    },
+    {
+      "label": "390px mobile",
+      "width": 390,
+      "height": 844,
+      "scrollWidth": 375,
+      "horizontalOverflow": false,
+      "canvasRect": {
+        "width": 253,
+        "height": 262
+      },
+      "canvasNonWhitePixels": 21917,
+      "canvasDistinctSampleColors": 594,
+      "minimumVisibleCtaHeight": 48
+    },
+    {
+      "label": "768px tablet",
+      "width": 768,
+      "height": 1024,
+      "scrollWidth": 753,
+      "horizontalOverflow": false,
+      "canvasRect": {
+        "width": 408,
+        "height": 447
+      },
+      "canvasNonWhitePixels": 43363,
+      "canvasDistinctSampleColors": 415,
+      "minimumVisibleCtaHeight": 44
+    },
+    {
+      "label": "1280px desktop",
+      "width": 1280,
+      "height": 900,
+      "scrollWidth": 1265,
+      "horizontalOverflow": false,
+      "canvasRect": {
+        "width": 651,
+        "height": 398
+      },
+      "canvasNonWhitePixels": 18295,
+      "canvasDistinctSampleColors": 87,
+      "minimumVisibleCtaHeight": 44
+    }
+  ],
+  "selectedAdditionalBoxClearButton": {
+    "verified": true,
+    "width": 104,
+    "height": 48
+  },
+  "sourceLevelGuards": [
+    "src/lib/workspace/result-detail-removal-layout.test.ts"
+  ],
+  "legacyResultOutputs": {
+    "placementDetail": {
+      "visible": false,
+      "exportable": false
+    },
+    "stackingOrder": {
+      "visible": false,
+      "exportable": false
+    },
+    "workInstruction": {
+      "visible": false,
+      "exportable": false
+    }
+  },
+  "resultSummaryKpis": {
+    "labels": [
+      "평균 적재율",
+      "남은 부피",
+      "미적재",
+      "계산 시각"
+    ],
+    "definitions": [
+      {
+        "label": "평균 적재율",
+        "meaning": "사용된 적재공간별 적재율 평균",
+        "fieldUse": "공간별 적재 효율이 전반적으로 낮은지 빠르게 판단한다."
+      },
+      {
+        "label": "남은 부피",
+        "meaning": "현재 결과 기준으로 사용할 수 있게 남은 총 부피",
+        "fieldUse": "추가 박스를 더 시험할 여지가 있는지 판단한다."
+      },
+      {
+        "label": "미적재",
+        "meaning": "현재 결과에서 적재하지 못한 박스 수량",
+        "fieldUse": "수량 조정, 공간 변경, 오버행 검토가 필요한지 판단한다."
+      },
+      {
+        "label": "계산 시각",
+        "meaning": "현재 결과가 생성된 시각",
+        "fieldUse": "작업자가 보고 있는 결과가 최신 계산인지 확인한다."
+      }
+    ],
+    "sourceLevelGuards": [
+      "src/lib/workspace/result-remaining-volume-layout.test.ts",
+      "src/lib/workspace/result-calculated-time-layout.test.ts",
+      "src/lib/workspace/result-warning-summary.test.ts"
+    ]
+  },
+  "stateTransitionCoverage": [
+    {
+      "state": "미적재 확인",
+      "fromState": "결과 생성 완료",
+      "trigger": "미적재 박스가 1개 이상 남음",
+      "toState": "결과 확인 유지",
+      "nextAction": "작업 수량 조정 또는 더 큰 공간 선택",
+      "nextActionVisible": true,
+      "contextPolicy": "현재 결과와 미적재 요약 유지",
+      "sourceLevelGuard": "src/lib/workspace/result-warning-summary.test.ts"
+    },
+    {
+      "state": "결과 백업 권장",
+      "fromState": "결과 생성 완료",
+      "trigger": "최신 결과가 아직 백업되지 않음",
+      "toState": "결과 확인 유지",
+      "nextAction": "백업 파일 만들기",
+      "nextActionVisible": true,
+      "contextPolicy": "현재 결과와 작업 데이터 유지",
+      "sourceLevelGuard": "src/lib/workspace/result-backup-action-layout.test.ts"
+    },
+    {
+      "state": "오프라인 백업 권장",
+      "fromState": "작업 중",
+      "trigger": "인터넷 끊김 감지 및 작업 데이터 존재",
+      "toState": "작업 중 유지",
+      "nextAction": "현재 작업 백업 만들기",
+      "nextActionVisible": true,
+      "contextPolicy": "브라우저 저장 상태를 유지하고 백업 안내",
+      "sourceLevelGuard": "src/lib/workspace/connectivity-status.test.ts"
+    },
+    {
+      "state": "결과 생성 중",
+      "fromState": "실행 전 확인",
+      "trigger": "결과 만들기 클릭",
+      "toState": "계산 진행",
+      "nextAction": "계산 완료까지 대기",
+      "nextActionVisible": true,
+      "contextPolicy": "중복 계산 CTA 비활성",
+      "sourceLevelGuard": "src/lib/workspace/result-calculation-feedback-layout.test.ts"
+    },
+    {
+      "state": "메인 결과 계산 실패",
+      "fromState": "계산 진행",
+      "trigger": "적재 계산 예외 발생",
+      "toState": "복구 필요",
+      "nextAction": "입력 수정 또는 다시 계산",
+      "nextActionVisible": true,
+      "contextPolicy": "실패 원인을 경고 배너에 유지",
+      "sourceLevelGuard": "src/lib/workspace/result-calculation-failure-layout.test.ts"
+    },
+    {
+      "state": "추가 시뮬레이션 계산 실패",
+      "fromState": "추가 시뮬레이션 계산 중",
+      "trigger": "추가 결과 계산 예외 또는 fatal warning",
+      "toState": "추가 시뮬레이션 복구 필요",
+      "nextAction": "기준 결과 다시 생성 또는 선택 초기화",
+      "nextActionVisible": true,
+      "contextPolicy": "선택한 추가 박스 조건은 사용자가 복구 행동을 선택할 때까지 유지",
+      "sourceLevelGuard": "src/lib/workspace/multi-chain-simulation-layout.test.ts"
+    },
+    {
+      "state": "추가 가능 0",
+      "fromState": "추가 시뮬레이션 계산 완료",
+      "trigger": "선택 조건에서 추가 가능한 박스가 없음",
+      "toState": "결과 안내",
+      "nextAction": "다른 박스 선택 또는 선택 초기화",
+      "nextActionVisible": true,
+      "contextPolicy": "계산 실패가 아닌 안내 상태로 유지",
+      "sourceLevelGuard": "src/lib/workspace/multi-chain-simulation-layout.test.ts"
+    },
+    {
+      "state": "미리보기 취소",
+      "fromState": "추가 결과 미리보기",
+      "trigger": "미리보기 취소 클릭",
+      "toState": "추가 시뮬레이션 조건 설정",
+      "nextAction": "조건 유지 후 다시 계산",
+      "nextActionVisible": true,
+      "contextPolicy": "선택 박스와 수량 조건 유지",
+      "sourceLevelGuard": "src/lib/workspace/multi-chain-simulation-layout.test.ts"
+    },
+    {
+      "state": "직전 추가 취소",
+      "fromState": "추가 결과 반영 완료",
+      "trigger": "직전 추가 취소 클릭",
+      "toState": "직전 반영 이전 결과",
+      "nextAction": "필요 시 추가 조건 재계산",
+      "nextActionVisible": true,
+      "contextPolicy": "반영된 추가 결과만 되돌림",
+      "sourceLevelGuard": "src/lib/workspace/multi-chain-simulation-layout.test.ts"
+    },
+    {
+      "state": "다른 탭 저장 충돌",
+      "fromState": "작업 중",
+      "trigger": "다른 탭 또는 창에서 최신 작업본 저장",
+      "toState": "읽기 전용 충돌 보호",
+      "nextAction": "최신본 불러오기 또는 현재 화면 백업",
+      "nextActionVisible": true,
+      "contextPolicy": "덮어쓰기 방지를 위해 편집 CTA 차단",
+      "sourceLevelGuard": "src/lib/workspace/save-conflict-banner-layout.test.ts"
+    },
+    {
+      "state": "WebGL 실패 2D 보기",
+      "fromState": "3D 결과 확인",
+      "trigger": "WebGL 렌더러 초기화 실패",
+      "toState": "2D 투영 확인",
+      "nextAction": "위 보기로 확인",
+      "nextActionVisible": true,
+      "contextPolicy": "결과 데이터는 유지하고 2D 보기로 대체",
+      "sourceLevelGuard": "src/lib/workspace/webgl-fallback-action-layout.test.ts"
+    },
+    {
+      "state": "백업 가져오기 충돌",
+      "fromState": "백업 파일 가져오기",
+      "trigger": "현재 작업과 가져오기 파일이 충돌",
+      "toState": "가져오기 결정 대기",
+      "nextAction": "현재 작업 유지, 가져온 파일로 교체, 복사본 열기 또는 가져오기 취소",
+      "nextActionVisible": true,
+      "contextPolicy": "사용자가 결정하기 전 현재 작업 유지",
+      "sourceLevelGuard": "src/lib/workspace/import-conflict-panel-layout.test.ts"
+    }
+  ]
+}

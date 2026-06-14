@@ -30,6 +30,10 @@ describe("v2 verification script", () => {
       script.indexOf("next typegen") < script.indexOf("npx tsc --noEmit"),
       "next typegen should run before TypeScript type checking"
     );
+    assert.ok(
+      script.indexOf("npm run build") < script.indexOf("git diff --check"),
+      "whitespace diff check should run after the production build"
+    );
   });
 
   it("Next.js 자동 생성 타입 파일은 추적 파일 churn을 만들지 않도록 ignore한다", () => {
@@ -50,8 +54,11 @@ describe("v2 verification script", () => {
     assert.match(roadmap, /npm run v2:verify/);
     assert.match(developmentDeliverables, /npm run v2:verify/);
     assert.match(fieldGuide, /npm run v2:verify/);
+    assert.match(roadmap, /### 7\.2 Exit Gate[\s\S]*npm run v2:verify/);
     assert.match(developmentDeliverables, /next typegen/);
     assert.match(fieldGuide, /next-env\.d\.ts/);
+    assert.match(fieldGuide, /git diff --check/);
+    assert.match(fieldGuide, /UI 변경[\s\S]*360px[\s\S]*390px[\s\S]*768px[\s\S]*1280px/);
     assert.match(developmentDeliverables, /git diff --check/);
   });
 });

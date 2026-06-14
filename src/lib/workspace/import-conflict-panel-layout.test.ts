@@ -4,9 +4,10 @@ import { describe, it } from "node:test";
 
 const workspaceSource = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
 const cssSource = readFileSync("src/app/globals.css", "utf8");
+const copySource = readFileSync("src/lib/workspace/import-conflict-copy.ts", "utf8");
 
 describe("import-conflict-panel-layout", () => {
-  it("백업 가져오기 충돌 패널은 copy helper와 현장 버튼 문구를 사용한다", () => {
+  it("백업 가져오기 충돌 패널은 copy helper와 가져오기 취소 액션을 사용한다", () => {
     // Given / When
     const hasCopyContract =
       workspaceSource.includes("getImportConflictCopy") &&
@@ -14,6 +15,8 @@ describe("import-conflict-panel-layout", () => {
       workspaceSource.includes("{importConflictCopy.title}") &&
       workspaceSource.includes("{importConflictCopy.description}") &&
       workspaceSource.includes("{importConflictCopy.actionLabels.replace}") &&
+      workspaceSource.includes("{importConflictCopy.actionLabels.cancel}") &&
+      copySource.includes('cancel: "가져오기 취소"') &&
       !workspaceSource.includes("충돌 유형: {pendingImport.conflict.kind}");
 
     // Then

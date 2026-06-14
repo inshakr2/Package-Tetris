@@ -12,10 +12,24 @@ const V2_VERIFICATION_METADATA_PATH = join(
   process.cwd(),
   "docs/verification/2026-06-13-v2-field-patch-verification.meta.json"
 );
+const V2_BROWSER_ACCEPTANCE_METADATA_PATH = join(
+  process.cwd(),
+  "docs/verification/2026-06-14-v2-field-browser-acceptance.meta.json"
+);
 
 interface V2VerificationMetadata {
   verifiedImplementationCommit: string;
   npmTestPassCount: number;
+}
+
+interface BrowserAcceptanceMetadata {
+  sourceLevelGuards?: string[];
+  resultSummaryKpis?: {
+    sourceLevelGuards?: string[];
+  };
+  stateTransitionCoverage?: Array<{
+    sourceLevelGuard?: string;
+  }>;
 }
 
 describe("v2 verification report document", () => {
@@ -27,30 +41,40 @@ describe("v2 verification report document", () => {
     const metadata = metadataExists
       ? (JSON.parse(readFileSync(V2_VERIFICATION_METADATA_PATH, "utf8")) as V2VerificationMetadata)
       : null;
+    const acceptanceSourceGuardPaths = readBrowserAcceptanceSourceGuardPaths();
 
     // Then
     assert.equal(exists, true);
     assert.equal(metadataExists, true);
     assert.ok(metadata);
     assert.match(metadata.verifiedImplementationCommit, /^[0-9a-f]{7,40}$/);
-    assert.equal(metadata.verifiedImplementationCommit, "10c1f31");
+    assert.equal(metadata.verifiedImplementationCommit, "d05ad40");
     assert.equal(gitCommandSucceeds(["cat-file", "-e", `${metadata.verifiedImplementationCommit}^{commit}`]), true);
     assert.equal(gitCommandSucceeds(["merge-base", "--is-ancestor", metadata.verifiedImplementationCommit, "HEAD"]), true);
+    assert.deepEqual(getDisallowedPathsAfterVerifiedCommit(metadata.verifiedImplementationCommit), []);
     assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
-    assert.ok(metadata.npmTestPassCount > 0);
-    assert.equal(metadata.npmTestPassCount, 442);
+    assert.equal(metadata.npmTestPassCount, 450);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
     assert.match(document, /브랜치[\s\S]*`v2`/);
     assert.match(
       document,
       new RegExp(`제품 구현 검증 기준 커밋[\\s\\S]*\`${metadata.verifiedImplementationCommit}\``)
     );
-    assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업 동작 변경은 포함하지 않는다/);
+    assert.match(document, /개발 산출물 문서/);
+    assert.match(document, /브라우저 acceptance 기록/);
+    assert.match(document, /활성 기획서/);
+    assert.match(document, /런타임 UI[\s\S]*적재 엔진[\s\S]*저장\/백업[\s\S]*엑셀 import 동작 변경은 포함하지 않는다/);
+    assert.match(document, /개발 산출물 문서[\s\S]*제품 동작 계약을 바꾸지 않는 경우에만 verification-only/);
+    assert.match(document, /브라우저 acceptance[\s\S]*source-level guard 테스트[\s\S]*verification-only/);
+    assert.match(document, /제품 동작 계약이 바뀌면[\s\S]*새 구현 검증 기준 커밋/);
     assert.match(document, /보증하는 대상[\s\S]*verified implementation commit[\s\S]*검증 결과/);
     assert.match(document, /수동 브라우저 검증 생략[\s\S]*문서\/테스트\/검증 스크립트만 변경된 경우에만 허용/);
     assert.doesNotMatch(document, /기준 커밋:\s*`1418a37`/);
     assert.doesNotMatch(document, /431개 테스트/);
     assert.doesNotMatch(document, /439개 테스트/);
+    assert.doesNotMatch(document, /442개 테스트/);
+    assert.doesNotMatch(document, /448개 테스트/);
+    assert.doesNotMatch(document, /449개 테스트/);
     assert.match(document, new RegExp(`npm test[\\s\\S]*${metadata.npmTestPassCount}개 테스트[\\s\\S]*통과`));
     assert.match(document, /최신 HEAD를 자동 보증하지 않는다/);
     assert.match(document, /npx next typegen[\s\S]*통과/);
@@ -73,6 +97,14 @@ describe("v2 verification report document", () => {
     assert.doesNotMatch(document, /작업 지시서/);
     assert.doesNotMatch(document, /배치 상세/);
     assert.doesNotMatch(document, /쌓는 순서/);
+    assert.ok(acceptanceSourceGuardPaths.has("src/lib/workspace/result-detail-removal-layout.test.ts"));
+    assert.ok(acceptanceSourceGuardPaths.has("src/lib/workspace/import-conflict-panel-layout.test.ts"));
+    assert.equal(acceptanceSourceGuardPaths.size >= 10, true);
+    for (const path of acceptanceSourceGuardPaths) {
+      assert.equal(isAllowedVerificationOnlyPath(path), true);
+    }
+    assert.equal(isAllowedVerificationOnlyPath("src/components/PackingResultViewer.tsx"), false);
+    assert.equal(isAllowedVerificationOnlyPath("src/app/globals.css"), false);
   });
 });
 
@@ -83,4 +115,56 @@ function gitCommandSucceeds(args: string[]) {
   } catch {
     return false;
   }
+}
+
+function getDisallowedPathsAfterVerifiedCommit(commit: string) {
+  const output = execFileSync("git", ["diff", "--name-only", `${commit}..HEAD`], {
+    cwd: process.cwd(),
+    encoding: "utf8"
+  });
+  const changedPaths = output
+    .split("\n")
+    .map((path) => path.trim())
+    .filter(Boolean);
+  return changedPaths.filter((path) => !isAllowedVerificationOnlyPath(path));
+}
+
+function isAllowedVerificationOnlyPath(path: string) {
+  return (
+    path === "docs/field-demo-user-guide.md" ||
+    path === "docs/development-deliverables.md" ||
+    path === "docs/plans/2026-06-10-v2-field-feedback-roadmap.md" ||
+    path === "docs/tetris-ui-planning-draft.md" ||
+    path === "docs/verification/2026-06-13-v2-field-patch-verification.md" ||
+    path === "docs/verification/2026-06-13-v2-field-patch-verification.meta.json" ||
+    path === "docs/verification/2026-06-14-v2-field-browser-acceptance.md" ||
+    path === "docs/verification/2026-06-14-v2-field-browser-acceptance.meta.json" ||
+    path === "src/lib/workspace/active-planning-document.test.ts" ||
+    path === "src/lib/workspace/development-deliverables-document.test.ts" ||
+    path === "src/lib/workspace/field-demo-user-guide-document.test.ts" ||
+    path === "src/lib/workspace/v2-field-browser-acceptance-document.test.ts" ||
+    path === "src/lib/workspace/v2-roadmap-document.test.ts" ||
+    path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
+    path === "src/lib/workspace/v2-verification-script.test.ts" ||
+    readBrowserAcceptanceSourceGuardPaths().has(path)
+  );
+}
+
+function readBrowserAcceptanceSourceGuardPaths() {
+  const metadata = JSON.parse(
+    readFileSync(V2_BROWSER_ACCEPTANCE_METADATA_PATH, "utf8")
+  ) as BrowserAcceptanceMetadata;
+  const paths = new Set<string>();
+  for (const path of metadata.sourceLevelGuards ?? []) {
+    paths.add(path);
+  }
+  for (const path of metadata.resultSummaryKpis?.sourceLevelGuards ?? []) {
+    paths.add(path);
+  }
+  for (const coverage of metadata.stateTransitionCoverage ?? []) {
+    if (coverage.sourceLevelGuard) {
+      paths.add(coverage.sourceLevelGuard);
+    }
+  }
+  return paths;
 }
