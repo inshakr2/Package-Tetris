@@ -201,14 +201,14 @@ UI 변경 시 추가 확인:
 - `docs/v1-readiness.md`: V1 역사 완료 기준과 운영 전 파일럿 확인 범위
 - `docs/tetris-ui-planning-draft.md`: UI/UX 기획서
 - `docs/plans/2026-06-10-v2-field-feedback-roadmap.md`: V2 현장 피드백 로드맵
+- `docs/plans/2026-06-15-v3-product-direction-plan.md`: V3 제품 방향과 작업 계획
 - `docs/agents/*.md`: PM, BA, UI, QA, 개발 역할 메모리
 - `docs/plans/*.md`: 기능 증분별 개발 계획 기록
 
 ## 후속 후보
 
-- 서버 기반 여러 기기 자동 동기화
-- 사용자 계정과 팀별 작업본 관리
+- V3 Core: 프론트 구조 분해, 작업본 document model, field workbench, 브라우저 QA 자동화, 엔진/추가 시뮬레이션 guardrail
+- V3+: 서버 기반 여러 기기 자동 동기화, 사용자 계정과 팀별 작업본 관리, 승인 이력, WMS/TMS/ERP 연동
 - 실제 현장 데이터 기반 벤치마크 확대
-- WMS/TMS/ERP 연동
 - 차량/컨테이너별 운영 비용과 배차 조건 반영
 - 무게 중심, 파레트 총중량, 층별 하중 검토
