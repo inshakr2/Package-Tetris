@@ -638,4 +638,11 @@ Implemented scope:
 - 3D result shows orientation arrows based on original upright direction.
 - Additional simulation is a visible 5th stage.
 - Additional simulation supports up to 3 selected boxes and variant comparison.
-- All phase tests, typecheck, build, and responsive UI checks pass.
+- `npm run v2:verify` fresh run passes. This includes `npx next typegen`, `npm test`, `npx tsc --noEmit`, `npm run field:audit`, `npm run build`, and `git diff --check`.
+- `field:audit` summary still includes the V2 feature checks listed in Section 8, especially partial support, overhang recommendation, pinwheel regressions, `.xlsx` imports, and additional simulation variants.
+- The current verification evidence is traceable through `docs/verification/2026-06-13-v2-field-patch-verification.md`.
+- Browser evidence for UI-sensitive changes is traceable through `docs/verification/2026-06-14-v2-field-browser-acceptance.md` or a newer replacement evidence file. The replacement evidence must keep the same metadata structure and preserve `verifiedImplementationCommit` traceability.
+- 새 evidence 파일을 만들면 로드맵, 문서 테스트, 메타데이터의 기준 파일 참조를 같은 cycle에서 갱신한다.
+- UI evidence covers 360px, 390px, 768px, and 1280px, with no horizontal overflow, 44-48px touch targets, nonblank 3D canvas, and usable WebGL fallback.
+- 런타임 UI 변경은 done으로 표시하기 전에 브라우저 evidence를 갱신해야 한다.
+- 엔진 변경은 done으로 표시하기 전에 boundary, collision, support, fragile policy, partial support, deterministic output, additional simulation variants, and `field:audit` evidence가 green 상태여야 한다.
