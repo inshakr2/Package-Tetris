@@ -67,7 +67,10 @@
     "height": 48
   },
   "sourceLevelGuards": [
-    "src/lib/workspace/result-detail-removal-layout.test.ts"
+    "src/lib/workspace/result-detail-removal-layout.test.ts",
+    "src/lib/workspace/result-3d-dimension-overlay-layout.test.ts",
+    "src/lib/workspace/result-3d-orientation-arrow-layout.test.ts",
+    "src/lib/workspace/result-selection-clear-action-layout.test.ts"
   ],
   "legacyResultOutputs": {
     "placementDetail": {

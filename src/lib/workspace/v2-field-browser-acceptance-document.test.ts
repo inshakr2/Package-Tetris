@@ -14,6 +14,24 @@ const BROWSER_ACCEPTANCE_METADATA_PATH = join(
 
 const REQUIRED_SOURCE_GUARD_TOKENS: Record<string, string[]> = {
   "src/lib/workspace/result-detail-removal-layout.test.ts": ["배치 상세", "쌓는 순서", "작업지시서"],
+  "src/lib/workspace/result-3d-dimension-overlay-layout.test.ts": [
+    "결과 최대치수",
+    "가로",
+    "세로",
+    "높이",
+    "pointer-events: none"
+  ],
+  "src/lib/workspace/result-3d-orientation-arrow-layout.test.ts": [
+    "new THREE.ArrowHelper",
+    "createFlatOrientationArrowGeometry",
+    "new THREE.Shape()",
+    "raycasterRef.current.intersectObjects(blockMeshesRef.current, false)"
+  ],
+  "src/lib/workspace/result-selection-clear-action-layout.test.ts": [
+    "3D 캔버스 클릭은 박스 강조를 켜지 않고",
+    "onSelectBlockTemplate(hit.block.blockTemplateId)",
+    "강조 해제"
+  ],
   "src/lib/workspace/result-remaining-volume-layout.test.ts": ["평균 적재율", "남은 부피", "미적재"],
   "src/lib/workspace/result-calculated-time-layout.test.ts": ["계산 시각"],
   "src/lib/workspace/result-warning-summary.test.ts": ["미적재 확인"],
@@ -255,6 +273,9 @@ describe("v2 field browser acceptance document", () => {
     assert.equal(metadata.selectedAdditionalBoxClearButton.height >= 48, true);
     assert.equal(Array.isArray(metadata.sourceLevelGuards), true);
     assert.ok(metadata.sourceLevelGuards.includes("src/lib/workspace/result-detail-removal-layout.test.ts"));
+    assert.ok(metadata.sourceLevelGuards.includes("src/lib/workspace/result-3d-dimension-overlay-layout.test.ts"));
+    assert.ok(metadata.sourceLevelGuards.includes("src/lib/workspace/result-3d-orientation-arrow-layout.test.ts"));
+    assert.ok(metadata.sourceLevelGuards.includes("src/lib/workspace/result-selection-clear-action-layout.test.ts"));
     assert.deepEqual(metadata.legacyResultOutputs, {
       placementDetail: {
         visible: false,
@@ -323,6 +344,10 @@ describe("v2 field browser acceptance document", () => {
     assert.match(document, /백업 파일 만들기/);
     assert.match(document, /레거시 결과 산출물[\s\S]*배치 상세[\s\S]*쌓는 순서[\s\S]*작업지시서/);
     assert.match(document, /source-level 제거 가드[\s\S]*result-detail-removal-layout\.test\.ts/);
+    assert.match(
+      document,
+      /3D 해석성 source-level 가드[\s\S]*result-3d-dimension-overlay-layout\.test\.ts[\s\S]*result-3d-orientation-arrow-layout\.test\.ts[\s\S]*result-selection-clear-action-layout\.test\.ts/
+    );
     assert.match(document, /배치 상세[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);
     assert.match(document, /쌓는 순서[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);
     assert.match(document, /작업지시서[\s\S]{0,80}미노출[\s\S]{0,80}export 없음/);

@@ -33,6 +33,7 @@ Package Tetris는 제한된 적재 공간에 박스형 화물을 어떻게 쌓�
 - 현장 시연 상세 가이드: [docs/field-demo-user-guide.md](docs/field-demo-user-guide.md)
 - V1 역사 완료 기준과 운영 전 파일럿 범위: [docs/v1-readiness.md](docs/v1-readiness.md)
 - V2 현장 피드백 로드맵: [docs/plans/2026-06-10-v2-field-feedback-roadmap.md](docs/plans/2026-06-10-v2-field-feedback-roadmap.md)
+- V3 제품 방향과 작업 계획: [docs/plans/2026-06-15-v3-product-direction-plan.md](docs/plans/2026-06-15-v3-product-direction-plan.md)
 - 개발 산출물과 기술 구조: [docs/development-deliverables.md](docs/development-deliverables.md)
 - UI/UX 기획서: [docs/tetris-ui-planning-draft.md](docs/tetris-ui-planning-draft.md)
 

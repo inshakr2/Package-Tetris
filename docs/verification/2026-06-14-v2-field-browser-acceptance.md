@@ -67,6 +67,16 @@
 | 쌓는 순서 | 미노출 | export 없음 |
 | 작업지시서 | 미노출 | export 없음 |
 
+3D 해석성 source-level 가드:
+
+`결과 최대치수`, `방향 화살표`, `3D 클릭 강조 제거`는 현장 작업자가 3D를 보고 실제 적재 방향과 오버 여부를 판단하는 기준이다. 이 항목은 문서에만 완료라고 적지 않고, 아래 source-level 가드가 실제 소스 계약을 함께 확인한다. 특히 방향 화살표는 선분형 helper 방식으로 되돌아가면 실패해야 한다.
+
+| 항목 | 확인 기준 | 가드 |
+| --- | --- | --- |
+| 결과 최대치수 | 공간 원래 치수가 아니라 현재 결과의 최대 가로/세로/높이를 표시하고, 오버레이가 캔버스 조작을 막지 않음 | `src/lib/workspace/result-3d-dimension-overlay-layout.test.ts` |
+| 방향 화살표 | 처음 입력한 높이 방향을 납작한 면형 mesh로 표시하고, 박스 선택 raycast 대상에서 제외함 | `src/lib/workspace/result-3d-orientation-arrow-layout.test.ts` |
+| 클릭 강조 제거 | 3D 캔버스 클릭은 강조 상태를 만들지 않고, 강조는 범례/2D 보기와 강조 해제 버튼으로 제어함 | `src/lib/workspace/result-selection-clear-action-layout.test.ts` |
+
 결과 KPI source-level 가드:
 
 아래 항목은 새 브라우저 실측이 아니라 기존 source-level 가드로 유지 중인 결과 해석 기준이다. 결과 요약 타일이나 상태 문구 UI가 바뀌면 다음 브라우저 acceptance 재실측 대상에 포함한다.

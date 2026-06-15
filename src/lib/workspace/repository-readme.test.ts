@@ -23,6 +23,7 @@ describe("repository README", () => {
     assert.match(readme, /docs\/development-deliverables\.md/);
     assert.match(readme, /docs\/v1-readiness\.md/);
     assert.match(readme, /docs\/plans\/2026-06-10-v2-field-feedback-roadmap\.md/);
+    assert.match(readme, /docs\/plans\/2026-06-15-v3-product-direction-plan\.md/);
     assert.match(readme, /https:\/\/github\.com\/inshakr2\/Package-Tetris/);
     assert.doesNotMatch(readme, /main`은 V1 현장 테스트 안정 브랜치/);
     assert.doesNotMatch(readme, /main`은 현장 작업자가 테스트 중인 V1 안정 기준/);
