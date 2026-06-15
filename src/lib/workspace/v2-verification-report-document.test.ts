@@ -131,9 +131,11 @@ function getDisallowedPathsAfterVerifiedCommit(commit: string) {
 
 function isAllowedVerificationOnlyPath(path: string) {
   return (
+    path === "README.md" ||
     path === "docs/field-demo-user-guide.md" ||
     path === "docs/development-deliverables.md" ||
     path === "docs/plans/2026-06-10-v2-field-feedback-roadmap.md" ||
+    path === "docs/plans/2026-06-15-v3-product-direction-plan.md" ||
     path === "docs/tetris-ui-planning-draft.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.md" ||
     path === "docs/verification/2026-06-13-v2-field-patch-verification.meta.json" ||
@@ -142,6 +144,7 @@ function isAllowedVerificationOnlyPath(path: string) {
     path === "src/lib/workspace/active-planning-document.test.ts" ||
     path === "src/lib/workspace/development-deliverables-document.test.ts" ||
     path === "src/lib/workspace/field-demo-user-guide-document.test.ts" ||
+    path === "src/lib/workspace/repository-readme.test.ts" ||
     path === "src/lib/workspace/v2-field-browser-acceptance-document.test.ts" ||
     path === "src/lib/workspace/v2-roadmap-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
