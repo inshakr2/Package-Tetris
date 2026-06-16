@@ -34,6 +34,9 @@ V3는 현장 사용자가 쓰는 흐름을 유지하면서, 7,000줄 이상으�
 - `SpaceLibraryPanel`을 별도 컴포넌트로 분리해 1번 섹션 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `BlockLibraryPanel`을 별도 컴포넌트로 분리해 2번 섹션의 저장 박스 조회, 엑셀 포맷, 일괄등록 모달 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `createTopBlockGroups`, `createChildBlockGroups` 그룹 옵션 로직을 공통 유틸로 분리해 박스 등록/조회/추가 시뮬레이션이 같은 그룹 기준을 사용하게 한다.
+- `CurrentWorkBlocksPanel`을 별도 컴포넌트로 분리해 3번 섹션의 현재 작업 박스, 작업용 엑셀 등록, 포맷 안내 모달 책임을 워크스페이스 앱 본문에서 덜어낸다.
+- `NumberFieldInput`을 공통 leaf 컴포넌트로 분리해 박스/공간/현재 작업 수량 입력이 같은 숫자 입력 검증과 선택 UX를 사용하게 한다.
+- `DRAFT_LOAD_PRIORITY_OPTIONS`, `normalizeDraftLoadPriorityOptionValue`, `createDraftLoadPrioritySummary`를 공통 유틸로 분리해 실행 전 확인과 현재 작업 패널이 같은 배치 우선 기준을 사용하게 한다.
 - `tetris-workspace-app.tsx`가 분리된 컴포넌트를 import하도록 변경한다.
 - 구조 테스트로 “문서에만 완료처럼 보이는 상태”를 방지한다.
 

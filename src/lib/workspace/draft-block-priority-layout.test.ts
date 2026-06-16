@@ -5,27 +5,32 @@ import { describe, it } from "node:test";
 
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const CURRENT_WORK_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
+const DRAFT_LOAD_PRIORITY_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/draft-load-priority-options.ts");
 
 describe("draft-block-priority-layout", () => {
   it("현재 작업 박스마다 현장 문구 기반 배치 우선 설정을 노출한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const appSource = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const panelSource = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
+    const prioritySource = readFileSync(DRAFT_LOAD_PRIORITY_OPTIONS_PATH, "utf8");
 
     // When
     const hasUpdatePath =
-      source.includes("updateDraftBlockItemLoadPriority") &&
-      source.includes("function updateCurrentLoadPriority") &&
-      source.includes("onLoadPriorityChange={updateCurrentLoadPriority}");
+      appSource.includes("updateDraftBlockItemLoadPriority") &&
+      appSource.includes("function updateCurrentLoadPriority") &&
+      appSource.includes("onLoadPriorityChange={updateCurrentLoadPriority}");
     const hasFieldCopy =
-      source.includes("배치 우선") &&
-      source.includes("기본") &&
-      source.includes("아래 우선") &&
-      !source.includes("맨 아래 우선");
+      panelSource.includes("배치 우선") &&
+      prioritySource.includes("기본") &&
+      prioritySource.includes("아래 우선") &&
+      !panelSource.includes("맨 아래 우선") &&
+      !prioritySource.includes("맨 아래 우선");
     const hasAccessibleGroup =
-      source.includes('className="draft-priority-control"') &&
-      source.includes('role="group"') &&
-      source.includes('aria-label={`${block.name} 배치 우선 설정`}') &&
-      source.includes("DRAFT_LOAD_PRIORITY_OPTIONS.map");
+      panelSource.includes('className="draft-priority-control"') &&
+      panelSource.includes('role="group"') &&
+      panelSource.includes('aria-label={`${block.name} 배치 우선 설정`}') &&
+      panelSource.includes("DRAFT_LOAD_PRIORITY_OPTIONS.map");
 
     // Then
     assert.ok(hasUpdatePath, "draft priority should be wired from UI to workspace update helper");
@@ -58,12 +63,13 @@ describe("draft-block-priority-layout", () => {
   it("실행 전 확인은 배치 우선 박스명과 우선 단계를 함께 보여준다", () => {
     // Given
     const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const prioritySource = readFileSync(DRAFT_LOAD_PRIORITY_OPTIONS_PATH, "utf8");
 
     // When
     const createsPrioritySummaries =
       source.includes("const priorityBlockSummaries = draftBlocks.flatMap") &&
       source.includes("createDraftLoadPrioritySummary(block)") &&
-      source.includes("`${block.name} ${block.quantity}개 · ${getDraftLoadPriorityLabel(priority)}`");
+      prioritySource.includes("`${block.name} ${block.quantity}개 · ${getDraftLoadPriorityLabel(priority)}`");
     const passesPrioritySummaries =
       source.includes("priorityBlockSummaries={priorityBlockSummaries}") &&
       source.includes("priorityBlockSummaries: string[];");
@@ -80,19 +86,20 @@ describe("draft-block-priority-layout", () => {
 
   it("현재 작업 중복 추가는 영향을 받은 카드 근처에 합산 수량을 안내한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const appSource = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const panelSource = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 
     // When
     const hasMergeState =
-      source.includes("interface DraftMergeNotice") &&
-      source.includes("createDraftImportMergeNotice") &&
-      source.includes("setDraftMergeNotice");
+      appSource.includes("type DraftMergeNotice") &&
+      appSource.includes("createDraftImportMergeNotice") &&
+      appSource.includes("setDraftMergeNotice");
     const hasCardNotice =
-      source.includes('className="draft-merge-notice"') &&
-      source.includes('role="status"') &&
-      source.includes("기존 카드에 {mergeNotice.quantityAdded}개 합산됨") &&
-      source.includes("총 {mergeNotice.totalQuantity}개");
+      panelSource.includes('className="draft-merge-notice"') &&
+      panelSource.includes('role="status"') &&
+      panelSource.includes("기존 카드에 {mergeNotice.quantityAdded}개 합산됨") &&
+      panelSource.includes("총 {mergeNotice.totalQuantity}개");
     const hasNoticeStyle =
       /\.draft-merge-notice\s*{[\s\S]*?background:\s*#eef5ff;[\s\S]*?overflow-wrap:\s*anywhere;[\s\S]*?}/.test(
         css

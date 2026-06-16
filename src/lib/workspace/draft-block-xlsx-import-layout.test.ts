@@ -4,31 +4,33 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const CURRENT_WORK_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 
 describe("draft block xlsx import layout", () => {
   it("실행 전 확인은 현재 작업 박스 .xlsx 샘플과 미리보기 import 흐름을 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const appSource = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const panelSource = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
 
     // When
     const hasActions =
-      source.includes("엑셀로 등록하기") &&
-      source.includes("엑셀 포맷 보기") &&
-      source.includes('accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"');
+      panelSource.includes("엑셀로 등록하기") &&
+      panelSource.includes("엑셀 포맷 보기") &&
+      panelSource.includes('accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"');
     const hasPreviewDialog =
-      source.includes("현재 작업 엑셀 미리보기") &&
-      source.includes("추가할 박스") &&
-      source.includes("오류 행") &&
-      source.includes("합산된 행") &&
-      source.includes("기존 설정 유지") &&
-      source.includes("createDraftImportMergeSummaryCopy(row)") &&
-      source.includes("row.warnings.map") &&
-      source.includes("현재 작업에 추가");
+      panelSource.includes("현재 작업 엑셀 미리보기") &&
+      panelSource.includes("추가할 박스") &&
+      panelSource.includes("오류 행") &&
+      panelSource.includes("합산된 행") &&
+      panelSource.includes("기존 설정 유지") &&
+      panelSource.includes("createDraftImportMergeSummaryCopy(row)") &&
+      panelSource.includes("row.warnings.map") &&
+      panelSource.includes("현재 작업에 추가");
     const hasFormatUtilities =
-      source.includes("readDraftBlockXlsxFile") &&
-      source.includes("createDraftBlockImportSampleWorkbook") &&
-      source.includes("importDraftBlocks");
+      panelSource.includes("readDraftBlockXlsxFile") &&
+      panelSource.includes("createDraftBlockImportSampleWorkbook") &&
+      appSource.includes("importDraftBlocks");
 
     // Then
     assert.ok(hasActions, "current work section should expose xlsx import and sample actions");
@@ -38,7 +40,7 @@ describe("draft block xlsx import layout", () => {
 
   it("현재 작업 엑셀 등록은 파일 선택 전 포맷 안내 dialog와 샘플 다운로드를 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 
     // When
@@ -76,7 +78,7 @@ describe("draft block xlsx import layout", () => {
 
   it("현재 작업 영역은 시연 예제 버튼 없이 엑셀 등록과 새 작업 시작만 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 
     // When
@@ -97,7 +99,7 @@ describe("draft block xlsx import layout", () => {
 
   it("현재 작업 카드의 총 부피 타일과 제거 버튼은 좁은 화면에서도 그리드 밖으로 넘치지 않는다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 
     // When

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 const workspaceSource = readFileSync("src/components/tetris-workspace-app.tsx", "utf8");
+const numberFieldInputSource = readFileSync("src/components/workspace/number-field-input.tsx", "utf8");
 const styles = readFileSync("src/app/globals.css", "utf8");
 
 describe("chain-simulation-requested-quantity-layout", () => {
@@ -19,7 +20,7 @@ describe("chain-simulation-requested-quantity-layout", () => {
       workspaceSource.includes("최대") &&
       workspaceSource.includes("수량 지정") &&
       workspaceSource.includes('aria-label={`${template.name} 지정 수량`}') &&
-      workspaceSource.includes('inputMode="numeric"') &&
+      numberFieldInputSource.includes('inputMode="numeric"') &&
       workspaceSource.includes("개");
     const hasCalculationContract =
       workspaceSource.includes("requestedQuantitiesByTemplateId") &&
