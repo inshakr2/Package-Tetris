@@ -95,9 +95,9 @@ import {
 } from "@/lib/workspace/draft-block-xlsx-import";
 import {
   calculateBlockVolumeM3,
-  hasPositiveDimensions,
   isValidBlockMeasurementInput
 } from "@/lib/workspace/block-measurements";
+import { SelectedSpaceSummary } from "@/components/workspace/selected-space-summary";
 import {
   createOptimizationInput,
   reviewExecutionReadiness,
@@ -195,6 +195,7 @@ import {
 } from "@/lib/workspace/pwa-install-guidance";
 import { getImportConflictCopy } from "@/lib/workspace/import-conflict-copy";
 import { hasCurrentWorkToReset, resetCurrentWorkspace } from "@/lib/workspace/current-work-reset";
+import { formatDimensions } from "@/lib/workspace/dimension-format";
 import { calculateUsableSize, DEFAULT_PALLET_SPACE_ID, PRESET_SPACES } from "@/lib/workspace/presets";
 import { createPackedSpaceLoadSummary } from "@/lib/workspace/space-load-summary";
 import { createDefaultWorkspace } from "@/lib/workspace/workspace-factory";
@@ -2083,35 +2084,6 @@ function SpaceLibraryPanel({
             <p className="meta">직접 저장한 공간이 아직 없습니다.</p>
           )}
         </div>
-      </div>
-    </section>
-  );
-}
-
-function SelectedSpaceSummary({ selectedSpace }: { selectedSpace: SpaceDefinition | undefined }) {
-  const usableSize = selectedSpace ? calculateUsableSize(selectedSpace) : null;
-
-  return (
-    <section className="selection-summary" aria-live="polite">
-      <span className="badge" data-tone="green">
-        선택된 공간
-      </span>
-      <strong>{selectedSpace?.name ?? "공간 미선택"}</strong>
-      <p className="meta">
-        {selectedSpace
-          ? `${formatDimensions(selectedSpace.dimensions)} · ${selectedSpace.isPreset ? "기본 공간" : "내 공간"}`
-                  : "공간을 선택하면 실제 적재 가능 크기와 여유치를 확인할 수 있습니다."}
-      </p>
-      <div className="summary-grid compact-summary">
-                <SummaryTile label="적재 가능 크기" value={usableSize ? formatDimensions(usableSize) : "-"} />
-                <SummaryTile
-                  label="안전 여유"
-          value={
-            selectedSpace
-              ? `${selectedSpace.offset.widthMm} / ${selectedSpace.offset.depthMm} / ${selectedSpace.offset.heightMm}mm`
-              : "-"
-          }
-        />
       </div>
     </section>
   );
@@ -7774,14 +7746,6 @@ function formatOptionalWeightDisplay(weightKg: number | null | undefined) {
   }
 
   return `${weightKg}kg`;
-}
-
-function formatDimensions(dimensions: { widthMm: number; depthMm: number; heightMm: number }) {
-  if (!hasPositiveDimensions(dimensions)) {
-    return "입력 확인 필요";
-  }
-
-  return `${dimensions.widthMm} / ${dimensions.depthMm} / ${dimensions.heightMm}mm`;
 }
 
 function formatM3(value: number) {
