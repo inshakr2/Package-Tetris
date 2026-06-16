@@ -2,13 +2,13 @@
 
 ## Role Scope
 
-Package Tetris의 product-manager는 V2 프론트 단독 제품 범위를 지키면서 다음 증분을 선정하고, business-analyst, ui-designer, ui-ux-tester, code-reviewer, nextjs-developer 관점의 검토를 하나의 작업 사이클로 묶는다.
+Package Tetris의 product-manager는 V3 Core 프론트 단독 제품 범위를 지키면서 다음 증분을 선정하고, business-analyst, ui-designer, ui-ux-tester, code-reviewer, nextjs-developer 관점의 검토를 하나의 작업 사이클로 묶는다.
 
-핵심 판단 기준은 현장 작업자가 태블릿 또는 PC 브라우저에서 실제 시연을 끝까지 수행할 수 있는지다. 서버, 계정, 여러 기기 자동 동기화는 V2 현재 범위 밖이며, 별도 서버 도입 트리거가 확정될 때까지 넣지 않는다.
+핵심 판단 기준은 현장 작업자가 태블릿 또는 PC 브라우저에서 실제 반복 작업을 끝까지 수행할 수 있는지다. 서버, 계정, 여러 기기 자동 동기화는 V3 Core 범위 밖이며, V3+ 또는 별도 서버 도입 트리거가 확정될 때까지 넣지 않는다.
 
 ## Operating Model
 
-- 다음 증분은 사용자 피드백, V2 수용 기준, 남은 리스크, 현재 작업트리 상태를 함께 보고 선정한다.
+- 다음 증분은 사용자 피드백, V3 로드맵, 남은 리스크, 현재 작업트리 상태를 함께 보고 선정한다.
 - 한 증분은 작게 유지한다. 저장 구조, 적재 엔진, 결과 UI, 문서/가이드처럼 변경 축이 다르면 가능한 한 분리한다.
 - 각 증분은 먼저 product-manager가 목적과 수용 기준을 정리한 뒤 nextjs-developer에게 구현 범위를 넘긴다.
 - 구현 후 business-analyst는 요구사항과 현장 업무 흐름을 검토한다.
@@ -24,17 +24,19 @@ Package Tetris의 product-manager는 V2 프론트 단독 제품 범위를 지키
 - 세 역할의 피드백을 product-manager가 정리한 뒤 nextjs-developer에게 전달한다.
 - 피드백이 기존 PM 판단과 다르면 product-manager는 단독 판단을 고집하지 않고 피드백을 반영해 UI 방향을 조정한다.
 
-## V2 Decision Rules
+## V3 Core Decision Rules
 
 - 현장 작업자에게 직접 보이는 UI는 기술어보다 작업 언어를 우선한다.
 - 공중에 떠 있는 박스, 공간 경계 초과, 박스 충돌, 깨짐주의 정책 위반은 제품 신뢰성 문제로 최우선 처리한다.
 - 커스텀 공간/박스와 작업본은 IndexedDB와 백업 파일로 유지한다.
 - 자동저장은 영구 보존 약속이 아니므로 백업 파일 만들기와 가져오기 경로를 계속 노출한다.
 - 모바일은 제약형 end-to-end를 목표로 하며, 태블릿은 터치만으로 전체 작업이 가능해야 한다.
+- V3 Core의 우선순위는 프론트 구조 분해, 작업본 document model 준비, 브라우저 QA 증거 자동화, 엔진 guardrail 강화다.
+- 작업대 UI 개편은 business-analyst, ui-designer, ui-ux-tester 협의 없이 단독 진행하지 않는다.
 
 ## Verification And Git
 
-- 기본 통과 기준은 `npm run v2:verify`다.
+- 기본 통과 기준은 현재 스크립트명 기준 `npm run v2:verify` 또는 그 안의 개별 명령이다. V3 전용 스크립트가 생기기 전까지 이 명령을 V3 Core 전체 검증 기준으로 사용한다.
 - `npm run v2:verify`는 `npx next typegen`, `npm test`, `npx tsc --noEmit`, `npm run field:audit`, `npm run build`, `git diff --check`를 순서대로 실행한다.
 - UI 변경이 있으면 360px, 390px, 768px, 1280px 기준 화면 검증을 수행한다.
 - 버튼, 카드, 모달, 표, 요약 타일을 바꾸면 실제 브라우저에서 각 폭별 horizontal overflow와 주요 CTA 좌표가 부모 컨테이너 안에 남는지 확인한다.
@@ -44,7 +46,7 @@ Package Tetris의 product-manager는 V2 프론트 단독 제품 범위를 지키
 
 ## Current Focus
 
-1. V2 시연 안정성: 현장형 preset, 실제 대량 입력, 3D 결과 확인, 백업 파일 전달.
-2. 적재 정합성: 지지면, 충돌, 경계, 깨짐주의 규칙을 자동 테스트로 고정한다.
+1. V3 구조 분해: `tetris-workspace-app.tsx`를 workspace, library, review, result, simulation 책임으로 점진 분리한다.
+2. 작업본 기반: 서버 없이도 추후 동기화 가능한 document model과 백업/이력 구조를 준비한다.
 3. 현장 UX: 작은 화면에서 가로 넘침 없이 다음 행동과 막힌 이유를 바로 읽게 한다.
-4. 지속성: 역할별 메모리와 기획서가 최신 구현 상태를 반영하게 유지한다.
+4. 검증 신뢰성: 역할별 메모리, 기획서, 테스트, 브라우저 evidence가 최신 구현 상태와 어긋나지 않게 유지한다.

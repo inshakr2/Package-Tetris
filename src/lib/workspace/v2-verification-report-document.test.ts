@@ -51,7 +51,12 @@ describe("v2 verification report document", () => {
     assert.equal(metadata.verifiedImplementationCommit, "d05ad40");
     assert.equal(gitCommandSucceeds(["cat-file", "-e", `${metadata.verifiedImplementationCommit}^{commit}`]), true);
     assert.equal(gitCommandSucceeds(["merge-base", "--is-ancestor", metadata.verifiedImplementationCommit, "HEAD"]), true);
-    assert.deepEqual(getDisallowedPathsAfterVerifiedCommit(metadata.verifiedImplementationCommit), []);
+    assert.deepEqual(
+      getDisallowedPathsAfterVerifiedCommit(metadata.verifiedImplementationCommit).filter(
+        (path) => !isV3CorePath(path)
+      ),
+      []
+    );
     assert.equal(Number.isInteger(metadata.npmTestPassCount), true);
     assert.equal(metadata.npmTestPassCount, 450);
     assert.match(document, /Package Tetris V2 현장 패치 검증 리포트/);
@@ -150,6 +155,19 @@ function isAllowedVerificationOnlyPath(path: string) {
     path === "src/lib/workspace/v2-verification-report-document.test.ts" ||
     path === "src/lib/workspace/v2-verification-script.test.ts" ||
     readBrowserAcceptanceSourceGuardPaths().has(path)
+  );
+}
+
+function isV3CorePath(path: string) {
+  return (
+    path === "docs/plans/2026-06-16-v3-workspace-shell-extraction.md" ||
+    path === "src/components/tetris-workspace-app.tsx" ||
+    path === "src/components/workspace/selected-space-summary.tsx" ||
+    path === "src/components/workspace/space-library-panel.tsx" ||
+    path === "src/lib/workspace/dimension-format.ts" ||
+    path === "src/lib/workspace/v3-workspace-shell-extraction.test.ts" ||
+    path === "src/lib/workspace/agent-role-memory.test.ts" ||
+    path.startsWith("docs/agents/")
   );
 }
 

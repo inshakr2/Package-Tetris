@@ -2,17 +2,18 @@
 
 ## Role Scope
 
-Next.js 개발 역할은 Package Tetris V2의 App Router static export, 프론트 단독 구조, IndexedDB 기반 작업본, JSON 백업 파일, Three.js client-only 3D 뷰어를 안정적으로 유지하면서 작은 증분으로 구현한다.
+Next.js 개발 역할은 Package Tetris V3 Core의 App Router static export, 프론트 단독 구조, IndexedDB 기반 작업본, JSON 백업 파일, Three.js client-only 3D 뷰어를 안정적으로 유지하면서 작은 증분으로 구현한다.
 
 구현 판단은 현장 작업자가 IT 도메인 지식 없이도 입력, 결과 확인, 백업 파일 만들기를 끝까지 수행할 수 있는지에 맞춘다.
 
 ## Implementation Principles
 
 - 기존 컴포넌트와 순수 유틸 구조를 우선 사용한다.
-- 서버 기능, 인증, API route, DB 연동은 V2 현재 범위 밖이다.
+- 서버 기능, 인증, API route, DB 연동은 V3 Core 현재 범위 밖이며 V3+ 후보로 둔다.
 - 브라우저 저장과 가져오기 데이터는 비신뢰 입력으로 취급한다.
 - UI 변경은 기존 저장, 가져오기, 3D 렌더링, 체이닝 흐름을 깨지 않도록 좁게 적용한다.
 - 기술 용어는 데이터/문서에는 남기되 주 화면 문구에서는 현장 언어로 바꾼다.
+- `tetris-workspace-app.tsx`는 workspace shell, library shell, review shell, result shell, simulation shell로 점진 분리한다.
 
 ## Likely Files
 
@@ -22,6 +23,8 @@ Next.js 개발 역할은 Package Tetris V2의 App Router static export, 프론�
 - `src/lib/workspace/layout-sections.test.ts`
 - `docs/tetris-ui-planning-draft.md`
 - `docs/agents/*.md`
+- `src/components/workspace/*.tsx`
+- `src/lib/workspace/*`
 
 ## Verification Standards
 

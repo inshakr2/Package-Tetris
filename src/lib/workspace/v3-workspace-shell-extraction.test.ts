@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 
 const APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const SELECTED_SPACE_SUMMARY_PATH = join(process.cwd(), "src/components/workspace/selected-space-summary.tsx");
+const SPACE_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/space-library-panel.tsx");
 const DIMENSION_FORMAT_PATH = join(process.cwd(), "src/lib/workspace/dimension-format.ts");
 const PLAN_PATH = join(process.cwd(), "docs/plans/2026-06-16-v3-workspace-shell-extraction.md");
 
@@ -16,14 +17,28 @@ describe("V3 workspace shell extraction", () => {
   it("선택된 공간 요약을 워크스페이스 leaf 컴포넌트로 분리한다", () => {
     // Given
     const appSource = read(APP_PATH);
+    const spaceLibraryPanelSource = read(SPACE_LIBRARY_PANEL_PATH);
     const selectedSpaceSummarySource = read(SELECTED_SPACE_SUMMARY_PATH);
 
     // When / Then
     assert.equal(existsSync(SELECTED_SPACE_SUMMARY_PATH), true);
-    assert.match(appSource, /@\/components\/workspace\/selected-space-summary/);
+    assert.match(spaceLibraryPanelSource, /\.\/selected-space-summary/);
     assert.doesNotMatch(appSource, /function SelectedSpaceSummary/);
     assert.match(selectedSpaceSummarySource, /export function SelectedSpaceSummary/);
     assert.match(selectedSpaceSummarySource, /aria-live="polite"/);
+  });
+
+  it("공간 선택 섹션 패널을 워크스페이스 컴포넌트로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const spaceLibraryPanelSource = read(SPACE_LIBRARY_PANEL_PATH);
+
+    // When / Then
+    assert.equal(existsSync(SPACE_LIBRARY_PANEL_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/space-library-panel/);
+    assert.doesNotMatch(appSource, /function SpaceLibraryPanel/);
+    assert.match(spaceLibraryPanelSource, /export function SpaceLibraryPanel/);
+    assert.match(spaceLibraryPanelSource, /getWorkspaceSectionTitle\("space"\)/);
   });
 
   it("치수 표시 포맷을 공통 유틸로 관리한다", () => {
@@ -46,6 +61,7 @@ describe("V3 workspace shell extraction", () => {
     // When / Then
     assert.match(plan, /V3 워크스페이스 구조 분해/);
     assert.match(plan, /SelectedSpaceSummary/);
+    assert.match(plan, /SpaceLibraryPanel/);
     assert.match(plan, /formatDimensions/);
     assert.match(plan, /문서\/구현 불일치/);
   });

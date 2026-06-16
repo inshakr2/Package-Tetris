@@ -31,6 +31,7 @@ V3는 현장 사용자가 쓰는 흐름을 유지하면서, 7,000줄 이상으�
 
 - `formatDimensions`를 공통 유틸로 분리한다.
 - `SelectedSpaceSummary`를 별도 컴포넌트로 분리한다.
+- `SpaceLibraryPanel`을 별도 컴포넌트로 분리해 1번 섹션 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `tetris-workspace-app.tsx`가 분리된 컴포넌트를 import하도록 변경한다.
 - 구조 테스트로 “문서에만 완료처럼 보이는 상태”를 방지한다.
 
