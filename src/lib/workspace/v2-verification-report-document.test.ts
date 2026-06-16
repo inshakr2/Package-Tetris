@@ -162,8 +162,10 @@ function isV3CorePath(path: string) {
   return (
     path === "docs/plans/2026-06-16-v3-workspace-shell-extraction.md" ||
     path === "src/components/tetris-workspace-app.tsx" ||
+    path === "src/components/workspace/block-library-panel.tsx" ||
     path === "src/components/workspace/selected-space-summary.tsx" ||
     path === "src/components/workspace/space-library-panel.tsx" ||
+    path === "src/lib/workspace/block-group-options.ts" ||
     path === "src/lib/workspace/dimension-format.ts" ||
     path === "src/lib/workspace/v3-workspace-shell-extraction.test.ts" ||
     path === "src/lib/workspace/agent-role-memory.test.ts" ||

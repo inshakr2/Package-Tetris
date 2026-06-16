@@ -6,6 +6,8 @@ import { describe, it } from "node:test";
 const APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const SELECTED_SPACE_SUMMARY_PATH = join(process.cwd(), "src/components/workspace/selected-space-summary.tsx");
 const SPACE_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/space-library-panel.tsx");
+const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
+const BLOCK_GROUP_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/block-group-options.ts");
 const DIMENSION_FORMAT_PATH = join(process.cwd(), "src/lib/workspace/dimension-format.ts");
 const PLAN_PATH = join(process.cwd(), "docs/plans/2026-06-16-v3-workspace-shell-extraction.md");
 
@@ -41,6 +43,29 @@ describe("V3 workspace shell extraction", () => {
     assert.match(spaceLibraryPanelSource, /getWorkspaceSectionTitle\("space"\)/);
   });
 
+  it("저장된 박스 패널과 그룹 옵션 로직을 워크스페이스 단위로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const blockLibraryPanelSource = read(BLOCK_LIBRARY_PANEL_PATH);
+    const blockGroupOptionsSource = read(BLOCK_GROUP_OPTIONS_PATH);
+
+    // When / Then
+    assert.equal(existsSync(BLOCK_LIBRARY_PANEL_PATH), true);
+    assert.equal(existsSync(BLOCK_GROUP_OPTIONS_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/block-library-panel/);
+    assert.match(appSource, /@\/lib\/workspace\/block-group-options/);
+    assert.doesNotMatch(appSource, /function BlockLibraryPanel/);
+    assert.doesNotMatch(appSource, /function BlockLibraryDialog/);
+    assert.doesNotMatch(appSource, /function BlockTemplateImportDialog/);
+    assert.doesNotMatch(appSource, /function BlockTemplateImportFormatDialog/);
+    assert.doesNotMatch(appSource, /function createTopBlockGroups/);
+    assert.match(blockLibraryPanelSource, /export function BlockLibraryPanel/);
+    assert.match(blockLibraryPanelSource, /function BlockLibraryDialog/);
+    assert.match(blockLibraryPanelSource, /function BlockTemplateImportDialog/);
+    assert.match(blockLibraryPanelSource, /function BlockTemplateImportFormatDialog/);
+    assert.match(blockGroupOptionsSource, /export function createTopBlockGroups/);
+  });
+
   it("치수 표시 포맷을 공통 유틸로 관리한다", () => {
     // Given
     const appSource = read(APP_PATH);
@@ -62,6 +87,7 @@ describe("V3 workspace shell extraction", () => {
     assert.match(plan, /V3 워크스페이스 구조 분해/);
     assert.match(plan, /SelectedSpaceSummary/);
     assert.match(plan, /SpaceLibraryPanel/);
+    assert.match(plan, /BlockLibraryPanel/);
     assert.match(plan, /formatDimensions/);
     assert.match(plan, /문서\/구현 불일치/);
   });

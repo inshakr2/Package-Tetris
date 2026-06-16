@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
 
 describe("block-library-search-layout", () => {
   it("내 공간 추가 모달은 공간명, 치수, 안전 여유를 행 단위로 묶는다", () => {
@@ -79,7 +80,7 @@ describe("block-library-search-layout", () => {
 
   it("저장된 박스 영역은 현장 사용자가 이름, 치수, 무게, 그룹으로 필터링할 수 있는 검색 입력을 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_LIBRARY_PANEL_PATH, "utf8");
 
     // When
     const hasSearchState =
@@ -149,7 +150,7 @@ describe("block-library-search-layout", () => {
 
   it("저장된 박스는 대량 목록을 본문에 펼치지 않고 dialog에서 검색하고 선택한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_LIBRARY_PANEL_PATH, "utf8");
 
     // When
     const hasLibraryOpenAction =
@@ -182,7 +183,7 @@ describe("block-library-search-layout", () => {
 
   it("저장된 박스는 .xlsx 파일을 선택하고 미리보기 dialog에서 확인한 뒤 일괄등록한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_LIBRARY_PANEL_PATH, "utf8");
 
     // When
     const hasImportAction =
@@ -214,7 +215,7 @@ describe("block-library-search-layout", () => {
 
   it("엑셀 일괄등록은 파일 선택 전 포맷 안내 dialog를 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_LIBRARY_PANEL_PATH, "utf8");
     const css = readFileSync(GLOBALS_CSS_PATH, "utf8");
 
     // When
