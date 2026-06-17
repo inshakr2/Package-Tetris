@@ -4,15 +4,17 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const SPACE_FORM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/space-form-dialog.tsx");
 const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
 const NUMBER_FIELD_INPUT_PATH = join(process.cwd(), "src/components/workspace/number-field-input.tsx");
 
 const appSource = readFileSync(WORKSPACE_APP_PATH, "utf8");
+const spaceFormDialogSource = readFileSync(SPACE_FORM_DIALOG_PATH, "utf8");
 const blockCreatePanelSource = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 const currentWorkPanelSource = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
 const numberFieldInputSource = readFileSync(NUMBER_FIELD_INPUT_PATH, "utf8");
-const combinedSource = `${appSource}\n${blockCreatePanelSource}\n${currentWorkPanelSource}\n${numberFieldInputSource}`;
+const combinedSource = `${appSource}\n${spaceFormDialogSource}\n${blockCreatePanelSource}\n${currentWorkPanelSource}\n${numberFieldInputSource}`;
 
 describe("field-number-input-layout", () => {
   it("숫자 입력은 공통 파서를 사용하고 직접 Number 변환을 사용하지 않는다", () => {

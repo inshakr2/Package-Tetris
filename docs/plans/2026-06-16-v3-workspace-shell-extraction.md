@@ -32,6 +32,7 @@ V3는 현장 사용자가 쓰는 흐름을 유지하면서, 7,000줄 이상으�
 - `formatDimensions`를 공통 유틸로 분리한다.
 - `SelectedSpaceSummary`를 별도 컴포넌트로 분리한다.
 - `SpaceLibraryPanel`을 별도 컴포넌트로 분리해 1번 섹션 책임을 워크스페이스 앱 본문에서 덜어낸다.
+- `SpaceFormDialog`를 별도 컴포넌트로 분리해 1번 섹션의 내 공간 추가/수정 모달과 공간 숫자 입력 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `BlockLibraryPanel`을 별도 컴포넌트로 분리해 2번 섹션의 저장 박스 조회, 엑셀 포맷, 일괄등록 모달 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `createTopBlockGroups`, `createChildBlockGroups` 그룹 옵션 로직을 공통 유틸로 분리해 박스 등록/조회/추가 시뮬레이션이 같은 그룹 기준을 사용하게 한다.
 - `BlockCreatePanel`을 별도 컴포넌트로 분리해 2번 섹션의 박스 신규 등록, 수정, 새 그룹 등록, 등록된 그룹 관리 dialog 책임을 워크스페이스 앱 본문에서 덜어낸다.

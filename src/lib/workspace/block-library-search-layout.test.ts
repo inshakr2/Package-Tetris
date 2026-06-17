@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
-const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const SPACE_FORM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/space-form-dialog.tsx");
 const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
 const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 
 describe("block-library-search-layout", () => {
   it("내 공간 추가 모달은 공간명, 치수, 안전 여유를 행 단위로 묶는다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(SPACE_FORM_DIALOG_PATH, "utf8");
 
     // When
     const hasSpaceRows =

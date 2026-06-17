@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 const APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const SELECTED_SPACE_SUMMARY_PATH = join(process.cwd(), "src/components/workspace/selected-space-summary.tsx");
 const SPACE_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/space-library-panel.tsx");
+const SPACE_FORM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/space-form-dialog.tsx");
 const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
 const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_BLOCKS_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
@@ -45,6 +46,23 @@ describe("V3 workspace shell extraction", () => {
     assert.doesNotMatch(appSource, /function SpaceLibraryPanel/);
     assert.match(spaceLibraryPanelSource, /export function SpaceLibraryPanel/);
     assert.match(spaceLibraryPanelSource, /getWorkspaceSectionTitle\("space"\)/);
+  });
+
+  it("내 공간 추가와 수정 dialog를 워크스페이스 컴포넌트로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const spaceFormDialogSource = read(SPACE_FORM_DIALOG_PATH);
+
+    // When / Then
+    assert.equal(existsSync(SPACE_FORM_DIALOG_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/space-form-dialog/);
+    assert.doesNotMatch(appSource, /function SpaceFormDialog/);
+    assert.doesNotMatch(appSource, /function SpaceForm\(/);
+    assert.doesNotMatch(appSource, /const DEFAULT_SPACE_FORM/);
+    assert.match(spaceFormDialogSource, /export const DEFAULT_SPACE_FORM/);
+    assert.match(spaceFormDialogSource, /export function SpaceFormDialog/);
+    assert.match(spaceFormDialogSource, /function SpaceForm\(/);
+    assert.match(spaceFormDialogSource, /NumberFieldInput/);
   });
 
   it("저장된 박스 패널과 그룹 옵션 로직을 워크스페이스 단위로 분리한다", () => {
@@ -135,6 +153,7 @@ describe("V3 workspace shell extraction", () => {
     assert.match(plan, /V3 워크스페이스 구조 분해/);
     assert.match(plan, /SelectedSpaceSummary/);
     assert.match(plan, /SpaceLibraryPanel/);
+    assert.match(plan, /SpaceFormDialog/);
     assert.match(plan, /BlockLibraryPanel/);
     assert.match(plan, /BlockCreatePanel/);
     assert.match(plan, /CurrentWorkBlocksPanel/);

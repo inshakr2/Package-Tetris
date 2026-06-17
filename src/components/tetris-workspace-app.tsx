@@ -46,6 +46,11 @@ import {
   type DraftMergeNotice
 } from "@/components/workspace/current-work-blocks-panel";
 import { NumberFieldInput, type NumberFieldFormValue } from "@/components/workspace/number-field-input";
+import {
+  DEFAULT_SPACE_FORM,
+  SpaceFormDialog,
+  type SpaceFormValue
+} from "@/components/workspace/space-form-dialog";
 import { SpaceLibraryPanel } from "@/components/workspace/space-library-panel";
 import {
   copyWorkspaceForNewFile,
@@ -113,7 +118,7 @@ import {
 } from "@/lib/workspace/delete-confirmation-copy";
 import { getSaveConflictBannerCopy } from "@/lib/workspace/save-conflict-banner-copy";
 import { createLocalSaveState } from "@/lib/workspace/storage-save-state";
-import { getSpaceDialogCopy, type SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
+import type { SpaceDialogMode } from "@/lib/workspace/space-dialog-copy";
 import { validateSpaceForm } from "@/lib/workspace/space-form-validation";
 import { runPackingEngineInWorker } from "@/lib/workspace/packing-worker-client";
 import {
@@ -254,16 +259,6 @@ interface PendingDraftUndo {
   index: number;
 }
 
-const DEFAULT_SPACE_FORM = {
-  name: "커스텀 공간",
-  widthMm: 1200,
-  depthMm: 1000,
-  heightMm: 1500,
-  offsetWidthMm: 50,
-  offsetDepthMm: 50,
-  offsetHeightMm: 80
-};
-
 const STORAGE_PANEL_ID = "storage-reliability-panel";
 const MOBILE_STICKY_STATUS_ID = "mobile-sticky-status";
 const MOBILE_STICKY_HELPER_ID = "mobile-sticky-helper";
@@ -324,7 +319,7 @@ export function TetrisWorkspaceApp() {
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [pendingDraftUndo, setPendingDraftUndo] = useState<PendingDraftUndo | null>(null);
   const [resetWorkDialogOpen, setResetWorkDialogOpen] = useState(false);
-  const [spaceForm, setSpaceForm] = useState(DEFAULT_SPACE_FORM);
+  const [spaceForm, setSpaceForm] = useState<SpaceFormValue>(DEFAULT_SPACE_FORM);
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
   const [spaceFormError, setSpaceFormError] = useState<string | null>(null);
@@ -808,7 +803,7 @@ export function TetrisWorkspaceApp() {
     return true;
   }
 
-  function updateSpaceForm(nextForm: typeof DEFAULT_SPACE_FORM) {
+  function updateSpaceForm(nextForm: SpaceFormValue) {
     setSpaceForm(nextForm);
     setSpaceFormError(null);
   }
@@ -5267,102 +5262,6 @@ function getStorageUsageDetail(storageHealth: StorageHealthSnapshot) {
   return "브라우저가 제공한 대략치를 표시합니다.";
 }
 
-function SpaceFormDialog({
-  open,
-  mode,
-  value,
-  error,
-  saveDisabled,
-  saveDisabledReason,
-  onChange,
-  onClose,
-  onSave
-}: {
-  open: boolean;
-  mode: SpaceDialogMode;
-  value: typeof DEFAULT_SPACE_FORM;
-  error: string | null;
-  saveDisabled: boolean;
-  saveDisabledReason: string | null;
-  onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const copy = getSpaceDialogCopy(mode);
-  const titleId = "space-form-dialog-title";
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-
-    if (!dialog) {
-      return;
-    }
-
-    if (open) {
-      if (!dialog.open) {
-        dialog.showModal();
-      }
-
-      window.setTimeout(() => {
-        dialog.querySelector<HTMLInputElement>("input")?.focus();
-      }, 0);
-      return;
-    }
-
-    if (dialog.open) {
-      dialog.close();
-    }
-  }, [open]);
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="space-form-dialog"
-      aria-labelledby={titleId}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          onClose();
-        }
-      }}
-    >
-      <div className="space-form-sheet">
-        <div className="space-form-dialog-head">
-          <div>
-            <h2 id={titleId}>{copy.title}</h2>
-            <p className="fine-print">{copy.helperLabel}</p>
-          </div>
-          <button className="icon-button panel-close-button" onClick={onClose} aria-label="공간 입력 닫기">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="space-form-dialog-body">
-          <SpaceForm value={value} onChange={onChange} />
-          {error || saveDisabledReason ? (
-            <p className="form-error" role="alert">
-              {error ?? saveDisabledReason}
-            </p>
-          ) : null}
-        </div>
-        <div className="form-actions space-form-dialog-actions">
-          <button className="secondary-button" onClick={onClose}>
-            취소
-          </button>
-          <button className="primary-button" onClick={onSave} disabled={saveDisabled}>
-            <Plus size={16} />
-            {copy.primaryLabel}
-          </button>
-        </div>
-      </div>
-    </dialog>
-  );
-}
-
 function DeleteConfirmDialog({
   pendingDelete,
   confirmDisabled,
@@ -5455,83 +5354,6 @@ function DeleteConfirmDialog({
         </div>
       </div>
     </dialog>
-  );
-}
-
-function SpaceForm({
-  value,
-  onChange
-}: {
-  value: typeof DEFAULT_SPACE_FORM;
-  onChange: (value: typeof DEFAULT_SPACE_FORM) => void;
-}) {
-  return (
-    <div className="space-form-rows space-form">
-      <div className="form-row space-form-name-row">
-        <label>
-          공간명
-          <input value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />
-        </label>
-      </div>
-      <div className="form-row form-row-three space-form-dimension-row">
-        <label>
-          가로(mm)
-          <NumberFieldInput
-            aria-label="공간 가로 mm"
-            min={1}
-            value={value.widthMm}
-            onValidValueChange={(widthMm) => onChange({ ...value, widthMm })}
-          />
-        </label>
-        <label>
-          세로(mm)
-          <NumberFieldInput
-            aria-label="공간 세로 mm"
-            min={1}
-            value={value.depthMm}
-            onValidValueChange={(depthMm) => onChange({ ...value, depthMm })}
-          />
-        </label>
-        <label>
-          높이(mm)
-          <NumberFieldInput
-            aria-label="공간 높이 mm"
-            min={1}
-            value={value.heightMm}
-            onValidValueChange={(heightMm) => onChange({ ...value, heightMm })}
-          />
-        </label>
-      </div>
-      <div className="form-row form-row-three space-form-offset-row">
-        <label>
-          안전 여유 가로(mm)
-          <NumberFieldInput
-            aria-label="안전 여유 가로 mm"
-            min={0}
-            value={value.offsetWidthMm}
-            onValidValueChange={(offsetWidthMm) => onChange({ ...value, offsetWidthMm })}
-          />
-        </label>
-        <label>
-          안전 여유 세로(mm)
-          <NumberFieldInput
-            aria-label="안전 여유 세로 mm"
-            min={0}
-            value={value.offsetDepthMm}
-            onValidValueChange={(offsetDepthMm) => onChange({ ...value, offsetDepthMm })}
-          />
-        </label>
-        <label>
-          안전 여유 높이(mm)
-          <NumberFieldInput
-            aria-label="안전 여유 높이 mm"
-            min={0}
-            value={value.offsetHeightMm}
-            onValidValueChange={(offsetHeightMm) => onChange({ ...value, offsetHeightMm })}
-          />
-        </label>
-      </div>
-    </div>
   );
 }
 
