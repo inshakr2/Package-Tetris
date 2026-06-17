@@ -10,6 +10,7 @@ const SPACE_FORM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/spa
 const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
 const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_BLOCKS_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
+const DELETE_CONFIRM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/delete-confirm-dialog.tsx");
 const NUMBER_FIELD_INPUT_PATH = join(process.cwd(), "src/components/workspace/number-field-input.tsx");
 const BLOCK_GROUP_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/block-group-options.ts");
 const DRAFT_LOAD_PRIORITY_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/draft-load-priority-options.ts");
@@ -145,6 +146,23 @@ describe("V3 workspace shell extraction", () => {
     assert.match(formatSource, /입력 확인 필요/);
   });
 
+  it("삭제 확인 dialog를 워크스페이스 컴포넌트로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const deleteConfirmDialogSource = read(DELETE_CONFIRM_DIALOG_PATH);
+
+    // When / Then
+    assert.equal(existsSync(DELETE_CONFIRM_DIALOG_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/delete-confirm-dialog/);
+    assert.doesNotMatch(appSource, /function DeleteConfirmDialog/);
+    assert.doesNotMatch(appSource, /interface PendingDelete/);
+    assert.doesNotMatch(appSource, /getDeleteConfirmationCopy/);
+    assert.match(deleteConfirmDialogSource, /export interface PendingDelete/);
+    assert.match(deleteConfirmDialogSource, /export function DeleteConfirmDialog/);
+    assert.match(deleteConfirmDialogSource, /getDeleteConfirmationCopy/);
+    assert.match(deleteConfirmDialogSource, /role="alertdialog"/);
+  });
+
   it("V3 구조 분해 계획은 문서와 실제 구현 범위를 함께 고정한다", () => {
     // Given
     const plan = read(PLAN_PATH);
@@ -157,6 +175,7 @@ describe("V3 workspace shell extraction", () => {
     assert.match(plan, /BlockLibraryPanel/);
     assert.match(plan, /BlockCreatePanel/);
     assert.match(plan, /CurrentWorkBlocksPanel/);
+    assert.match(plan, /DeleteConfirmDialog/);
     assert.match(plan, /NumberFieldInput/);
     assert.match(plan, /formatDimensions/);
     assert.match(plan, /문서\/구현 불일치/);
