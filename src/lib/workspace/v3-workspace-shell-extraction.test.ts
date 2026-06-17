@@ -7,6 +7,7 @@ const APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const SELECTED_SPACE_SUMMARY_PATH = join(process.cwd(), "src/components/workspace/selected-space-summary.tsx");
 const SPACE_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/space-library-panel.tsx");
 const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
+const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_BLOCKS_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
 const NUMBER_FIELD_INPUT_PATH = join(process.cwd(), "src/components/workspace/number-field-input.tsx");
 const BLOCK_GROUP_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/block-group-options.ts");
@@ -69,6 +70,23 @@ describe("V3 workspace shell extraction", () => {
     assert.match(blockGroupOptionsSource, /export function createTopBlockGroups/);
   });
 
+  it("박스 등록 패널과 그룹 관리 dialog를 워크스페이스 단위로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const blockCreatePanelSource = read(BLOCK_CREATE_PANEL_PATH);
+
+    // When / Then
+    assert.equal(existsSync(BLOCK_CREATE_PANEL_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/block-create-panel/);
+    assert.doesNotMatch(appSource, /function BlockCreatePanel/);
+    assert.doesNotMatch(appSource, /function BlockGroupManagementDialog/);
+    assert.doesNotMatch(appSource, /const DEFAULT_BLOCK_FORM/);
+    assert.match(blockCreatePanelSource, /export const DEFAULT_BLOCK_FORM/);
+    assert.match(blockCreatePanelSource, /export function BlockCreatePanel/);
+    assert.match(blockCreatePanelSource, /function BlockGroupManagementDialog/);
+    assert.match(blockCreatePanelSource, /NumberFieldInput/);
+  });
+
   it("현재 작업 패널, 숫자 입력, 배치 우선 옵션을 워크스페이스 단위로 분리한다", () => {
     // Given
     const appSource = read(APP_PATH);
@@ -118,6 +136,7 @@ describe("V3 workspace shell extraction", () => {
     assert.match(plan, /SelectedSpaceSummary/);
     assert.match(plan, /SpaceLibraryPanel/);
     assert.match(plan, /BlockLibraryPanel/);
+    assert.match(plan, /BlockCreatePanel/);
     assert.match(plan, /CurrentWorkBlocksPanel/);
     assert.match(plan, /NumberFieldInput/);
     assert.match(plan, /formatDimensions/);

@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 const GLOBALS_CSS_PATH = join(process.cwd(), "src/app/globals.css");
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
 const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-library-panel.tsx");
+const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 
 describe("block-library-search-layout", () => {
   it("내 공간 추가 모달은 공간명, 치수, 안전 여유를 행 단위로 묶는다", () => {
@@ -33,7 +34,7 @@ describe("block-library-search-layout", () => {
 
   it("박스 등록은 박스명/무게, 치수, 그룹을 행 단위로 묶는다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 
     // When
     const hasBlockRows =
@@ -109,7 +110,7 @@ describe("block-library-search-layout", () => {
 
   it("신규 박스 등록은 기본 수량 대신 무게 입력과 등록된 상위/하위 그룹 선택을 제공한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 
     // When
     const hasRemovedDefaultQuantity =
@@ -131,7 +132,7 @@ describe("block-library-search-layout", () => {
 
   it("무게 입력은 하단 보조문구 없이 선택 입력으로만 표시한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 
     // When
     const keepsWeightInput =
@@ -318,7 +319,7 @@ describe("block-library-search-layout", () => {
 
   it("등록된 그룹 관리는 대량 그룹을 대비해 본문에 펼치지 않고 dialog에서 검색하고 삭제한다", () => {
     // Given
-    const source = readFileSync(WORKSPACE_APP_PATH, "utf8");
+    const source = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 
     // When
     const hasGroupManageAction =

@@ -4,13 +4,15 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 const WORKSPACE_APP_PATH = join(process.cwd(), "src/components/tetris-workspace-app.tsx");
+const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
 const NUMBER_FIELD_INPUT_PATH = join(process.cwd(), "src/components/workspace/number-field-input.tsx");
 
 const appSource = readFileSync(WORKSPACE_APP_PATH, "utf8");
+const blockCreatePanelSource = readFileSync(BLOCK_CREATE_PANEL_PATH, "utf8");
 const currentWorkPanelSource = readFileSync(CURRENT_WORK_PANEL_PATH, "utf8");
 const numberFieldInputSource = readFileSync(NUMBER_FIELD_INPUT_PATH, "utf8");
-const combinedSource = `${appSource}\n${currentWorkPanelSource}\n${numberFieldInputSource}`;
+const combinedSource = `${appSource}\n${blockCreatePanelSource}\n${currentWorkPanelSource}\n${numberFieldInputSource}`;
 
 describe("field-number-input-layout", () => {
   it("숫자 입력은 공통 파서를 사용하고 직접 Number 변환을 사용하지 않는다", () => {
@@ -75,15 +77,15 @@ describe("field-number-input-layout", () => {
   it("박스 등록 치수는 빈 값으로 시작하고 저장 시 필수 치수를 검증한다", () => {
     // Given / When
     const hasEmptyBlockDefaults =
-      appSource.includes("const DEFAULT_BLOCK_FORM: BlockForm =") &&
-      appSource.includes('widthMm: ""') &&
-      appSource.includes('depthMm: ""') &&
-      appSource.includes('heightMm: ""');
+      blockCreatePanelSource.includes("export const DEFAULT_BLOCK_FORM: BlockForm =") &&
+      blockCreatePanelSource.includes('widthMm: ""') &&
+      blockCreatePanelSource.includes('depthMm: ""') &&
+      blockCreatePanelSource.includes('heightMm: ""');
     const hasEmptyNumberFieldPath =
-      appSource.includes("allowEmpty") &&
-      appSource.includes("onEmptyValueChange={() => onChange({ ...form, widthMm: \"\" })}") &&
-      appSource.includes("onEmptyValueChange={() => onChange({ ...form, depthMm: \"\" })}") &&
-      appSource.includes("onEmptyValueChange={() => onChange({ ...form, heightMm: \"\" })}");
+      blockCreatePanelSource.includes("allowEmpty") &&
+      blockCreatePanelSource.includes("onEmptyValueChange={() => onChange({ ...form, widthMm: \"\" })}") &&
+      blockCreatePanelSource.includes("onEmptyValueChange={() => onChange({ ...form, depthMm: \"\" })}") &&
+      blockCreatePanelSource.includes("onEmptyValueChange={() => onChange({ ...form, heightMm: \"\" })}");
     const hasSaveValidation =
       appSource.includes("const dimensions = createBlockFormDimensions(blockForm)") &&
       appSource.includes("가로, 세로, 높이를 모두 1 이상의 정수로 입력해 주세요.");
