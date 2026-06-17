@@ -166,7 +166,9 @@ function isV3CorePath(path: string) {
     path === "src/components/workspace/block-library-panel.tsx" ||
     path === "src/components/workspace/current-work-blocks-panel.tsx" ||
     path === "src/components/workspace/delete-confirm-dialog.tsx" ||
+    path === "src/components/workspace/draft-undo-toast.tsx" ||
     path === "src/components/workspace/number-field-input.tsx" ||
+    path === "src/components/workspace/reset-current-work-dialog.tsx" ||
     path === "src/components/workspace/selected-space-summary.tsx" ||
     path === "src/components/workspace/space-form-dialog.tsx" ||
     path === "src/components/workspace/space-library-panel.tsx" ||

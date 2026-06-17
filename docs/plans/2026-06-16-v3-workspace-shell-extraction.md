@@ -40,6 +40,7 @@ V3는 현장 사용자가 쓰는 흐름을 유지하면서, 7,000줄 이상으�
 - `NumberFieldInput`을 공통 leaf 컴포넌트로 분리해 박스/공간/현재 작업 수량 입력이 같은 숫자 입력 검증과 선택 UX를 사용하게 한다.
 - `DRAFT_LOAD_PRIORITY_OPTIONS`, `normalizeDraftLoadPriorityOptionValue`, `createDraftLoadPrioritySummary`를 공통 유틸로 분리해 실행 전 확인과 현재 작업 패널이 같은 배치 우선 기준을 사용하게 한다.
 - `DeleteConfirmDialog`를 별도 컴포넌트로 분리해 내 공간, 저장된 박스, 현재 작업 박스, 그룹 삭제 확인 모달 책임을 워크스페이스 앱 본문에서 덜어낸다.
+- `ResetCurrentWorkDialog`와 `DraftUndoToast`를 별도 컴포넌트로 분리해 현재 작업 초기화 확인과 제거 복구 안내 책임을 워크스페이스 앱 본문에서 덜어낸다.
 - `tetris-workspace-app.tsx`가 분리된 컴포넌트를 import하도록 변경한다.
 - 구조 테스트로 “문서에만 완료처럼 보이는 상태”를 방지한다.
 

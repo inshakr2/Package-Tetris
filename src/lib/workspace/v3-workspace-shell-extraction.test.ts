@@ -11,6 +11,8 @@ const BLOCK_LIBRARY_PANEL_PATH = join(process.cwd(), "src/components/workspace/b
 const BLOCK_CREATE_PANEL_PATH = join(process.cwd(), "src/components/workspace/block-create-panel.tsx");
 const CURRENT_WORK_BLOCKS_PANEL_PATH = join(process.cwd(), "src/components/workspace/current-work-blocks-panel.tsx");
 const DELETE_CONFIRM_DIALOG_PATH = join(process.cwd(), "src/components/workspace/delete-confirm-dialog.tsx");
+const RESET_CURRENT_WORK_DIALOG_PATH = join(process.cwd(), "src/components/workspace/reset-current-work-dialog.tsx");
+const DRAFT_UNDO_TOAST_PATH = join(process.cwd(), "src/components/workspace/draft-undo-toast.tsx");
 const NUMBER_FIELD_INPUT_PATH = join(process.cwd(), "src/components/workspace/number-field-input.tsx");
 const BLOCK_GROUP_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/block-group-options.ts");
 const DRAFT_LOAD_PRIORITY_OPTIONS_PATH = join(process.cwd(), "src/lib/workspace/draft-load-priority-options.ts");
@@ -163,6 +165,25 @@ describe("V3 workspace shell extraction", () => {
     assert.match(deleteConfirmDialogSource, /role="alertdialog"/);
   });
 
+  it("현재 작업 초기화 dialog와 제거 복구 toast를 워크스페이스 컴포넌트로 분리한다", () => {
+    // Given
+    const appSource = read(APP_PATH);
+    const resetDialogSource = read(RESET_CURRENT_WORK_DIALOG_PATH);
+    const undoToastSource = read(DRAFT_UNDO_TOAST_PATH);
+
+    // When / Then
+    assert.equal(existsSync(RESET_CURRENT_WORK_DIALOG_PATH), true);
+    assert.equal(existsSync(DRAFT_UNDO_TOAST_PATH), true);
+    assert.match(appSource, /@\/components\/workspace\/reset-current-work-dialog/);
+    assert.match(appSource, /@\/components\/workspace\/draft-undo-toast/);
+    assert.doesNotMatch(appSource, /function ResetCurrentWorkDialog/);
+    assert.doesNotMatch(appSource, /function DraftUndoToast/);
+    assert.match(resetDialogSource, /export function ResetCurrentWorkDialog/);
+    assert.match(resetDialogSource, /role="alertdialog"/);
+    assert.match(undoToastSource, /export function DraftUndoToast/);
+    assert.match(undoToastSource, /aria-live="polite"/);
+  });
+
   it("V3 구조 분해 계획은 문서와 실제 구현 범위를 함께 고정한다", () => {
     // Given
     const plan = read(PLAN_PATH);
@@ -176,6 +197,8 @@ describe("V3 workspace shell extraction", () => {
     assert.match(plan, /BlockCreatePanel/);
     assert.match(plan, /CurrentWorkBlocksPanel/);
     assert.match(plan, /DeleteConfirmDialog/);
+    assert.match(plan, /ResetCurrentWorkDialog/);
+    assert.match(plan, /DraftUndoToast/);
     assert.match(plan, /NumberFieldInput/);
     assert.match(plan, /formatDimensions/);
     assert.match(plan, /문서\/구현 불일치/);
